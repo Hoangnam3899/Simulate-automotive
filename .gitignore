@@ -1,0 +1,17 @@
+# .NET build output
+[Bb]in/
+[Oo]bj/
+
+# Visual Studio and user-specific files
+.vs/
+*.user
+*.suo
+
+# Local secrets and environment files
+.env
+.env.*
+!.env.example
+
+# OS files
+.DS_Store
+Thumbs.db
