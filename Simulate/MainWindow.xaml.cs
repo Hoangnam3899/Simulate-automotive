@@ -107,9 +107,13 @@ namespace Simulate
         private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             if (e.ClickCount == 2)
+            {
                 ToggleMaximize();
+            }
             else if (e.LeftButton == MouseButtonState.Pressed)
+            {
                 DragMove();
+            }
         }
 
         private void BtnMinimize_Click(object sender, RoutedEventArgs e) =>

@@ -1,0 +1,1596 @@
+#region Assembly vxlapi_NET, Version=25.20.14.0, Culture=neutral, PublicKeyToken=9b9ef2c94571ded1
+// C:\Users\Hnam\Desktop\wpf\TreeViews and Value Converters\TreeViews and Value Converters\bin\Debug\vxlapi_NET.dll
+// Decompiled with ICSharpCode.Decompiler 8.2.0.7535
+#endregion
+
+using System;
+
+namespace vxlapi_NET;
+
+public class XLDefine
+{
+    public enum XL_A429_EventTags : ushort
+    {
+        XL_A429_EV_TAG_TX_OK = 1536,
+        XL_A429_EV_TAG_TX_ERR = 1537,
+        XL_A429_EV_TAG_RX_OK = 1544,
+        XL_A429_EV_TAG_RX_ERR = 1545,
+        XL_A429_EV_TAG_BUS_STATISTIC = 1551,
+        XL_SYNC_PULSE = 11
+    }
+
+    public enum XL_A429_PARAMS_AutoBaudrate : byte
+    {
+        XL_A429_MSG_AUTO_BAUDRATE_DISABLED,
+        XL_A429_MSG_AUTO_BAUDRATE_ENABLED
+    }
+
+    [Flags]
+    public enum XL_A429_TX_MSG_Flags : uint
+    {
+        XL_A429_MSG_FLAG_ON_REQUEST = 1u,
+        XL_A429_MSG_FLAG_CYCLIC = 2u,
+        XL_A429_MSG_FLAG_DELETE_CYCLIC = 4u
+    }
+
+    public enum XL_A429_PARAMS_Parity : byte
+    {
+        XL_A429_MSG_PARITY_DEFAULT,
+        XL_A429_MSG_PARITY_DISABLED,
+        XL_A429_MSG_PARITY_ODD,
+        XL_A429_MSG_PARITY_EVEN
+    }
+
+    public enum XL_A429_RX_EVENT_MsgCtrl : byte
+    {
+        XL_A429_EV_TX_MSG_CTRL_ON_REQUEST,
+        XL_A429_EV_TX_MSG_CTRL_CYCLIC
+    }
+
+    public enum XL_A429_TX_EVENT_ErrorReason : byte
+    {
+        XL_A429_EV_TX_ERROR_ACCESS_DENIED,
+        XL_A429_EV_TX_ERROR_TRANSMISSION_ERROR
+    }
+
+    public enum XL_A429_RX_EVENT_ErrorReason : byte
+    {
+        XL_A429_EV_RX_ERROR_GAP_VIOLATION,
+        XL_A429_EV_RX_ERROR_PARITY,
+        XL_A429_EV_RX_ERROR_BITRATE_LOW,
+        XL_A429_EV_RX_ERROR_BITRATE_HIGH,
+        XL_A429_EV_RX_ERROR_FRAME_FORMAT,
+        XL_A429_EV_RX_ERROR_CODING_RZ,
+        XL_A429_EV_RX_ERROR_DUTY_FACTOR,
+        XL_A429_EV_RX_ERROR_AVG_BIT_LENGTH
+    }
+
+    public enum XL_CANFD_ConfigOptions : byte
+    {
+        XL_CANFD_CONFOPT_NO_ISO = 8
+    }
+
+    public enum XL_CANFD_RX_EventTags : ushort
+    {
+        XL_CAN_EV_TAG_RX_OK = 1024,
+        XL_CAN_EV_TAG_RX_ERROR = 1025,
+        XL_CAN_EV_TAG_TX_ERROR = 1026,
+        XL_CAN_EV_TAG_TX_REQUEST = 1027,
+        XL_CAN_EV_TAG_TX_OK = 1028,
+        XL_CAN_EV_TAG_CHIP_STATE = 1033,
+        XL_SYNC_PULSE = 11
+    }
+
+    public enum XL_CANFD_TX_EventTags : ushort
+    {
+        XL_CAN_EV_TAG_TX_MSG = 1088
+    }
+
+    [Flags]
+    public enum XL_CANFD_TX_MessageFlags : uint
+    {
+        XL_CAN_TXMSG_FLAG_NONE = 0u,
+        XL_CAN_TXMSG_FLAG_EDL = 1u,
+        XL_CAN_TXMSG_FLAG_BRS = 2u,
+        XL_CAN_TXMSG_FLAG_RTR = 0x10u,
+        XL_CAN_TXMSG_FLAG_HIGHPRIO = 0x80u,
+        XL_CAN_TXMSG_FLAG_WAKEUP = 0x200u
+    }
+
+    [Flags]
+    public enum XL_CANFD_RX_MessageFlags : uint
+    {
+        XL_CAN_RXMSG_FLAG_NONE = 0u,
+        XL_CAN_RXMSG_FLAG_EDL = 1u,
+        XL_CAN_RXMSG_FLAG_BRS = 2u,
+        XL_CAN_RXMSG_FLAG_ESI = 4u,
+        XL_CAN_RXMSG_FLAG_RTR = 0x10u,
+        XL_CAN_RXMSG_FLAG_EF = 0x200u,
+        XL_CAN_RXMSG_FLAG_ARB_LOST = 0x400u,
+        XL_CAN_RXMSG_FLAG_WAKEUP = 0x2000u,
+        XL_CAN_RXMSG_FLAG_TE = 0x4000u
+    }
+
+    public enum XL_CANFD_DLC : byte
+    {
+        DLC_CAN_CANFD_0_BYTES,
+        DLC_CAN_CANFD_1_BYTES,
+        DLC_CAN_CANFD_2_BYTES,
+        DLC_CAN_CANFD_3_BYTES,
+        DLC_CAN_CANFD_4_BYTES,
+        DLC_CAN_CANFD_5_BYTES,
+        DLC_CAN_CANFD_6_BYTES,
+        DLC_CAN_CANFD_7_BYTES,
+        DLC_CAN_CANFD_8_BYTES,
+        DLC_CANFD_12_BYTES,
+        DLC_CANFD_16_BYTES,
+        DLC_CANFD_20_BYTES,
+        DLC_CANFD_24_BYTES,
+        DLC_CANFD_32_BYTES,
+        DLC_CANFD_48_BYTES,
+        DLC_CANFD_64_BYTES
+    }
+
+    public enum XL_CANFD_FLAGSCHIP : ushort
+    {
+        XL_CAN_COMMON_USE_RESERVED_1 = 0x80,
+        XL_CAN_QUEUE_OVERFLOW = 0x100,
+        XL_CAN_HIGH_PRECISION_TIMER = 0x400,
+        XL_CAN_COMMON_USE_RESERVED_2 = 0x4000
+    }
+
+    public enum XL_CANFD_BusParams_CanOpMode : byte
+    {
+        XL_BUS_PARAMS_CANOPMODE_CAN20 = 1,
+        XL_BUS_PARAMS_CANOPMODE_CANFD = 2,
+        XL_BUS_PARAMS_CANOPMODE_CANFD_NO_ISO = 8
+    }
+
+    public enum XL_CANFD_RX_EV_ERROR_errorCode : byte
+    {
+        XL_CAN_ERRC_BIT_ERROR = 1,
+        XL_CAN_ERRC_FORM_ERROR,
+        XL_CAN_ERRC_STUFF_ERROR,
+        XL_CAN_ERRC_OTHER_ERROR,
+        XL_CAN_ERRC_CRC_ERROR,
+        XL_CAN_ERRC_ACK_ERROR,
+        XL_CAN_ERRC_NACK_ERROR,
+        XL_CAN_ERRC_OVLD_ERROR,
+        XL_CAN_ERRC_EXCPT_ERROR
+    }
+
+    public enum XLethernet_EventTags : ushort
+    {
+        XL_ETH_EVENT_TAG_FRAMERX = 1280,
+        XL_ETH_EVENT_TAG_FRAMERX_ERROR = 1281,
+        XL_ETH_EVENT_TAG_FRAMETX_ERROR = 1286,
+        XL_ETH_EVENT_TAG_FRAMETX_ERROR_SWITCH = 1287,
+        XL_ETH_EVENT_TAG_FRAMETX_ACK = 1296,
+        XL_ETH_EVENT_TAG_FRAMETX_ACK_SWITCH = 1297,
+        XL_ETH_EVENT_TAG_FRAMETX_ACK_OTHER_APP = 1299,
+        XL_ETH_EVENT_TAG_FRAMETX_ERROR_OTHER_APP = 1300,
+        XL_ETH_EVENT_TAG_CHANNEL_STATUS = 1312,
+        XL_ETH_EVENT_TAG_CONFIGRESULT = 1328,
+        XL_ETH_EVENT_TAG_LOSTEVENT = 1534,
+        XL_ETH_EVENT_TAG_ERROR = 1535
+    }
+
+    [Flags]
+    public enum XLethernetEvent_FlagsChip : ushort
+    {
+        XL_ETH_NONE = 0,
+        XL_ETH_CONNECTOR_RJ45 = 1,
+        XL_ETH_CONNECTOR_DSUB = 2,
+        XL_ETH_PHY_IEEE = 4,
+        XL_ETH_PHY_BROADR = 8,
+        XL_ETH_FRAME_BYPASSED = 0x10,
+        XL_ETH_QUEUE_OVERFLOW = 0x100,
+        XL_ETH_BYPASS_QUEUE_OVERFLOW = 0x8000
+    }
+
+    public enum XLethernetSettings_BRpairs : ushort
+    {
+        XL_ETH_MODE_BR_PAIR_DONT_CARE = 0,
+        XL_ETH_MODE_BR_PAIR_1PAIR = 1,
+        XL_ETH_MODE_BR_PAIR_AUTO = 4
+    }
+
+    public enum XLethernetSettings_MdiMode : ushort
+    {
+        XL_ETH_MODE_MDI_AUTO = 1,
+        XL_ETH_MODE_MDI_STRAIGHT,
+        XL_ETH_MODE_MDI_CROSSOVER
+    }
+
+    public enum XLethernetSettings_ClockMode : ushort
+    {
+        XL_ETH_MODE_CLOCK_DONT_CARE,
+        XL_ETH_MODE_CLOCK_AUTO,
+        XL_ETH_MODE_CLOCK_MASTER,
+        XL_ETH_MODE_CLOCK_SLAVE
+    }
+
+    public enum XLethernetSettings_Phy : ushort
+    {
+        XL_ETH_MODE_PHY_DONT_CARE,
+        XL_ETH_MODE_PHY_IEEE_802_3,
+        XL_ETH_MODE_PHY_BROADR_REACH
+    }
+
+    public enum XLethernetSettings_Connector : ushort
+    {
+        XL_ETH_MODE_CONNECTOR_DONT_CARE,
+        XL_ETH_MODE_CONNECTOR_RJ45,
+        XL_ETH_MODE_CONNECTOR_DSUB
+    }
+
+    public enum XLethernetSettings_Duplex : ushort
+    {
+        XL_ETH_MODE_DUPLEX_DONT_CARE = 0,
+        XL_ETH_MODE_DUPLEX_AUTO = 1,
+        XL_ETH_MODE_DUPLEX_FULL = 3
+    }
+
+    public enum XLethernetSettings_Speed : ushort
+    {
+        XL_ETH_MODE_SPEED_AUTO_100 = 2,
+        XL_ETH_MODE_SPEED_AUTO_1000 = 4,
+        XL_ETH_MODE_SPEED_AUTO_100_1000 = 5,
+        XL_ETH_MODE_SPEED_FIXED_100 = 8,
+        XL_ETH_MODE_SPEED_FIXED_1000 = 9
+    }
+
+    public enum XLethernetChannelStatus_Link : uint
+    {
+        XL_ETH_STATUS_LINK_UNKNOWN = 0u,
+        XL_ETH_STATUS_LINK_DOWN = 1u,
+        XL_ETH_STATUS_LINK_UP = 2u,
+        XL_ETH_STATUS_LINK_ERROR = 4u
+    }
+
+    public enum XLethernetChannelStatus_Speed : uint
+    {
+        XL_ETH_STATUS_SPEED_UNKNOWN,
+        XL_ETH_STATUS_SPEED_10,
+        XL_ETH_STATUS_SPEED_100,
+        XL_ETH_STATUS_SPEED_1000,
+        XL_ETH_STATUS_SPEED_2500,
+        XL_ETH_STATUS_SPEED_5000,
+        XL_ETH_STATUS_SPEED_10000
+    }
+
+    public enum XLethernetChannelStatus_Duplex : uint
+    {
+        XL_ETH_STATUS_DUPLEX_UNKNOWN,
+        XL_ETH_STATUS_DUPLEX_HALF,
+        XL_ETH_STATUS_DUPLEX_FULL
+    }
+
+    public enum XLethernetChannelStatus_MDImode : uint
+    {
+        XL_ETH_STATUS_MDI_UNKNOWN,
+        XL_ETH_STATUS_MDI_STRAIGHT,
+        XL_ETH_STATUS_MDI_CROSSOVER
+    }
+
+    public enum XLethernetChannelStatus_ActiveConnector : uint
+    {
+        XL_ETH_STATUS_CONNECTOR_DONT_CARE = 0u,
+        XL_ETH_STATUS_CONNECTOR_DEFAULT = 0u,
+        XL_ETH_STATUS_CONNECTOR_RJ45 = 1u,
+        XL_ETH_STATUS_CONNECTOR_DSUB = 2u
+    }
+
+    public enum XLethernetChannelStatus_ActivePhy : uint
+    {
+        XL_ETH_STATUS_PHY_UNKNOWN = 0u,
+        XL_ETH_STATUS_PHY_IEEE_802_3 = 1u,
+        XL_ETH_STATUS_PHY_BROADR_REACH = 2u,
+        XL_ETH_STATUS_PHY_100BASE_T1 = 2u,
+        XL_ETH_STATUS_PHY_1000BASE_T1 = 4u
+    }
+
+    public enum XLethernetChannelStatus_ClockMode : uint
+    {
+        XL_ETH_STATUS_CLOCK_DONT_CARE,
+        XL_ETH_STATUS_CLOCK_MASTER,
+        XL_ETH_STATUS_CLOCK_SLAVE
+    }
+
+    public enum XLethernetChannelStatus_BRpairs : uint
+    {
+        XL_ETH_STATUS_BR_PAIR_DONT_CARE,
+        XL_ETH_STATUS_BR_PAIR_1PAIR
+    }
+
+    public enum XLethernetStatus_TX_ErrorType : uint
+    {
+        XL_ETH_TX_ERROR_BYPASS_ENABLED = 1u,
+        XL_ETH_TX_ERROR_NO_LINK = 2u,
+        XL_ETH_TX_ERROR_PHY_NOT_CONFIGURED = 3u,
+        XL_ETH_TX_ERROR_INVALID_LENGTH = 7u
+    }
+
+    [Flags]
+    public enum XLethernetStatus_RX_ErrorFlags : uint
+    {
+        XL_ETH_RX_ERROR_NONE = 0u,
+        XL_ETH_RX_ERROR_INVALID_LENGTH = 1u,
+        XL_ETH_RX_ERROR_INVALID_CRC = 2u,
+        XL_ETH_RX_ERROR_PHY_ERROR = 4u,
+        XL_ETH_RX_ERROR_COLLISION = 8u
+    }
+
+    [Flags]
+    public enum XLethernet_TX_Flags : uint
+    {
+        XL_ETH_DATAFRAME_FLAGS_NONE = 0u,
+        XL_ETH_DATAFRAME_FLAGS_USE_SOURCE_MAC = 1u
+    }
+
+    public enum XLethernet_FrameType : byte
+    {
+        XL_ETH_DATAFRAME_TYPE_NO_VLAN,
+        XL_ETH_DATAFRAME_TYPE_VLAN_1,
+        XL_ETH_DATAFRAME_TYPE_VLAN_2,
+        XL_ETH_DATAFRAME_TYPE_VLAN_3
+    }
+
+    public enum XLethernet_BypassMode : uint
+    {
+        XL_ETH_BYPASS_INACTIVE,
+        XL_ETH_BYPASS_PHY,
+        XL_ETH_BYPASS_MACCORE
+    }
+
+    public enum XL_FlexRay_EventTags : ushort
+    {
+        XL_FR_START_CYCLE = 128,
+        XL_FR_RX_FRAME = 129,
+        XL_FR_TX_FRAME = 130,
+        XL_FR_TXACK_FRAME = 131,
+        XL_FR_INVALID_FRAME = 132,
+        XL_FR_WAKEUP = 133,
+        XL_FR_SYMBOL_WINDOW = 134,
+        XL_FR_ERROR = 135,
+        XL_SYNC_PULSE = 11,
+        XL_FR_ERROR_POC_MODE = 1,
+        XL_FR_ERROR_SYNC_FRAMES_BELOWMIN = 2,
+        XL_FR_ERROR_SYNC_FRAMES_OVERLOAD = 3,
+        XL_FR_ERROR_CLOCK_CORR_FAILURE = 4,
+        XL_FR_ERROR_NIT_FAILURE = 5,
+        XL_FR_ERROR_CC_ERROR = 6,
+        XL_FR_STATUS = 136,
+        XL_FR_NM_VECTOR = 138,
+        XL_FR_TRANCEIVER_STATUS = 139,
+        XL_FR_SPY_FRAME = 142,
+        XL_FR_SPY_SYMBOL = 143
+    }
+
+    [Flags]
+    public enum XL_FlexRay_Status : uint
+    {
+        XL_FR_CHANNEL_CFG_STATUS_NONE = 0u,
+        XL_FR_CHANNEL_CFG_STATUS_INIT_APP_PRESENT = 1u,
+        XL_FR_CHANNEL_CFG_STATUS_CHANNEL_ACTIVATED = 2u,
+        XL_FR_CHANNEL_CFG_STATUS_VALID_CLUSTER_CFG = 4u,
+        XL_FR_CHANNEL_CFG_STATUS_VALID_CFG_MODE = 8u
+    }
+
+    public enum XL_FlexRay_ConfigMode : uint
+    {
+        XL_FR_CHANNEL_CFG_MODE_SYNCHRONOUS = 1u,
+        XL_FR_CHANNEL_CFG_MODE_COMBINED,
+        XL_FR_CHANNEL_CFG_MODE_ASYNCHRONOUS
+    }
+
+    public enum XL_FlexRay_Mode : uint
+    {
+        XL_FR_MODE_NORMAL = 0u,
+        XL_FR_MODE_COLD_NORMAL = 4u
+    }
+
+    public enum XL_FlexRay_StartupAttributes : uint
+    {
+        XL_FR_MODE_NONE,
+        XL_FR_MODE_WAKEUP,
+        XL_FR_MODE_COLDSTART_LEADING,
+        XL_FR_MODE_COLDSTART_FOLLOWING,
+        XL_FR_MODE_WAKEUP_AND_COLDSTART_LEADING,
+        XL_FR_MODE_WAKEUP_AND_COLDSTART_FOLLOWING
+    }
+
+    public enum XL_FlexRay_SymbolWindowMask : uint
+    {
+        XL_FR_SYMBOL_MTS = 1u,
+        XL_FR_SYMBOL_CAS
+    }
+
+    public enum XL_FlexRay_TansceiverMode : uint
+    {
+        XL_FR_TRANSCEIVER_MODE_SLEEP = 1u,
+        XL_FR_TRANSCEIVER_MODE_NORMAL,
+        XL_FR_TRANSCEIVER_MODE_RECEIVE_ONLY,
+        XL_FR_TRANSCEIVER_MODE_STANDBY
+    }
+
+    public enum XL_FlexRay_SpyMode : uint
+    {
+        XL_FR_SPY_MODE_ASYNCHRONOUS = 1u
+    }
+
+    public enum XL_FlexRay_FilterStatus : uint
+    {
+        XL_FR_FILTER_PASS,
+        XL_FR_FILTER_BLOCK
+    }
+
+    public enum XL_FlexRay_FilterType : uint
+    {
+        XL_FR_FILTER_TYPE_DATA = 1u,
+        XL_FR_FILTER_TYPE_NF = 2u,
+        XL_FR_FILTER_TYPE_FILLUP_NF = 4u
+    }
+
+    public enum XL_FlexRay_FilterChannel : uint
+    {
+        XL_FR_FILTER_CHANNEL_A = 1u,
+        XL_FR_FILTER_CHANNEL_B
+    }
+
+    public enum XL_FlexRay_FlagsChip : ushort
+    {
+        XL_FR_CHANNEL_A = 1,
+        XL_FR_CHANNEL_B = 2,
+        XL_FR_CHANNEL_AB = 3,
+        XL_FR_CC_COLD_A = 4,
+        XL_FR_CC_COLD_B = 8,
+        XL_FR_CC_COLD_AB = 12,
+        XL_FR_SPY_CHANNEL_A = 16,
+        XL_FR_SPY_CHANNEL_B = 32,
+        XL_FR_QUEUE_OVERFLOW = 256
+    }
+
+    public enum XL_FlexRay_FrameFlags : ushort
+    {
+        XL_FR_FRAMEFLAG_STARTUP = 1,
+        XL_FR_FRAMEFLAG_SYNC = 2,
+        XL_FR_FRAMEFLAG_NULLFRAME = 4,
+        XL_FR_FRAMEFLAG_PAYLOAD_PREAMBLE = 8,
+        XL_FR_FRAMEFLAG_FR_RESERVED = 16,
+        XL_FR_FRAMEFLAG_REQ_TXACK = 32,
+        XL_FR_FRAMEFLAG_TXACK_SS = 32,
+        XL_FR_FRAMEFLAG_RX_UNEXPECTED = 32,
+        XL_FR_FRAMEFLAG_NEW_DATA_TX = 64,
+        XL_FR_FRAMEFLAG_DATA_UPDATE_LOST = 128,
+        XL_FR_FRAMEFLAG_SYNTAX_ERROR = 512,
+        XL_FR_FRAMEFLAG_CONTENT_ERROR = 1024,
+        XL_FR_FRAMEFLAG_SLOT_BOUNDARY_VIOLATION = 2048,
+        XL_FR_FRAMEFLAG_TX_CONFLICT = 4096,
+        XL_FR_FRAMEFLAG_EMPTY_SLOT = 8192,
+        XL_FR_FRAMEFLAG_FRAME_TRANSMITTED = 32768
+    }
+
+    public enum XL_FlexRay_FrameError : byte
+    {
+        XL_FR_SPY_FRAMEFLAG_FRAMING_ERROR = 1,
+        XL_FR_SPY_FRAMEFLAG_HEADER_CRC_ERROR = 2,
+        XL_FR_SPY_FRAMEFLAG_FRAME_CRC_ERROR = 4,
+        XL_FR_SPY_FRAMEFLAG_BUS_ERROR = 8
+    }
+
+    public enum XL_FlexRay_FrameCRC : uint
+    {
+        XL_FR_SPY_FRAMEFLAG_FRAME_CRC_NEW_LAYOUT = 0x80000000u
+    }
+
+    public enum XL_FlexRay_SpyFrameFlags : uint
+    {
+        XL_FR_SPY_FRAMEFLAG_STATIC_FRAME = 1u
+    }
+
+    public enum XL_FlexRay_TXMode : byte
+    {
+        XL_FR_TX_MODE_CYCLIC = 1,
+        XL_FR_TX_MODE_SINGLE_SHOT = 2,
+        XL_FR_TX_MODE_NONE = byte.MaxValue
+    }
+
+    public enum XL_FlexRay_IncrementSize : byte
+    {
+        XL_FR_PAYLOAD_INCREMENT_8BIT = 8,
+        XL_FR_PAYLOAD_INCREMENT_16BIT = 16,
+        XL_FR_PAYLOAD_INCREMENT_32BIT = 32,
+        XL_FR_PAYLOAD_INCREMENT_NONE = 0
+    }
+
+    public enum XL_FlexRay_StatusType : uint
+    {
+        XL_FR_STATUS_DEFAULT_CONFIG = 0u,
+        XL_FR_STATUS_READY = 1u,
+        XL_FR_STATUS_NORMAL_ACTIVE = 2u,
+        XL_FR_STATUS_NORMAL_PASSIVE = 3u,
+        XL_FR_STATUS_HALT = 4u,
+        XL_FR_STATUS_MONITOR_MODE = 5u,
+        XL_FR_STATUS_CONFIG = 15u,
+        XL_FR_STATUS_WAKEUP_STANDBY = 16u,
+        XL_FR_STATUS_WAKEUP_LISTEN = 17u,
+        XL_FR_STATUS_WAKEUP_SEND = 18u,
+        XL_FR_STATUS_WAKEUP_DETECT = 19u,
+        XL_FR_STATUS_STARTUP_PREPARE = 32u,
+        XL_FR_STATUS_COLDSTART_LISTEN = 33u,
+        XL_FR_STATUS_COLDSTART_COLLISION_RESOLUTION = 34u,
+        XL_FR_STATUS_COLDSTART_CONSISTENCY_CHECK = 35u,
+        XL_FR_STATUS_COLDSTART_GAP = 36u,
+        XL_FR_STATUS_COLDSTART_JOIN = 37u,
+        XL_FR_STATUS_INTEGRATION_COLDSTART_CHECK = 38u,
+        XL_FR_STATUS_INTEGRATION_LISTEN = 39u,
+        XL_FR_STATUS_INTEGRATION_CONSISTENCY_CHECK = 40u,
+        XL_FR_STATUS_INITIALIZE_SCHEDULE = 41u,
+        XL_FR_STATUS_ABORT_STARTUP = 42u,
+        XL_FR_STATUS_STARTUP_SUCCESS = 43u
+    }
+
+    public enum XL_FlexRay_ErrorMode : byte
+    {
+        XL_FR_ERROR_POC_ACTIVE,
+        XL_FR_ERROR_POC_PASSIVE,
+        XL_FR_ERROR_POC_COMM_HALT
+    }
+
+    public enum XL_FlexRay_NITError : uint
+    {
+        XL_FR_ERROR_NIT_SENA = 0x100u,
+        XL_FR_ERROR_NIT_SBNA = 0x200u,
+        XL_FR_ERROR_NIT_SENB = 0x400u,
+        XL_FR_ERROR_NIT_SBNB = 0x800u
+    }
+
+    public enum XL_FlexRay_ErrorFlags : uint
+    {
+        XL_FR_ERROR_MISSING_OFFSET_CORRECTION = 1u,
+        XL_FR_ERROR_MAX_OFFSET_CORRECTION_REACHED = 2u,
+        XL_FR_ERROR_MISSING_RATE_CORRECTION = 4u,
+        XL_FR_ERROR_MAX_RATE_CORRECTION_REACHED = 8u
+    }
+
+    public enum XL_FlexRay_ErayEir : uint
+    {
+        XL_FR_ERROR_CC_PERR = 0x40u,
+        XL_FR_ERROR_CC_IIBA = 0x200u,
+        XL_FR_ERROR_CC_IOBA = 0x400u,
+        XL_FR_ERROR_CC_MHF = 0x800u,
+        XL_FR_ERROR_CC_EDA = 0x10000u,
+        XL_FR_ERROR_CC_LTVA = 0x20000u,
+        XL_FR_ERROR_CC_TABA = 0x40000u,
+        XL_FR_ERROR_CC_EDB = 0x1000000u,
+        XL_FR_ERROR_CC_LTVB = 0x2000000u,
+        XL_FR_ERROR_CC_TABB = 0x4000000u
+    }
+
+    public enum XL_FlexRay_WakeupStatus : byte
+    {
+        XL_FR_WAKEUP_UNDEFINED = 0,
+        XL_FR_WAKEUP_RECEIVED_HEADER = 1,
+        XL_FR_WAKEUP_RECEIVED_WUP = 2,
+        XL_FR_WAKEUP_COLLISION_HEADER = 3,
+        XL_FR_WAKEUP_COLLISION_WUP = 4,
+        XL_FR_WAKEUP_COLLISION_UNKNOWN = 5,
+        XL_FR_WAKEUP_TRANSMITTED = 6,
+        XL_FR_WAKEUP_EXTERNAL_WAKEUP = 7,
+        XL_FR_WAKEUP_WUP_RECEIVED_WITHOUT_WUS_TX = 16,
+        XL_FR_WAKEUP_RESERVED = byte.MaxValue
+    }
+
+    public enum XL_FlexRay_SymbolStatus : uint
+    {
+        XL_FR_SYMBOL_STATUS_SESA = 1u,
+        XL_FR_SYMBOL_STATUS_SBSA = 2u,
+        XL_FR_SYMBOL_STATUS_TCSA = 4u,
+        XL_FR_SYMBOL_STATUS_SESB = 8u,
+        XL_FR_SYMBOL_STATUS_SBSB = 0x10u,
+        XL_FR_SYMBOL_STATUS_TCSB = 0x20u,
+        XL_FR_SYMBOL_STATUS_MTSA = 0x40u,
+        XL_FR_SYMBOL_STATUS_MTSB = 0x80u
+    }
+
+    public enum XL_FlexRay_Size : uint
+    {
+        XL_FR_RX_EVENT_HEADER_SIZE = 32u,
+        XL_FR_MAX_EVENT_SIZE = 512u,
+        XL_FR_MAX_DATA_LENGTH = 254u
+    }
+
+    public enum WaitResults
+    {
+        WAIT_OBJECT_0 = 0,
+        WAIT_ABANDONED = 128,
+        WAIT_TIMEOUT = 258,
+        INFINITE = 65535,
+        WAIT_FAILED = 268435455
+    }
+
+    public enum XL_Status : short
+    {
+        XL_SUCCESS = 0,
+        XL_PENDING = 1,
+        XL_ERR_QUEUE_IS_EMPTY = 10,
+        XL_ERR_QUEUE_IS_FULL = 11,
+        XL_ERR_TX_NOT_POSSIBLE = 12,
+        XL_ERR_NO_LICENSE = 14,
+        XL_ERR_WRONG_PARAMETER = 101,
+        XL_ERR_TWICE_REGISTER = 110,
+        XL_ERR_INVALID_CHAN_INDEX = 111,
+        XL_ERR_INVALID_ACCESS = 112,
+        XL_ERR_PORT_IS_OFFLINE = 113,
+        XL_ERR_CHAN_IS_ONLINE = 116,
+        XL_ERR_NOT_IMPLEMENTED = 117,
+        XL_ERR_INVALID_PORT = 118,
+        XL_ERR_HW_NOT_READY = 120,
+        XL_ERR_CMD_TIMEOUT = 121,
+        XL_ERR_CMD_HANDLING = 122,
+        XL_ERR_HW_NOT_PRESENT = 129,
+        XL_ERR_NOTIFY_ALREADY_ACTIVE = 131,
+        XL_ERR_INVALID_TAG = 132,
+        XL_ERR_INVALID_RESERVED_FLD = 133,
+        XL_ERR_INVALID_SIZE = 134,
+        XL_ERR_INSUFFICIENT_BUFFER = 135,
+        XL_ERR_ERROR_CRC = 136,
+        XL_ERR_BAD_EXE_FORMAT = 137,
+        XL_ERR_NO_SYSTEM_RESOURCES = 138,
+        XL_ERR_NOT_FOUND = 139,
+        XL_ERR_INVALID_ADDRESS = 140,
+        XL_ERR_REQ_NOT_ACCEP = 141,
+        XL_ERR_INVALID_LEVEL = 142,
+        XL_ERR_NO_DATA_DETECTED = 143,
+        XL_ERR_INTERNAL_ERROR = 144,
+        XL_ERR_UNEXP_NET_ERR = 145,
+        XL_ERR_INVALID_USER_BUFFER = 146,
+        XL_ERR_INVALID_PORT_ACCESS_TYPE = 147,
+        XL_ERR_NO_RESOURCES = 152,
+        XL_ERR_WRONG_CHIP_TYPE = 153,
+        XL_ERR_WRONG_COMMAND = 154,
+        XL_ERR_INVALID_HANDLE = 155,
+        XL_ERR_RESERVED_NOT_ZERO = 157,
+        XL_ERR_INIT_ACCESS_MISSING = 158,
+        XL_ERR_WRONG_VERSION = 160,
+        XL_ERR_CANNOT_OPEN_DRIVER = 201,
+        XL_ERR_WRONG_BUS_TYPE = 202,
+        XL_ERR_DLL_NOT_FOUND = 203,
+        XL_ERR_INVALID_CHANNEL_MASK = 204,
+        XL_ERR_NOT_SUPPORTED = 205,
+        XL_ERR_CONNECTION_BROKEN = 210,
+        XL_ERR_CONNECTION_CLOSED = 211,
+        XL_ERR_INVALID_STREAM_NAME = 212,
+        XL_ERR_CONNECTION_FAILED = 213,
+        XL_ERR_STREAM_NOT_FOUND = 214,
+        XL_ERR_STREAM_NOT_CONNECTED = 215,
+        XL_ERR_QUEUE_OVERRUN = 216,
+        XL_ERROR = 255,
+        XL_ERR_PDU_OUT_OF_MEMORY = 260,
+        XL_ERR_FR_CLUSTERCONFIG_MISSING = 261,
+        XL_ERR_PDU_OFFSET_REPET_INVALID = 262,
+        XL_ERR_PDU_PAYLOAD_SIZE_INVALID = 263,
+        XL_ERR_FR_NBR_FRAMES_OVERFLOW = 265,
+        XL_ERR_FR_SLOT_ID_INVALID = 267,
+        XL_ERR_FR_SLOT_ALREADY_OCCUPIED_BY_ERAY = 268,
+        XL_ERR_FR_SLOT_ALREADY_OCCUPIED_BY_COLDC = 269,
+        XL_ERR_FR_SLOT_OCCUPIED_BY_OTHER_APP = 270,
+        XL_ERR_FR_SLOT_IN_WRONG_SEGMENT = 271,
+        XL_ERR_FR_FRAME_CYCLE_MULTIPLEX_ERROR = 272,
+        XL_ERR_PDU_NO_UNMAP_OF_SYNCFRAME = 278,
+        XL_ERR_SYNC_FRAME_MODE = 291,
+        XL_ERR_INVALID_DLC = 513,
+        XL_ERR_INVALID_CANID = 514,
+        XL_ERR_INVALID_FDFLAG_MODE20 = 515,
+        XL_ERR_EDL_RTR = 516,
+        XL_ERR_EDL_NOT_SET = 517,
+        XL_ERR_UNKNOWN_FLAG = 518,
+        XL_ERR_ETH_PHY_ACTIVATION_FAILED = 4352,
+        XL_ERR_ETH_PHY_CONFIG_ABORTED = 4355,
+        XL_ERR_ETH_RESET_FAILED = 4356,
+        XL_ERR_ETH_SET_CONFIG_DELAYED = 4357,
+        XL_ERR_ETH_UNSUPPORTED_FEATURE = 4358,
+        XL_ERR_ETH_MAC_ACTIVATION_FAILED = 4359,
+        XL_ERR_NET_ETH_SWITCH_IS_ONLINE = 4364
+    }
+
+    public enum XL_Sizes : uint
+    {
+        XL_MAX_APPNAME = 32u,
+        XL_MAX_LENGTH = 31u,
+        XL_CONFIG_MAX_CHANNELS = 64u,
+        XLEVENT_SIZE = 48u,
+        XL_MAX_NAME_LENGTH = 48u,
+        XL_APPLCONFIG_MAX_CHANNELS = 256u
+    }
+
+    public enum XL_AcceptanceFilter : uint
+    {
+        XL_CAN_STD = 1u,
+        XL_CAN_EXT
+    }
+
+    public enum XL_EventTags : byte
+    {
+        XL_RECEIVE_MSG = 1,
+        XL_CHIP_STATE = 4,
+        XL_TRANSCEIVER_INFO = 6,
+        XL_TRANSCEIVER = 6,
+        XL_TIMER_EVENT = 8,
+        XL_TIMER = 8,
+        XL_TRANSMIT_MSG = 10,
+        XL_SYNC_PULSE = 11,
+        XL_APPLICATION_NOTIFICATION = 15,
+        XL_LIN_MSG = 20,
+        XL_LIN_ERRMSG = 21,
+        XL_LIN_SYNCERR = 22,
+        XL_LIN_NOANS = 23,
+        XL_LIN_WAKEUP = 24,
+        XL_LIN_SLEEP = 25,
+        XL_LIN_CRCINFO = 26,
+        XL_RECEIVE_DAIO_DATA = 32,
+        XL_RECEIVE_DAIO_PIGGY = 34,
+        XL_KLINE_MSG = 36
+    }
+
+    public enum XL_Transceiver_Types : ushort
+    {
+        XL_TRANSCEIVER_TYPE_NONE = 0,
+        XL_TRANSCEIVER_TYPE_CAN_251 = 1,
+        XL_TRANSCEIVER_TYPE_CAN_252 = 2,
+        XL_TRANSCEIVER_TYPE_CAN_DNOPTO = 3,
+        XL_TRANSCEIVER_TYPE_CAN_SWC_PROTO = 5,
+        XL_TRANSCEIVER_TYPE_CAN_SWC = 6,
+        XL_TRANSCEIVER_TYPE_CAN_EVA = 7,
+        XL_TRANSCEIVER_TYPE_CAN_FIBER = 8,
+        XL_TRANSCEIVER_TYPE_CAN_1054_OPTO = 11,
+        XL_TRANSCEIVER_TYPE_CAN_SWC_OPTO = 12,
+        XL_TRANSCEIVER_TYPE_CAN_B10011S = 13,
+        XL_TRANSCEIVER_TYPE_CAN_1050 = 14,
+        XL_TRANSCEIVER_TYPE_CAN_1050_OPTO = 15,
+        XL_TRANSCEIVER_TYPE_CAN_1041 = 16,
+        XL_TRANSCEIVER_TYPE_CAN_1041_OPTO = 17,
+        XL_TRANSCEIVER_TYPE_CAN_VIRTUAL = 22,
+        XL_TRANSCEIVER_TYPE_LIN_6258_OPTO = 23,
+        XL_TRANSCEIVER_TYPE_LIN_6259_OPTO = 25,
+        XL_TRANSCEIVER_TYPE_DAIO_8444_OPTO = 29,
+        XL_TRANSCEIVER_TYPE_CAN_1041A_OPTO = 33,
+        XL_TRANSCEIVER_TYPE_LIN_6259_MAG = 35,
+        XL_TRANSCEIVER_TYPE_LIN_7259_MAG = 37,
+        XL_TRANSCEIVER_TYPE_LIN_7269_MAG = 39,
+        XL_TRANSCEIVER_TYPE_CAN_1054_MAG = 51,
+        XL_TRANSCEIVER_TYPE_CAN_251_MAG = 53,
+        XL_TRANSCEIVER_TYPE_CAN_1050_MAG = 55,
+        XL_TRANSCEIVER_TYPE_CAN_1040_MAG = 57,
+        XL_TRANSCEIVER_TYPE_CAN_1041A_MAG = 59,
+        XL_TRANSCEIVER_TYPE_TWIN_CAN_1041A_MAG = 128,
+        XL_TRANSCEIVER_TYPE_TWIN_LIN_7269_MAG = 129,
+        XL_TRANSCEIVER_TYPE_TWIN_CAN_1041AV2_MAG = 130,
+        XL_TRANSCEIVER_TYPE_TWIN_CAN_1054_1041A_MAG = 131,
+        XL_TRANSCEIVER_TYPE_PB_CAN_251 = 257,
+        XL_TRANSCEIVER_TYPE_PB_CAN_1054 = 259,
+        XL_TRANSCEIVER_TYPE_PB_CAN_251_OPTO = 261,
+        XL_TRANSCEIVER_TYPE_PB_CAN_SWC = 267,
+        XL_TRANSCEIVER_TYPE_PB_CAN_1054_OPTO = 277,
+        XL_TRANSCEIVER_TYPE_PB_CAN_SWC_OPTO = 279,
+        XL_TRANSCEIVER_TYPE_PB_CAN_TT_OPTO = 281,
+        XL_TRANSCEIVER_TYPE_PB_CAN_1050 = 283,
+        XL_TRANSCEIVER_TYPE_PB_CAN_1050_OPTO = 285,
+        XL_TRANSCEIVER_TYPE_PB_CAN_1041 = 287,
+        XL_TRANSCEIVER_TYPE_PB_CAN_1041_OPTO = 289,
+        XL_TRANSCEIVER_TYPE_PB_LIN_6258_OPTO = 297,
+        XL_TRANSCEIVER_TYPE_PB_LIN_6259_OPTO = 299,
+        XL_TRANSCEIVER_TYPE_PB_LIN_6259_MAG = 301,
+        XL_TRANSCEIVER_TYPE_PB_CAN_1041A_OPTO = 303,
+        XL_TRANSCEIVER_TYPE_PB_LIN_7259_MAG = 305,
+        XL_TRANSCEIVER_TYPE_PB_LIN_7269_MAG = 307,
+        XL_TRANSCEIVER_TYPE_PB_CAN_251_MAG = 309,
+        XL_TRANSCEIVER_TYPE_PB_CAN_1050_MAG = 310,
+        XL_TRANSCEIVER_TYPE_PB_CAN_1040_MAG = 311,
+        XL_TRANSCEIVER_TYPE_PB_CAN_1041A_MAG = 312,
+        XL_TRANSCEIVER_TYPE_PB_DAIO_8444_OPTO = 313,
+        XL_TRANSCEIVER_TYPE_PB_CAN_1054_MAG = 315,
+        XL_TRANSCEIVER_TYPE_CAN_1051_CAP_FIX = 316,
+        XL_TRANSCEIVER_TYPE_DAIO_1021_FIX = 317,
+        XL_TRANSCEIVER_TYPE_LIN_7269_CAP_FIX = 318,
+        XL_TRANSCEIVER_TYPE_PB_CAN_1051_CAP = 319,
+        XL_TRANSCEIVER_TYPE_PB_CAN_SWC_7356_CAP = 320,
+        XL_TRANSCEIVER_TYPE_PB_CAN_1055_CAP = 321,
+        XL_TRANSCEIVER_TYPE_PB_CAN_1057_CAP = 322,
+        XL_TRANSCEIVER_TYPE_A429_HOLT8596_FIX = 323,
+        XL_TRANSCEIVER_TYPE_A429_HOLT8455_FIX = 324,
+        XL_TRANSCEIVER_TYPE_PB_CAN_1051HG_CAP = 325,
+        XL_TRANSCEIVER_TYPE_CAN_1057_FIX = 326,
+        XL_TRANSCEIVER_TYPE_LIN_7269_FIX = 327,
+        XL_TRANSCEIVER_TYPE_PB_CAN_1462BT = 329,
+        XL_TRANSCEIVER_TYPE_PB_LIN_7259 = 330,
+        XL_TRANSCEIVER_TYPE_CAN_1057B_FIX = 334,
+        XL_TRANSCEIVER_TYPE_LIN_7259_FIX = 345,
+        XL_TRANSCEIVER_TYPE_PB_FR_1080 = 513,
+        XL_TRANSCEIVER_TYPE_PB_FR_1080_MAG = 514,
+        XL_TRANSCEIVER_TYPE_PB_FR_1080A_MAG = 515,
+        XL_TRANSCEIVER_TYPE_PB_FR_1082_CAP = 516,
+        XL_TRANSCEIVER_TYPE_PB_FRC_1082_CAP = 517,
+        XL_TRANSCEIVER_TYPE_FR_1082_CAP_FIX = 518,
+        XL_TRANSCEIVER_TYPE_MOST150_ONBOARD = 544,
+        XL_TRANSCEIVER_TYPE_ETH_BCM54810_FIX = 560,
+        XL_TRANSCEIVER_TYPE_ETH_AR8031_FIX = 561,
+        XL_TRANSCEIVER_TYPE_ETH_BCM89810_FIX = 562,
+        XL_TRANSCEIVER_TYPE_ETH_TJA1100_FIX = 563,
+        XL_TRANSCEIVER_TYPE_ETH_BCM54810_89811_FIX = 564,
+        XL_TRANSCEIVER_TYPE_ETH_DP83XG710Q1_FIX = 565,
+        XL_TRANSCEIVER_TYPE_ETH_BCM54811S_FIX = 566,
+        XL_TRANSCEIVER_TYPE_ETH_RTL9000AA_FIX = 567,
+        XL_TRANSCEIVER_TYPE_ETH_BCM89811_FIX = 568,
+        XL_TRANSCEIVER_TYPE_ETH_BCM54210_FIX = 569,
+        XL_TRANSCEIVER_TYPE_ETH_88Q2112_FIX = 570,
+        XL_TRANSCEIVER_TYPE_ETH_BCM84891_FIX = 571,
+        XL_TRANSCEIVER_TYPE_PB_DAIO_8642 = 640,
+        XL_TRANSCEIVER_TYPE_PB_DAIO_8644 = 641,
+        XL_TRANSCEIVER_TYPE_DAIO_AL_ONLY = 655,
+        XL_TRANSCEIVER_TYPE_DAIO_1021_FIX_WITH_AL = 656,
+        XL_TRANSCEIVER_TYPE_DAIO_AL_WU = 657,
+        XL_TRANSCEIVER_TYPE_DAIO_1021_FIX_WITH_5V = 658,
+        XL_TRANSCEIVER_TYPE_ETH_MOD_BR_BCM89810 = 768,
+        XL_TRANSCEIVER_TYPE_ETH_MOD_IEEE_RGMII_AR8031 = 769,
+        XL_TRANSCEIVER_TYPE_ETH_MOD_IEEE_SGMII_AR8031 = 770,
+        XL_TRANSCEIVER_TYPE_ETH_MOD_BR_TJA1100 = 771,
+        XL_TRANSCEIVER_TYPE_ETH_MOD_BR_RTL9000AA = 772,
+        XL_TRANSCEIVER_TYPE_ETH_MOD_BR_SGMII_DP83XG710Q1 = 773,
+        XL_TRANSCEIVER_TYPE_ETH_MOD_BR_88Q2112 = 774,
+        XL_TRANSCEIVER_TYPE_ETH_MOD_BR_BCM89811 = 775,
+        XL_TRANSCEIVER_TYPE_ETH_MOD_BR_TJA1101 = 776,
+        XL_TRANSCEIVER_TYPE_AE_MOD_BR_BCM89883 = 1025,
+        XL_TRANSCEIVER_TYPE_PB_ETH_100BASET1_TJA1101 = 8066,
+        XL_TRANSCEIVER_TYPE_PB_ETH_1000BASET1_88Q2112 = 8067
+    }
+
+    public enum XL_Transceiver_Status : short
+    {
+        XL_TRANSCEIVER_STATUS_PRESENT = 1,
+        XL_TRANSCEIVER_STATUS_POWER_GOOD = 0x10,
+        XL_TRANSCEIVER_STATUS_EXT_POWER_GOOD = 0x20,
+        XL_TRANSCEIVER_STATUS_NOT_SUPPORTED = 0x40
+    }
+
+    public enum XL_Transceiver_Events : uint
+    {
+        XL_TRANSCEIVER_EVENT_NONE,
+        XL_TRANSCEIVER_EVENT_INSERTED,
+        XL_TRANSCEIVER_EVENT_REMOVED,
+        XL_TRANSCEIVER_EVENT_STATE_CHANGE
+    }
+
+    public enum XL_Transceiver_Modes : uint
+    {
+        XL_TRANSCEIVER_EVENT_ERROR = 1u,
+        XL_TRANSCEIVER_EVENT_CHANGED
+    }
+
+    public enum XL_Transceiver_OperationModes : uint
+    {
+        XL_TRANSCEIVER_LINEMODE_NA,
+        XL_TRANSCEIVER_LINEMODE_TWO_LINE,
+        XL_TRANSCEIVER_LINEMODE_CAN_H,
+        XL_TRANSCEIVER_LINEMODE_CAN_L,
+        XL_TRANSCEIVER_LINEMODE_SWC_SLEEP,
+        XL_TRANSCEIVER_LINEMODE_SWC_NORMAL,
+        XL_TRANSCEIVER_LINEMODE_SWC_FAST,
+        XL_TRANSCEIVER_LINEMODE_SWC_WAKEUP,
+        XL_TRANSCEIVER_LINEMODE_SLEEP,
+        XL_TRANSCEIVER_LINEMODE_NORMAL,
+        XL_TRANSCEIVER_LINEMODE_STDBY,
+        XL_TRANSCEIVER_LINEMODE_TT_CAN_H,
+        XL_TRANSCEIVER_LINEMODE_TT_CAN_L,
+        XL_TRANSCEIVER_LINEMODE_EVA_00,
+        XL_TRANSCEIVER_LINEMODE_EVA_01,
+        XL_TRANSCEIVER_LINEMODE_EVA_10,
+        XL_TRANSCEIVER_LINEMODE_EVA_11
+    }
+
+    [Flags]
+    public enum XL_Transceiver_StatusFlags : uint
+    {
+        XL_TRANSCEIVER_STATUS = 0u,
+        XL_TRANSCEIVER_STATUS_PRESENT = 1u,
+        XL_TRANSCEIVER_STATUS_POWER_GOOD = 0x10u,
+        XL_TRANSCEIVER_STATUS_EXT_POWER_GOOD = 0x20u,
+        XL_TRANSCEIVER_STATUS_NOT_SUPPORTED = 0x40u
+    }
+
+    public enum XL_NotifyReason : uint
+    {
+        XL_NOTIFY_REASON_CHANNEL_ACTIVATION = 1u,
+        XL_NOTIFY_REASON_CHANNEL_DEACTIVATION,
+        XL_NOTIFY_REASON_PORT_CLOSED
+    }
+
+    public enum XL_Sync_PulseCode : byte
+    {
+        XL_SYNC_PULSE_EXTERNAL,
+        XL_SYNC_PULSE_OUR,
+        XL_SYNC_PULSE_OUR_SHARED
+    }
+
+    public enum XL_HardwareType : byte
+    {
+        XL_HWTYPE_NONE = 0,
+        XL_HWTYPE_VIRTUAL = 1,
+        XL_HWTYPE_CANCARDX = 2,
+        XL_HWTYPE_CANAC2PCI = 6,
+        XL_HWTYPE_CANCARDY = 12,
+        XL_HWTYPE_CANCARDXL = 15,
+        XL_HWTYPE_CANCASEXL = 21,
+        XL_HWTYPE_CANCASEXL_LOG_OBSOLETE = 23,
+        XL_HWTYPE_CANBOARDXL = 25,
+        XL_HWTYPE_CANBOARDXL_PXI = 27,
+        XL_HWTYPE_VN2600 = 29,
+        XL_HWTYPE_VN2610 = 29,
+        XL_HWTYPE_VN3300 = 37,
+        XL_HWTYPE_VN3600 = 39,
+        XL_HWTYPE_VN7600 = 41,
+        XL_HWTYPE_CANCARDXLE = 43,
+        XL_HWTYPE_VN8900 = 45,
+        XL_HWTYPE_VN8950 = 47,
+        XL_HWTYPE_VN2640 = 53,
+        XL_HWTYPE_VN1610 = 55,
+        XL_HWTYPE_VN1630 = 57,
+        XL_HWTYPE_VN1640 = 59,
+        XL_HWTYPE_VN8970 = 61,
+        XL_HWTYPE_VN1611 = 63,
+        XL_HWTYPE_VN5240 = 64,
+        XL_HWTYPE_VN5610 = 65,
+        XL_HWTYPE_VN5620 = 66,
+        XL_HWTYPE_VN7570 = 67,
+        XL_HWTYPE_VN5650 = 68,
+        XL_HWTYPE_IPCLIENT = 69,
+        XL_HWTYPE_VN5611 = 70,
+        XL_HWTYPE_IPSERVER = 71,
+        XL_HWTYPE_VN5612 = 72,
+        XL_HWTYPE_VX1121 = 73,
+        XL_HWTYPE_VN5601 = 74,
+        XL_HWTYPE_VX1131 = 75,
+        XL_HWTYPE_VT6204 = 77,
+        XL_HWTYPE_VN5614 = 78,
+        XL_HWTYPE_VN1630_LOG = 79,
+        XL_HWTYPE_VN7610 = 81,
+        XL_HWTYPE_VN7572 = 83,
+        XL_HWTYPE_VN8972 = 85,
+        XL_HWTYPE_VN1641 = 86,
+        XL_HWTYPE_VN0601 = 87,
+        XL_HWTYPE_VT6104B = 88,
+        XL_HWTYPE_VN5640 = 89,
+        XL_HWTYPE_VT6204B = 90,
+        XL_HWTYPE_VX0312 = 91,
+        XL_HWTYPE_VH6501 = 94,
+        XL_HWTYPE_VN8800 = 95,
+        XL_HWTYPE_IPCL8800 = 96,
+        XL_HWTYPE_IPSRV8800 = 97,
+        XL_HWTYPE_CSMCAN = 98,
+        XL_HWTYPE_VN5610A = 101,
+        XL_HWTYPE_VN7640 = 102,
+        XL_HWTYPE_VX1135 = 104,
+        XL_HWTYPE_VN4610 = 105,
+        XL_HWTYPE_VT6306 = 107,
+        XL_HWTYPE_VT6104A = 108,
+        XL_HWTYPE_VN5430 = 109,
+        XL_HWTYPE_VTSSERVICE = 110,
+        XL_HWTYPE_VN1530 = 112,
+        XL_HWTYPE_VN1531 = 113,
+        XL_HWTYPE_VX1161A = 114,
+        XL_HWTYPE_VX1161B = 115,
+        XL_HWTYPE_VN1670 = 120,
+        XL_HWTYPE_VN5620A = 121,
+        XL_MAX_HWTYPE = 121
+    }
+
+    [Flags]
+    public enum XL_MessageFlags : ushort
+    {
+        XL_CAN_MSG_FLAG_NONE = 0,
+        XL_CAN_MSG_FLAG_ERROR_FRAME = 1,
+        XL_CAN_MSG_FLAG_OVERRUN = 2,
+        XL_CAN_MSG_FLAG_NERR = 4,
+        XL_CAN_MSG_FLAG_WAKEUP = 8,
+        XL_CAN_MSG_FLAG_REMOTE_FRAME = 0x10,
+        XL_CAN_MSG_FLAG_RESERVED_1 = 0x20,
+        XL_CAN_MSG_FLAG_TX_COMPLETED = 0x40,
+        XL_CAN_MSG_FLAG_TX_REQUEST = 0x80,
+        XL_CAN_MSG_FLAG_SRR_BIT_DOM = 0x200,
+        XL_EVENT_FLAG_OVERRUN = 1,
+        XL_LIN_MSGFLAG_TX = 0x40,
+        XL_LIN_MSGFLAG_CRCERROR = 0x81
+    }
+
+    public enum XL_MessageFlagsExtended : uint
+    {
+        XL_CAN_EXT_MSG_ID = 0x80000000u
+    }
+
+    public enum XL_InterfaceVersion : uint
+    {
+        XL_INTERFACE_VERSION_V2 = 2u,
+        XL_INTERFACE_VERSION_V3 = 3u,
+        XL_INTERFACE_VERSION_V4 = 4u,
+        XL_INTERFACE_VERSION = 3u
+    }
+
+    public enum XL_BusStatus : byte
+    {
+        XL_CHIPSTAT_BUSOFF = 1,
+        XL_CHIPSTAT_ERROR_PASSIVE = 2,
+        XL_CHIPSTAT_ERROR_WARNING = 4,
+        XL_CHIPSTAT_ERROR_ACTIVE = 8
+    }
+
+    public enum XL_OutputMode
+    {
+        XL_OUTPUT_MODE_SILENT,
+        XL_OUTPUT_MODE_NORMAL,
+        XL_OUTPUT_MODE_TX_OFF,
+        XL_OUTPUT_MODE_SJA_1000_SILENT
+    }
+
+    public enum XL_BusTypes : uint
+    {
+        XL_BUS_TYPE_NONE = 0u,
+        XL_BUS_TYPE_CAN = 1u,
+        XL_BUS_TYPE_LIN = 2u,
+        XL_BUS_TYPE_FLEXRAY = 4u,
+        XL_BUS_TYPE_AFDX = 8u,
+        XL_BUS_TYPE_MOST = 0x10u,
+        XL_BUS_TYPE_DAIO = 0x40u,
+        XL_BUS_TYPE_J1708 = 0x100u,
+        XL_BUS_TYPE_KLINE = 0x800u,
+        XL_BUS_TYPE_ETHERNET = 0x1000u,
+        XL_BUS_TYPE_A429 = 0x2000u,
+        XL_BUS_TYPE_STATUS = 0x20000u
+    }
+
+    public enum XL_AC_Flags : uint
+    {
+        XL_ACTIVATE_NONE = 0u,
+        XL_ACTIVATE_RESET_CLOCK = 8u
+    }
+
+    public enum XL_BusCapabilities : uint
+    {
+        XL_BUS_COMPATIBLE_CAN = 1u,
+        XL_BUS_COMPATIBLE_LIN = 2u,
+        XL_BUS_COMPATIBLE_FLEXRAY = 4u,
+        XL_BUS_COMPATIBLE_MOST = 0x10u,
+        XL_BUS_COMPATIBLE_DAIO = 0x40u,
+        XL_BUS_COMPATIBLE_J1708 = 0x100u,
+        XL_BUS_COMPATIBLE_KLINE = 0x800u,
+        XL_BUS_COMPATIBLE_ETHERNET = 0x1000u,
+        XL_BUS_COMPATIBLE_A429 = 0x2000u,
+        XL_BUS_ACTIVE_CAP_CAN = 0x10000u,
+        XL_BUS_ACTIVE_CAP_LIN = 0x20000u,
+        XL_BUS_ACTIVE_CAP_FLEXRAY = 0x40000u,
+        XL_BUS_ACTIVE_CAP_MOST = 0x100000u,
+        XL_BUS_ACTIVE_CAP_DAIO = 0x400000u,
+        XL_BUS_ACTIVE_CAP_J1708 = 0x1000000u,
+        XL_BUS_ACTIVE_CAP_KLINE = 0x8000000u,
+        XL_BUS_ACTIVE_CAP_ETHERNET = 0x10000000u,
+        XL_BUS_ACTIVE_CAP_A429 = 0x20000000u
+    }
+
+    public enum XL_ChannelCapabilities : uint
+    {
+        XL_CHANNEL_FLAG_TIME_SYNC_RUNNING = 1u,
+        XL_CHANNEL_FLAG_NO_HWSYNC_SUPPORT = 0x400u,
+        XL_CHANNEL_FLAG_SPDIF_CAPABLE = 0x4000u,
+        XL_CHANNEL_FLAG_CANFD_BOSCH_SUPPORT = 0x20000000u,
+        XL_CHANNEL_FLAG_CMACTLICENSE_SUPPORT = 0x40000000u,
+        XL_CHANNEL_FLAG_CANFD_ISO_SUPPORT = 0x80000000u
+    }
+
+    public enum XL_TimeSyncNewValue : ulong
+    {
+        XL_SET_TIMESYNC_NO_CHANGE,
+        XL_SET_TIMESYNC_ON,
+        XL_SET_TIMESYNC_OFF
+    }
+
+    public enum XL_TsTimeScale
+    {
+        XL_TS_TIMESCALE_UNDEFINED,
+        XL_TS_TIMESCALE_UTC,
+        XL_TS_TIMESCALE_TAI,
+        XL_TS_TIMESCALE_PERFORMANCE_COUNTER,
+        XL_TS_TIMESCALE_ARBITRARY,
+        XL_TS_TIMESCALE_RTC
+    }
+
+    public enum XL_TsClkUuidFormat
+    {
+        XL_TS_CLK_UUID_FORMAT_UNDEFINED,
+        XL_TS_CLK_UUID_FORMAT_VECTOR_DEV,
+        XL_TS_CLK_UUID_FORMAT_EUI64,
+        XL_TS_CLK_UUID_FORMAT_LOCAL_PC,
+        XL_TS_CLK_UUID_FORMAT_VECTOR_PC,
+        XL_TS_CLK_UUID_FORMAT_STANDARD_PC,
+        XL_TS_CLK_UUID_FORMAT_PERFORMANCE_CNT,
+        XL_TS_CLK_UUID_FORMAT_EXTERNAL,
+        XL_TS_CLK_UUID_FORMAT_GPTP
+    }
+
+    public enum XL_RemoteDeviceInfoIpVersion : uint
+    {
+        XL_IPv4 = 4u,
+        XL_IPv6 = 6u
+    }
+
+    public enum XL_RemoteDeviceInfoFlag : uint
+    {
+        XL_REMOTE_DEVICE_AVAILABLE = 1u,
+        XL_REMOTE_DEVICE_CONFIGURED = 2u,
+        XL_REMOTE_DEVICE_CONNECTED = 4u,
+        XL_REMOTE_DEVICE_ENABLED = 8u,
+        XL_REMOTE_DEVICE_BUSY = 0x10u,
+        XL_REMOTE_DEVICE_TEMP_CONFIGURED = 0x20u
+    }
+
+    public enum XL_RemoteDeviceInfoSearch : uint
+    {
+        XL_REMOTE_NO_NET_SEARCH,
+        XL_REMOTE_NET_SEARCH
+    }
+
+    public enum XL_RemoteDeviceInfoDeviceType : uint
+    {
+        XL_REMOTE_DEVICE_TYPE_UNKNOWN,
+        XL_REMOTE_DEVICE_TYPE_VN8900,
+        XL_REMOTE_DEVICE_TYPE_STANDARD_PC,
+        XL_REMOTE_DEVICE_TYPE_VX,
+        XL_REMOTE_DEVICE_TYPE_VN8800,
+        XL_REMOTE_DEVICE_TYPE_VN,
+        XL_REMOTE_DEVICE_TYPE_VT
+    }
+
+    public enum XL_DAIO_DataMask : ushort
+    {
+        XL_DAIO_DATA_GET = 32768,
+        XL_DAIO_DATA_VALUE_DIGITAL = 1,
+        XL_DAIO_DATA_VALUE_ANALOG = 2,
+        XL_DAIO_DATA_PWM = 16,
+        XL_DAIO_MODE_PULSE = 32
+    }
+
+    public enum XL_DAIO_Config : uint
+    {
+        XL_DAIO_DIGITAL_ENABLED = 1u,
+        XL_DAIO_DIGITAL_INPUT = 2u,
+        XL_DAIO_DIGITAL_TRIGGER = 4u,
+        XL_DAIO_ANALOG_ENABLED = 1u,
+        XL_DAIO_ANALOG_INPUT = 2u,
+        XL_DAIO_ANALOG_TRIGGER = 4u,
+        XL_DAIO_ANALOG_RANGE_32V = 8u
+    }
+
+    public enum XL_DAIO_TriggerMode : uint
+    {
+        XL_DAIO_TRIGGER_MODE_NONE = 0u,
+        XL_DAIO_TRIGGER_MODE_DIGITAL = 1u,
+        XL_DAIO_TRIGGER_MODE_ANALOG_ASCENDING = 2u,
+        XL_DAIO_TRIGGER_MODE_ANALOG_DESCENDING = 4u,
+        XL_DAIO_TRIGGER_MODE_ANALOG = 6u
+    }
+
+    public enum XL_DAIO_TriggerLevel : uint
+    {
+        XL_DAIO_TRIGGER_MODE_NONE = 0u,
+        XL_DAIO_TRIGGER_MODE_DIGITAL = 1u,
+        XL_DAIO_TRIGGER_MODE_ANALOG_ASCENDING = 2u,
+        XL_DAIO_TRIGGER_MODE_ANALOG_DESCENDING = 4u,
+        XL_DAIO_TRIGGER_MODE_ANALOG = 6u
+    }
+
+    public enum XL_DAIO_TriggerLev : uint
+    {
+        XL_DAIO_TRIGGER_LEVEL_NONE
+    }
+
+    public enum XL_DAIO_Polling : uint
+    {
+        XL_DAIO_POLLING_NONE
+    }
+
+    public enum XL_DAIO_PortTypeMask : uint
+    {
+        XL_DAIO_PORT_TYPE_MASK_DIGITAL = 1u,
+        XL_DAIO_PORT_TYPE_MASK_ANALOG
+    }
+
+    public enum XL_DAIO_PortTriggerType : uint
+    {
+        XL_DAIO_TRIGGER_TYPE_CYCLIC = 1u,
+        XL_DAIO_TRIGGER_TYPE_PORT
+    }
+
+    public enum XL_DAIO_TriggerType : uint
+    {
+        XL_DAIO_TRIGGER_TYPE_RISING = 1u,
+        XL_DAIO_TRIGGER_TYPE_FALLING,
+        XL_DAIO_TRIGGER_TYPE_BOTH,
+        XL_DAIO_TRIGGER_TYPE_NONE
+    }
+
+    public enum XL_DAIO_PortFunction : uint
+    {
+        XL_DAIO_PORT_DIGITAL_IN = 0u,
+        XL_DAIO_PORT_DIGITAL_PUSHPULL = 1u,
+        XL_DAIO_PORT_DIGITAL_OPENDRAIN = 2u,
+        XL_DAIO_PORT_DIGITAL_SWITCH = 5u,
+        XL_DAIO_PORT_DIGITAL_IN_OUT = 6u,
+        XL_DAIO_PORT_ANALOG_IN = 0u,
+        XL_DAIO_PORT_ANALOG_OUT = 1u,
+        XL_DAIO_PORT_ANALOG_DIFF = 2u,
+        XL_DAIO_PORT_ANALOG_OFF = 3u
+    }
+
+    public enum XL_DAIO_OutputLevel : uint
+    {
+        XL_DAIO_DO_LEVEL_0V = 0u,
+        XL_DAIO_DO_LEVEL_5V = 5u,
+        XL_DAIO_DO_LEVEL_12V = 12u
+    }
+
+    public enum XL_DAIO_DigitalPortMask : uint
+    {
+        XL_DAIO_PORT_MASK_DIGITAL_D0 = 1u,
+        XL_DAIO_PORT_MASK_DIGITAL_D1 = 2u,
+        XL_DAIO_PORT_MASK_DIGITAL_D2 = 4u,
+        XL_DAIO_PORT_MASK_DIGITAL_D3 = 8u,
+        XL_DAIO_PORT_MASK_DIGITAL_D4 = 0x10u,
+        XL_DAIO_PORT_MASK_DIGITAL_D5 = 0x20u,
+        XL_DAIO_PORT_MASK_DIGITAL_D6 = 0x40u,
+        XL_DAIO_PORT_MASK_DIGITAL_D7 = 0x80u
+    }
+
+    public enum XL_DAIO_AnalogPortMask : uint
+    {
+        XL_DAIO_PORT_MASK_ANALOG_A0 = 1u,
+        XL_DAIO_PORT_MASK_ANALOG_A1 = 2u,
+        XL_DAIO_PORT_MASK_ANALOG_A2 = 4u,
+        XL_DAIO_PORT_MASK_ANALOG_A3 = 8u
+    }
+
+    public enum XL_DAIO_EventIDs : uint
+    {
+        XL_DAIO_EVT_ID_DIGITAL = 1u,
+        XL_DAIO_EVT_ID_ANALOG
+    }
+
+    [Flags]
+    public enum XL_IO_PortMask : uint
+    {
+        XL_DAIO_PORT_MASK_DIGITAL_NONE = 0u,
+        XL_DAIO_PORT_MASK_DIGITAL_D0_ANALOG_A0 = 1u,
+        XL_DAIO_PORT_MASK_DIGITAL_D1_ANALOG_A1 = 2u,
+        XL_DAIO_PORT_MASK_DIGITAL_D2_ANALOG_A2 = 4u,
+        XL_DAIO_PORT_MASK_DIGITAL_D3_ANALOG_A3 = 8u,
+        XL_DAIO_PORT_MASK_DIGITAL_D4 = 0x10u,
+        XL_DAIO_PORT_MASK_DIGITAL_D5 = 0x20u,
+        XL_DAIO_PORT_MASK_DIGITAL_D6 = 0x40u,
+        XL_DAIO_PORT_MASK_DIGITAL_D7 = 0x80u
+    }
+
+    [Flags]
+    public enum XL_IO_PortMaskAnalog : uint
+    {
+        XL_DAIO_PORT_MASK_ANALOG_NONE = 0u,
+        XL_DAIO_PORT_MASK_ANALOG_A0 = 1u,
+        XL_DAIO_PORT_MASK_ANALOG_A1 = 2u,
+        XL_DAIO_PORT_MASK_ANALOG_A2 = 4u,
+        XL_DAIO_PORT_MASK_ANALOG_A3 = 8u
+    }
+
+    public enum XL_KLine_EventTags : byte
+    {
+        XL_KLINE_EVT_RX_DATA = 1,
+        XL_KLINE_EVT_TX_DATA = 2,
+        XL_KLINE_EVT_TESTER_5BD = 3,
+        XL_KLINE_EVT_ECU_5BD = 5,
+        XL_KLINE_EVT_TESTER_FI_WU_PATTERN = 7,
+        XL_KLINE_EVT_ECU_FI_WU_PATTERN = 8,
+        XL_KLINE_EVT_ERROR = 9,
+        XL_KLINE_EVT_CONFIRMATION = 10
+    }
+
+    public enum XL_KLine_ErrorMask : uint
+    {
+        XL_KLINE_BYTE_FRAMING_ERROR_MASK = 1u,
+        XL_KLINE_BYTE_PARITY_ERROR_MASK
+    }
+
+    public enum XL_KLine_Tag5bd : uint
+    {
+        XL_KLINE_EVT_TAG_5BD_ADDR = 1u,
+        XL_KLINE_EVT_TAG_5BD_BAUDRATE,
+        XL_KLINE_EVT_TAG_5BD_KB1,
+        XL_KLINE_EVT_TAG_5BD_KB2,
+        XL_KLINE_EVT_TAG_5BD_KB2NOT,
+        XL_KLINE_EVT_TAG_5BD_ADDRNOT
+    }
+
+    public enum XL_KLine_ConfTag : uint
+    {
+        XL_KLINE_EVT_TAG_SET_COMM_PARAM_TESTER = 1u,
+        XL_KLINE_EVT_TAG_COMM_PARAM_ECU,
+        XL_KLINE_EVT_TAG_SWITCH_HIGHSPEED
+    }
+
+    public enum XL_KLine_ErrorTag : uint
+    {
+        XL_KLINE_ERROR_TYPE_RXTX_ERROR = 1u,
+        XL_KLINE_ERROR_TYPE_5BD_TESTER,
+        XL_KLINE_ERROR_TYPE_5BD_ECU,
+        XL_KLINE_ERROR_TYPE_IBS,
+        XL_KLINE_ERROR_TYPE_FI
+    }
+
+    public enum XL_KLine_Error_RXTX : uint
+    {
+        XL_KLINE_ERR_RXTX_UA = 4u,
+        XL_KLINE_ERR_RXTX_MA = 2u,
+        XL_KLINE_ERR_RXTX_ISB = 1u
+    }
+
+    public enum XL_KLine_Error_Tester_5BD : uint
+    {
+        XL_KLINE_ERR_TESTER_W1MIN = 1u,
+        XL_KLINE_ERR_TESTER_W1MAX,
+        XL_KLINE_ERR_TESTER_W2MIN,
+        XL_KLINE_ERR_TESTER_W2MAX,
+        XL_KLINE_ERR_TESTER_W3MIN,
+        XL_KLINE_ERR_TESTER_W3MAX,
+        XL_KLINE_ERR_TESTER_W4MIN,
+        XL_KLINE_ERR_TESTER_W4MAX
+    }
+
+    public enum XL_KLine_Error_Ecu_5BD : uint
+    {
+        XL_KLINE_ERR_ECU_W4MIN = 1u,
+        XL_KLINE_ERR_ECU_W4MAX
+    }
+
+    public enum XL_KLine_Error_IBS : uint
+    {
+        XL_KLINE_ERR_IBS_P1 = 1u,
+        XL_KLINE_ERR_IBS_P4
+    }
+
+    public enum XL_KLine_UartParity : uint
+    {
+        XL_KLINE_UART_PARITY_NONE,
+        XL_KLINE_UART_PARITY_EVEN,
+        XL_KLINE_UART_PARITY_ODD,
+        XL_KLINE_UART_PARITY_MARK,
+        XL_KLINE_UART_PARITY_SPACE
+    }
+
+    public enum XL_KLine_Configure5BdEcu : uint
+    {
+        XL_KLINE_UNCONFIGURE_ECU,
+        XL_KLINE_CONFIGURE_ECU
+    }
+
+    public enum XL_KLine_TrxMode : uint
+    {
+        XL_KLINE_TRXMODE_NORMAL,
+        XL_KLINE_TRXMODE_HIGHSPEED
+    }
+
+    public enum XL_KLine_TesterResistor : uint
+    {
+        XL_KLINE_TESTERRESISTOR_OFF,
+        XL_KLINE_TESTERRESISTOR_ON
+    }
+
+    public enum XL_KLine_Kb2Flag : uint
+    {
+        XL_KLINE_FLAG_TAKE_KB2NOT = 0x80000000u
+    }
+
+    public enum XL_KLine_AddrFlag : uint
+    {
+        XL_KLINE_FLAG_TAKE_ADDRNOT = 0x80000000u
+    }
+
+    public enum XL_LIN_Mode : uint
+    {
+        XL_LIN_MASTER = 1u,
+        XL_LIN_SLAVE
+    }
+
+    public enum XL_LIN_Version : uint
+    {
+        XL_LIN_VERSION_1_3 = 1u,
+        XL_LIN_VERSION_2_0,
+        XL_LIN_VERSION_2_1
+    }
+
+    public enum XL_LIN_CalcChecksum : ushort
+    {
+        XL_LIN_CALC_CHECKSUM = 0x100,
+        XL_LIN_CALC_CHECKSUM_ENHANCED = 0x200
+    }
+
+    public enum XL_LINChecksum : byte
+    {
+        XL_LIN_CHECKSUM_CLASSIC = 0,
+        XL_LIN_CHECKSUM_ENHANCED = 1,
+        XL_LIN_CHECKSUM_UNDEFINED = byte.MaxValue
+    }
+
+    public enum XL_LIN_SleepMode : uint
+    {
+        XL_LIN_FLAG_NO_SLEEP_MODE_EVENT = 1u,
+        XL_LIN_FLAG_USE_ID_AS_WAKEUPID = 2u,
+        XL_LIN_SET_SILENT = 1u,
+        XL_LIN_SET_WAKEUPID = 3u
+    }
+
+    public enum XL_LIN_Sleep : byte
+    {
+        XL_LIN_STAYALIVE,
+        XL_LIN_SET_SLEEPMODE,
+        XL_LIN_COMESFROM_SLEEPMODE
+    }
+
+    public enum XL_LIN_WakeUp : byte
+    {
+        XL_LIN_WAKUP_INTERNAL = 1
+    }
+
+    public enum XL_LIN_SetDLC : byte
+    {
+        XL_LIN_UNDEFINED_DLC = byte.MaxValue
+    }
+
+    public enum XL_LIN_SlaveMode : byte
+    {
+        XL_LIN_SLAVE_ON = byte.MaxValue,
+        XL_LIN_SLAVE_OFF = 0
+    }
+
+    public const int XL_A429_MESSAGE_SIZE = 24;
+
+    public const int XL_A429_PARAMS_SIZE = 28;
+
+    public const int XL_A429_RX_EVENT_SIZE = 52;
+
+    public const int XL_A429_MSG_CHANNEL_DIR_TX = 1;
+
+    public const int XL_A429_MSG_CHANNEL_DIR_RX = 2;
+
+    public const int XL_A429_MSG_BITRATE_SLOW_MIN = 10500;
+
+    public const int XL_A429_MSG_BITRATE_SLOW_MAX = 16000;
+
+    public const int XL_A429_MSG_BITRATE_FAST_MIN = 90000;
+
+    public const int XL_A429_MSG_BITRATE_FAST_MAX = 110000;
+
+    public const int XL_A429_MSG_GAP_4BIT = 32;
+
+    public const int XL_A429_MSG_BITRATE_RX_MIN = 10000;
+
+    public const int XL_A429_MSG_BITRATE_RX_MAX = 120000;
+
+    public const uint XL_A429_MSG_CYCLE_MAX = 1073741823u;
+
+    public const uint XL_A429_MSG_GAP_DEFAULT = 0u;
+
+    public const uint XL_A429_MSG_GAP_MAX = 1048575u;
+
+    public const ushort XL_A429_QUEUE_OVERFLOW = 256;
+
+    public const int XL_A429_RX_FIFO_QUEUE_SIZE_MAX = 524288;
+
+    public const int XL_A429_RX_FIFO_QUEUE_SIZE_MIN = 8192;
+
+    public const int XL_CANFD_RX_EVENT_HEADER_SIZE = 32;
+
+    public const int XL_CANFD_TX_EVENT_SIZE = 88;
+
+    public const int XL_CANFD_CONFIG_SIZE = 40;
+
+    public const int XL_CAN_MAX_DATA_LEN = 64;
+
+    public const int XL_CAN_MAX_RX_EVENTSIZE = 128;
+
+    public const uint XL_CANFD_MAX_EVENT_SIZE = 128u;
+
+    public const uint XL_RX_FIFO_CANFD_QUEUE_SIZE_MAX = 524288u;
+
+    public const uint XL_RX_FIFO_CANFD_QUEUE_SIZE_MIN = 8192u;
+
+    public const int XL_ETH_EVENT_SIZE_HEADER = 32;
+
+    public const int XL_ETH_EVENT_SIZE_MAX = 2048;
+
+    public const int XL_ETH_RX_FIFO_QUEUE_SIZE_MAX = 67108864;
+
+    public const int XL_ETH_RX_FIFO_QUEUE_SIZE_MIN = 65536;
+
+    public const int XL_ETH_PAYLOAD_SIZE_MAX = 1500;
+
+    public const int XL_ETH_PAYLOAD_SIZE_MIN = 46;
+
+    public const int XL_ETH_RAW_FRAME_SIZE_MAX = 1600;
+
+    public const int XL_ETH_RAW_FRAME_SIZE_MIN = 24;
+
+    public const int XL_ETH_MACADDR_OCTETS = 6;
+
+    public const int XL_ETH_ETHERTYPE_OCTETS = 2;
+
+    public const int XL_ETH_VLANTAG_OCTETS = 4;
+
+    public const int XL_ETH_CONFIG_SIZE = 28;
+
+    public const uint XL_ETH_RAW_DATA_SIZE_MAX = 1598u;
+
+    public const int XL_FR_MAX_DATA_LENGTH = 254;
+
+    public const int XL_FR_MAX_EVENT_SIZE = 512;
+
+    public const int XL_FR_RX_EVENT_HEADER_SIZE = 32;
+
+    public const int XL_FR_CLUSTER_CONF_SIZE = 316;
+
+    public const int XL_FR_CHANNEL_CONF_SIZE = 348;
+
+    public const int MAX_MSG_LEN = 8;
+
+    public const int XL_CONFIG_MAX_CHANNELS = 64;
+
+    public const int XL_DRIVER_CONFIG_SIZE = 14576;
+
+    public const uint XL_EVENT_SIZE = 48u;
+
+    public const uint XL_MAX_REMOTE_DEVICE_INFO = 16u;
+
+    public const uint XL_REMOTE_DEVICE_INFO_SIZE = 988u;
+
+    public const uint XL_ALL_REMOTE_DEVICES = uint.MaxValue;
+
+    public const uint XL_MAX_REMOTE_ALIAS_SIZE = 64u;
+
+    public const int XL_INVALID_PORTHANDLE = -1;
+
+    public const int XL_TS_LEAP_SECONDS_SIZE = 8;
+
+    public const int XL_TS_CLOCK_UUID_SIZE = 44;
+
+    public const ulong XL_USE_ALL_CHANNELS = ulong.MaxValue;
+
+    public const uint XL_TS_LEAP_SECONDS_FLAGS_VALID = 1u;
+
+    public const int XL_Kline_uartPar_LENGTH = 12;
+
+    public const int XL_Kline_5BdTester_LENGTH = 52;
+
+    public const int XL_Kline_5BdEcu_LENGTH = 56;
+
+    public const int XL_Kline_InitTester_LENGTH = 12;
+
+    public const int XL_Kline_communicationTimingTester_LENGTH = 12;
+
+    public const int XL_Kline_communicationTimingEcu_LENGTH = 28;
+
+    public const int XL_KLINE_MAX_DATA_LENGTH = 16;
+
+    public const int XL_KLINE_MAX_EVENT_SIZE = 512;
+}
+#if false // Decompilation log
+'34' items in cache
+------------------
+Resolve: 'mscorlib, Version=2.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089'
+Found single assembly: 'mscorlib, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089'
+WARN: Version mismatch. Expected: '2.0.0.0', Got: '4.0.0.0'
+Load from: 'C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.8\mscorlib.dll'
+#endif

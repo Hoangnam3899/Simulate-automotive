@@ -17,7 +17,12 @@ calling an external service, or making any implementation decision, an agent MUS
 3. For a change, read the target files, related tests, and one comparable existing
    implementation before proposing or editing code.
 4. Read relevant `CONTEXT.md`, `docs/adr/`, and `docs/agents/` files when present.
-5. State assumptions and a short plan for multi-step work. If a requirement,
+5. For CAN, CAN FD, AUTOSAR E2E, or Vector XL work, identify and read the
+   relevant mandatory reference material in `docs-guide/` before planning or
+   implementing.
+6. For every automotive design, plan, code, test, or review, perform the standards
+   applicability assessment in `docs/agents/automotive-standards.md` before work.
+7. State assumptions and a short plan for multi-step work. If a requirement,
    acceptance criterion, or destructive/external side effect is materially unclear,
    stop and ask; do not invent a product decision.
 
@@ -59,6 +64,8 @@ Use the smallest relevant workflow; do not force every task through every skill.
 - Work in small, reversible slices. Preserve unrelated user changes.
 - Follow existing project patterns; do not invent APIs, dependencies, or framework
   behavior without checking the relevant source or official documentation.
+- C#/.NET code must comply with `docs/agents/csharp-automotive-coding-standard.md`.
+  Apply it to new and modified code; do not expand scope by rewriting untouched code.
 - Run the narrowest relevant verification after each change, then the appropriate
   build/test check before declaring completion. Report what ran and its result.
 - Update documentation only when the user asked or when the chosen workflow
@@ -66,6 +73,35 @@ Use the smallest relevant workflow; do not force every task through every skill.
   decisions in `docs/adr/` when applicable.
 - In the final handoff, state outcome, files changed, verification evidence, and
   any remaining limitation. Never claim success without evidence.
+
+## Mandatory automotive reference material
+
+`docs-guide/` is the project reference corpus. It is mandatory input for any
+plan, design, code, test, or review that touches the subject areas it covers.
+
+- Use the relevant AUTOSAR E2E and Vector XL documents and text references as
+  source material; do not rely only on model memory.
+- Treat `XLClass.txt`, `XLDefine.txt`, `XLDriver.txt`, and `XL_Driver_Library_Manual_EN.pdf`
+  as the Vector XL API reference set.
+- If two documents conflict, including different versions of the same specification,
+  report the exact conflict and ask for a decision before planning or coding.
+- Do not infer undocumented diagnostic behavior from a file name or from a DLL.
+
+## International automotive standards
+
+Automotive work is standards-first. The applicable-standard assessment and its
+evidence requirements are defined in `docs/agents/automotive-standards.md`.
+An agent MUST identify the applicable standards before design, planning, code,
+tests, or review, and MUST stop for a decision when a required controlled source
+is unavailable or standards conflict. Never claim ISO, AUTOSAR, regulatory, or
+safety compliance without a traceable assessment and verification evidence.
+
+## C#/.NET coding standard
+
+All C# design and implementation work must follow
+`docs/agents/csharp-automotive-coding-standard.md`. Use the configured analyzers
+and `.editorconfig` as a minimum automated gate; resolve or explicitly justify
+each warning rather than suppressing it by default.
 
 ## Project workflow configuration
 
