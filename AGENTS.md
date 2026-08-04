@@ -1,4 +1,4 @@
-# Simulate — Agent Instructions
+ Simulate — Agent Instructions
 
 > This file is the root entry point for AI coding agents (Codex, Claude Code, Cursor, Copilot, Gemini, etc.).
 > All agent skills, references, and configuration live in [`.agents/`](.agents/).
