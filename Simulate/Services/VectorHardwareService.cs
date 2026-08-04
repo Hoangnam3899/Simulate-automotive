@@ -38,10 +38,17 @@ namespace Simulate.Services
                         string deviceKey = $"{config.channel[i].hwType}_{config.channel[i].hwIndex}";
                         if (!dict.TryGetValue(deviceKey, out HardwareInterface? iface))
                         {
-                            string devName = config.channel[i].name;
-                            int bracketIdx = devName.IndexOf('(');
-                            if (bracketIdx > 0) devName = devName.Substring(0, bracketIdx).Trim();
-                            
+                            string devName;
+                            if (config.channel[i].hwType == XLDefine.XL_HardwareType.XL_HWTYPE_VIRTUAL)
+                            {
+                                devName = $"Virtual CAN Bus {config.channel[i].hwIndex + 1}";
+                            }
+                            else
+                            {
+                                string typeStr = config.channel[i].hwType.ToString().Replace("XL_HWTYPE_", "");
+                                devName = $"{typeStr} {config.channel[i].hwIndex + 1}";
+                            }
+
                             iface = new HardwareInterface { Name = devName };
                             dict[deviceKey] = iface;
                         }

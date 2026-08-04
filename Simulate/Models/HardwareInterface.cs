@@ -6,5 +6,7 @@ namespace Simulate.Models
     {
         public string Name { get; set; } = string.Empty;
         public List<HardwareChannel> Channels { get; set; } = new();
+
+        public override string ToString() => Name;
     }
 }
