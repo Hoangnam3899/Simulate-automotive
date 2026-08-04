@@ -1,0 +1,28 @@
+# Simulate — Windsurf / Cursor Rules
+
+## Project: C# WPF desktop application (Simulate.sln)
+## Architecture: MVVM (Model-View-ViewModel)
+
+## Commands
+- Build: dotnet build
+- Test: dotnet test
+- Run: dotnet run --project Simulate
+
+## Conventions
+- C# with .NET, XAML for UI
+- Conventional commits (feat:, fix:, chore:, refactor:, test:, docs:)
+- Named types, explicit access modifiers
+- XML doc comments on public API
+
+## Boundaries
+- Never commit secrets or credentials
+- Never modify files outside the solution without permission
+- Ask before adding NuGet dependencies
+- Ask before changing project/solution structure
+- Always verify build after changes
+
+## Skills
+Agent skills are in .agents/skills/. Read .agents/SKILL-CATALOG.md for routing.
+
+## Domain
+Read CONTEXT.md (if exists) for domain vocabulary before coding.
