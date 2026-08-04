@@ -1,5 +1,0 @@
-# Windsurf adapter
-
-Before responding with a plan, running a command, or changing repository files,
-read and obey `AGENTS.md` at the repository root. It is the authoritative policy.
-Then read the applicable `.agents/skills/<skill-name>/SKILL.md` before acting.

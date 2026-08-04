@@ -15,3 +15,6 @@
 # OS files
 .DS_Store
 Thumbs.db
+
+# Temporary agent skill sources (not for committing)
+.agent-skill-sources/
