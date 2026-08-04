@@ -7,15 +7,29 @@ namespace Simulate.Services
     {
         public bool IsConnected { get; private set; }
 
-        public List<HardwareChannel> GetAvailableChannels()
+        public List<HardwareInterface> GetAvailableInterfaces()
         {
-            return new List<HardwareChannel>
+            var virtualCan = new HardwareInterface
             {
-                new HardwareChannel { Name = "Virtual CAN 1", ChannelIndex = 0, ChannelMask = 1 },
-                new HardwareChannel { Name = "Virtual CAN 2", ChannelIndex = 1, ChannelMask = 2 },
-                new HardwareChannel { Name = "Virtual CAN 3", ChannelIndex = 2, ChannelMask = 4 },
-                new HardwareChannel { Name = "Virtual CAN 4", ChannelIndex = 3, ChannelMask = 8 }
+                Name = "Virtual CAN Bus",
+                Channels = new List<HardwareChannel>
+                {
+                    new HardwareChannel { Name = "Virtual CAN 1", ChannelIndex = 0, ChannelMask = 1 },
+                    new HardwareChannel { Name = "Virtual CAN 2", ChannelIndex = 1, ChannelMask = 2 }
+                }
             };
+            
+            var vn1640 = new HardwareInterface
+            {
+                Name = "Vector VN1640",
+                Channels = new List<HardwareChannel>
+                {
+                    new HardwareChannel { Name = "VN1640 Channel 1", ChannelIndex = 2, ChannelMask = 4 },
+                    new HardwareChannel { Name = "VN1640 Channel 2", ChannelIndex = 3, ChannelMask = 8 }
+                }
+            };
+
+            return new List<HardwareInterface> { virtualCan, vn1640 };
         }
 
         public bool Connect(HardwareChannel txChannel, HardwareChannel rxChannel, uint baudrate, bool isCanFd)

@@ -6,7 +6,7 @@ namespace Simulate.Services
     public interface ICanHardwareDriver
     {
         bool IsConnected { get; }
-        List<HardwareChannel> GetAvailableChannels();
+        List<HardwareInterface> GetAvailableInterfaces();
         bool Connect(HardwareChannel txChannel, HardwareChannel rxChannel, uint baudrate, bool isCanFd);
         bool Disconnect();
     }

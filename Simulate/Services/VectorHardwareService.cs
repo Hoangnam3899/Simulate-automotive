@@ -18,23 +18,35 @@ namespace Simulate.Services
             _driver = new XLDriver();
         }
 
-        public List<HardwareChannel> GetAvailableChannels()
+        public List<HardwareInterface> GetAvailableInterfaces()
         {
-            var channels = new List<HardwareChannel>();
+            var interfaces = new List<HardwareInterface>();
             
             XLDefine.XL_Status status = _driver.XL_OpenDriver();
-            if (status != XLDefine.XL_Status.XL_SUCCESS) return channels;
+            if (status != XLDefine.XL_Status.XL_SUCCESS) return interfaces;
 
             XLClass.xl_driver_config config = new XLClass.xl_driver_config();
             status = _driver.XL_GetDriverConfig(ref config);
 
             if (status == XLDefine.XL_Status.XL_SUCCESS)
             {
+                var dict = new Dictionary<string, HardwareInterface>();
                 for (int i = 0; i < config.channelCount; i++)
                 {
                     if (config.channel[i].hwType != XLDefine.XL_HardwareType.XL_HWTYPE_NONE && (config.channel[i].busParams.busType == XLDefine.XL_BusTypes.XL_BUS_TYPE_CAN))
                     {
-                        channels.Add(new HardwareChannel
+                        string deviceKey = $"{config.channel[i].hwType}_{config.channel[i].hwIndex}";
+                        if (!dict.TryGetValue(deviceKey, out HardwareInterface? iface))
+                        {
+                            string devName = config.channel[i].name;
+                            int bracketIdx = devName.IndexOf('(');
+                            if (bracketIdx > 0) devName = devName.Substring(0, bracketIdx).Trim();
+                            
+                            iface = new HardwareInterface { Name = devName };
+                            dict[deviceKey] = iface;
+                        }
+
+                        iface.Channels.Add(new HardwareChannel
                         {
                             Name = config.channel[i].name,
                             ChannelIndex = config.channel[i].channelIndex,
@@ -42,10 +54,11 @@ namespace Simulate.Services
                         });
                     }
                 }
+                interfaces.AddRange(dict.Values);
             }
             
             _driver.XL_CloseDriver();
-            return channels;
+            return interfaces;
         }
 
         public bool Connect(HardwareChannel txChannel, HardwareChannel rxChannel, uint baudrate, bool isCanFd)

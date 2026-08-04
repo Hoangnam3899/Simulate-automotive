@@ -11,13 +11,42 @@ namespace Simulate.ViewModels
         private readonly ICanHardwareDriver _hardwareDriver;
 
         [ObservableProperty]
-        private ObservableCollection<HardwareChannel> _availableInterfaces = new();
+        private ObservableCollection<HardwareInterface> _availableInterfaces = new();
+
+        [ObservableProperty]
+        private HardwareInterface? _selectedInterface;
+
+        [ObservableProperty]
+        private ObservableCollection<HardwareChannel> _availableChannels = new();
 
         [ObservableProperty]
         private HardwareChannel? _selectedTx;
 
         [ObservableProperty]
         private HardwareChannel? _selectedRx;
+
+        partial void OnSelectedInterfaceChanged(HardwareInterface? value)
+        {
+            AvailableChannels.Clear();
+            if (value != null)
+            {
+                foreach (var ch in value.Channels)
+                {
+                    AvailableChannels.Add(ch);
+                }
+            }
+
+            if (AvailableChannels.Count > 0)
+            {
+                SelectedTx = AvailableChannels[0];
+                SelectedRx = AvailableChannels.Count > 1 ? AvailableChannels[1] : AvailableChannels[0];
+            }
+            else
+            {
+                SelectedTx = null;
+                SelectedRx = null;
+            }
+        }
 
         [ObservableProperty]
         private bool _isCanFdEnabled = true;
@@ -40,17 +69,16 @@ namespace Simulate.ViewModels
         [RelayCommand]
         private void RefreshInterfaces()
         {
-            var channels = _hardwareDriver.GetAvailableChannels();
+            var interfaces = _hardwareDriver.GetAvailableInterfaces();
             AvailableInterfaces.Clear();
-            foreach (var ch in channels)
+            foreach (var iface in interfaces)
             {
-                AvailableInterfaces.Add(ch);
+                AvailableInterfaces.Add(iface);
             }
 
             if (AvailableInterfaces.Count > 0)
             {
-                SelectedTx = AvailableInterfaces[0];
-                SelectedRx = AvailableInterfaces.Count > 1 ? AvailableInterfaces[1] : AvailableInterfaces[0];
+                SelectedInterface = AvailableInterfaces[0];
             }
         }
 
