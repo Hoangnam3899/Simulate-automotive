@@ -53,11 +53,19 @@ namespace Simulate.Services
                             dict[deviceKey] = iface;
                         }
 
+                        string chName = string.IsNullOrWhiteSpace(config.channel[i].transceiverName) 
+                            ? $"Channel {config.channel[i].hwChannel + 1}"
+                            : $"{config.channel[i].transceiverName} (CH {config.channel[i].hwChannel + 1})";
+
+                        uint rate = config.channel[i].busParams.dataCan.bitrate;
+                        if (rate == 0) rate = 500000;
+
                         iface.Channels.Add(new HardwareChannel
                         {
-                            Name = config.channel[i].name,
+                            Name = chName,
                             ChannelIndex = config.channel[i].channelIndex,
-                            ChannelMask = config.channel[i].channelMask
+                            ChannelMask = config.channel[i].channelMask,
+                            DefaultBaudrate = rate
                         });
                     }
                 }

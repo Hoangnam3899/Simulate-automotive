@@ -48,6 +48,18 @@ namespace Simulate.ViewModels
             }
         }
 
+        partial void OnSelectedTxChanged(HardwareChannel? value)
+        {
+            if (value != null && value.DefaultBaudrate > 0)
+            {
+                if (!AvailableBaudrates.Contains(value.DefaultBaudrate))
+                {
+                    AvailableBaudrates.Add(value.DefaultBaudrate);
+                }
+                Baudrate = value.DefaultBaudrate;
+            }
+        }
+
         [ObservableProperty]
         private bool _isCanFdEnabled = true;
 
