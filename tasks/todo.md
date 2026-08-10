@@ -4,7 +4,7 @@
 >
 > UI LOCK: Không sửa `App.xaml`, `MainWindow.xaml`, `MainWindow.xaml.cs` hoặc file UI/XAML nào nếu chưa có yêu cầu và cho phép rõ ràng từ người dùng.
 >
-> Coordinator status (2026-08-10): Task 2 đã hoàn tất sau review PASS của `Luna high`; tiếp theo là Task 3 với lead `Sol ultra`, review `Terra xhigh`. Task completion reminder đã được bật. Bàn giao chi tiết: [`handoff.md`](../handoff.md).
+> Coordinator status (2026-08-10): Task 3 đã hoàn tất sau review PASS của `Terra xhigh`; tiếp theo là Task 4 với lead `Sol ultra`, test review `Luna xhigh` và code review `Terra xhigh`. Build PASS, test 21/21 PASS và UI diff bằng không. Task completion reminder đã được bật. Bàn giao chi tiết: [`handoff.md`](../handoff.md).
 
 ## Coordinator execution order
 
@@ -93,15 +93,18 @@
 
 **Description:** Sửa ownership của driver/port, kiểm tra mọi `XL_Status`, typed error và cleanup đầy đủ khi lỗi giữa chuỗi open/configure/activate.
 
+**Implementation status:** `DONE` — `Sol ultra` implementation và `Terra xhigh` independent review đều PASS.
+
 **Acceptance criteria:**
-- [ ] Không còn nhánh activation/configuration failure làm rò port/driver.
-- [ ] Discovery dùng `try/finally` và lọc channel CAN hợp lệ.
-- [ ] Error result giữ operation, `XL_Status` và message chẩn đoán.
+- [x] Không còn nhánh activation/configuration failure làm rò port/driver.
+- [x] Discovery dùng `try/finally` và lọc channel CAN hợp lệ.
+- [x] Error result giữ operation, `XL_Status` và message chẩn đoán.
 
 **Verification:**
-- [ ] Fault-path tests bằng seam/wrapper phù hợp.
-- [ ] Đối chiếu API với tài liệu local `Doc/`.
-- [ ] Build/test sạch, UI diff bằng không.
+- [x] Fault-path tests bằng seam/wrapper phù hợp: 11 test Vector lifecycle mới, toàn suite 21/21 PASS.
+- [x] Đối chiếu API với `XL Driver Library Manual 20.30` và wrapper `vxlapi_NET` 25.20.14.0 trong `Doc/`.
+- [x] `dotnet build Simulate.sln`: PASS, 0 warning/0 error; UI diff bằng không.
+- [ ] `NEEDS_VERIFY`: cắm hardware Vector thật để xác minh trạng thái native/driver thực tế ở Task 15.
 
 **Dependencies:** Tasks 1-2
 **Files likely touched:** `Services/VectorHardwareService.cs`, supporting models/tests
@@ -402,3 +405,26 @@ Mỗi mục trên cần một yêu cầu và approval UI riêng từ người d�
 - [x] Verification: `dotnet build Simulate.sln` PASS, 0 warning, 0 error; `dotnet test Simulate.sln` PASS, 10/10; `git diff --check` PASS; UI diff bằng không.
 - [x] Luna high review Task 2 PASS, không còn finding Critical/Required.
 - [x] Task 2 hoàn tất; next action là Task 3 — lead `Sol ultra`, review `Terra xhigh`.
+
+## Work log — 2026-08-10 (Task 3 implementation)
+
+- [x] `Sol ultra` đã tách boundary `IVectorXlApi`; type của Vector XL không lọt ra domain/session contract công khai.
+- [x] Discovery luôn đóng driver bằng `try/finally`, lọc theo `XL_BUS_ACTIVE_CAP_CAN` và kiểm tra channel mask theo global channel index.
+- [x] Open/configure/activate giữ ownership driver/port trong session; mọi failure path đều chạy cleanup theo thứ tự deactivate → close port → close driver.
+- [x] Classic dùng interface V3; CAN FD lifecycle dùng interface V4; `permissionMask` được kiểm tra trước cấu hình.
+- [x] Typed failure giữ `HardwareOperation`, `HardwareErrorCode`, numeric `XL_Status`, enum name và API gây lỗi.
+- [x] Fault-path tests bao phủ discovery, open port, thiếu init access, Classic/FD configuration, activation, legacy connect, stop/dispose idempotent và cleanup status.
+- [x] Source verification: manual local 20.30; `Doc/vxlapi_NET.dll` và `Simulate/lib/vxlapi_NET.dll` cùng version 25.20.14.0 và cùng SHA-256.
+- [x] Verification: `dotnet build Simulate.sln` PASS, 0 warning/0 error; `dotnet test Simulate.sln --no-build --no-restore` PASS 21/21; `git diff --check` PASS; UI diff bằng không.
+- [x] Self-review bằng `code-review` và review độc lập `Terra xhigh`: không còn finding Critical/Required.
+- [ ] `NEEDS_VERIFY`: hardware Vector thật chưa được cắm; receive/transmit/flush native vẫn thuộc Task 4/5.
+
+## Work log — 2026-08-10 (Task 3 independent review)
+
+- [x] `Terra xhigh` review độc lập hai trục spec/standards: PASS, không có finding Critical/Required.
+- [x] Spec: ownership/cleanup ở failure path, `try/finally` discovery, CAN channel filter, init access và typed native error đều đạt acceptance criteria.
+- [x] Standards: boundary `IVectorXlApi` giữ type Vector nội bộ; không có UI diff, secret, package/project configuration change hoặc file ngoài scope.
+- [x] Source verification độc lập: `XL Driver Library Manual 20.30` pp.37, 39, 43-44, 48, 53, 61, 85-86, 103-104; DLL dùng trong app và `Doc/` cùng version/hash.
+- [x] Verification độc lập: `dotnet build Simulate.sln --no-restore` PASS 0 warning/0 error; `dotnet test Simulate.sln --no-build --no-restore` PASS 21/21; `git diff --check` PASS; UI diff bằng không.
+- [ ] `NEEDS_VERIFY`: Vector hardware thật và close-status của driver còn cần manual checklist ở Task 15; đây không chặn Task 3.
+- [x] Task 3 hoàn tất; next action là Task 4 — lead `Sol ultra`, test review `Luna xhigh`, code review `Terra xhigh`.

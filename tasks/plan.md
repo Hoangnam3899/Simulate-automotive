@@ -135,7 +135,7 @@ Nguyên tắc:
 ### Phase 1 — Hardware foundation
 
 - [x] Task 2: Nâng Mock adapter thành in-memory gateway session — **Terra high**, review **Luna high**. Luna review PASS; task đã hoàn tất.
-- [ ] Task 3: Hardening discovery và native lifecycle — **Sol ultra**, review **Terra xhigh**.
+- [x] Task 3: Hardening discovery và native lifecycle — **Sol ultra**, review **Terra xhigh** PASS. Build 0 warning/0 error, test 21/21 PASS, UI diff bằng không; hardware thật còn `NEEDS_VERIFY`.
 - [ ] Task 4: Classic CAN receive/transmit hai chiều — **Sol ultra**, review **Luna xhigh** + **Terra xhigh**.
 - [ ] Task 5: CAN FD receive/transmit hai chiều — **Sol ultra**, review **Terra xhigh**.
 - [ ] Task 6: Chuyển connection orchestration sang async/cancellation — **Terra xhigh**, review **Luna high**.
@@ -143,7 +143,7 @@ Nguyên tắc:
 ### Checkpoint B — Hardware session
 
 - [x] Mock session chứng minh connect, receive, transmit, flush và disconnect qua contract tests; đang chờ review độc lập.
-- [ ] Mọi nhánh lỗi Vector đều đóng port/driver đúng một lần.
+- [x] Mọi nhánh lỗi Vector lifecycle đã mô phỏng đều giải phóng port/driver và giữ cleanup status; hardware thật còn `NEEDS_VERIFY`.
 - [ ] Classic dùng interface V3; CAN FD dùng V4 và API receive/transmit tương ứng.
 - [ ] Connect/refresh/disconnect không block UI thread.
 - [ ] Build/test sạch và không đổi UI.

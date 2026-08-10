@@ -26,11 +26,13 @@ Tài liệu này bàn giao trạng thái để model/agent tiếp theo thực hi
 - Task 0 baseline đã kiểm tra; người dùng đã xác nhận approval cho test project/NuGet, target x64 có điều kiện và module backend.
 - Task completion reminder đã được thêm vào `tasks/plan.md`, `tasks/todo.md` và handoff này.
 - Phần implementation Task 1 bằng `Sol xhigh` đã hoàn tất: domain frame/options/result và hardware/session seam đã compile sạch.
+- Task 1 đã commit tại `5a14071 feat: define CAN gateway session contracts`.
+- Task 2 đã commit tại `8eae6fa feat: add in-memory mock gateway session`.
+- Task 3 đã hoàn tất: `Sol ultra` implementation, `Terra xhigh` review PASS; chưa commit/push.
 
 ## Trạng thái repository
 
-- Các file PLAN/todo đã commit.
-- Task 1 và các cập nhật coordinator hiện chưa commit/push.
+- PLAN, Task 1 và Task 2 đã commit; Task 3 cùng cập nhật coordinator hiện chưa commit/push.
 - Worktree còn thay đổi không thuộc phạm vi coordinator và không được stage/commit:
   - `AGENTS.md`
   - `CLAUDE.md`
@@ -61,7 +63,7 @@ Vector-specific handles, masks, permissions và `XLDriver` phải nằm trong se
 
 ## Điểm kỹ thuật cần chú ý
 
-- `VectorHardwareService.Connect()` hiện có nguy cơ cleanup thiếu nếu activate fail: `Disconnect()` thoát sớm khi `IsConnected == false`, trong khi port/driver đã được mở.
+- Lỗi cleanup cũ của `VectorHardwareService.Connect()` khi activate fail đã được sửa trong Task 3 và có regression test qua legacy seam.
 - Discovery và command hiện đồng bộ; không gọi hardware blocking trong ViewModel constructor hoặc Dispatcher.
 - `ICanHardwareDriver` mới chỉ làm discovery/open session; `ICanGatewaySession` giữ receive/transmit/flush/stop/dispose và không lộ type Vector.
 - `ICanConnectionDriver` là seam chuyển tiếp cho luồng ViewModel đồng bộ hiện tại; Task 6 sẽ xóa seam này sau khi Vector/Mock adapters triển khai contract mới.
@@ -70,28 +72,20 @@ Vector-specific handles, masks, permissions và `XLDriver` phải nằm trong se
 
 ## Next action
 
-**Task 1 — DONE: Lead Sol xhigh; review Terra xhigh PASS.**
+**Task 3 — DONE: Lead Sol ultra; independent review Terra xhigh PASS.**
 
-Contract freeze đã chốt các điểm sau:
+Terra xác nhận không còn finding Critical/Required:
 
-1. `CanFrame` giữ standard/extended ID, frame format Classic/FD, DLC, BRS, payload, source và timestamp mà không phụ thuộc Vector XL.
-2. `CanGatewayOptions` phân biệt Classic/FD bitrate và chặn RX/TX có `ChannelIndex` giống nhau hoặc channel mask chồng lấp.
-3. `ICanHardwareDriver` chỉ discovery/open session; lifecycle I/O nằm trong `ICanGatewaySession`.
-4. `StopAsync` không cancellable giữa cleanup; `DisposeAsync` tiếp tục có contract idempotent.
-5. UI/XAML/code-behind và binding không thay đổi; `ICanConnectionDriver` chỉ là seam chuyển tiếp đến Task 6.
+1. `VectorHardwareService` triển khai typed discovery/open session và giữ legacy connection seam mà không đổi UI/binding.
+2. `IVectorXlApi` cô lập `vxlapi_NET`; discovery lọc `XL_BUS_ACTIVE_CAP_CAN`, valid channel index/mask và luôn đóng driver trong `finally`.
+3. Session sở hữu driver/port/channel activation; setup failure và stop cleanup theo thứ tự deactivate → close port → close driver.
+4. Tất cả native failure giữ operation, error code, numeric `XL_Status`, enum name và API name; cleanup failure không bị nuốt.
+5. Manual local 20.30 xác nhận active CAN capability ở p.61, interface V3/V4 và `permissionMask` ở pp.43-44, cleanup flow ở p.103. DLL đang dùng là 25.20.14.0 và trùng hash với bản trong `Doc/`.
+6. Verification độc lập: build 0 warning/0 error, full suite 21/21 PASS, `git diff --check` PASS, UI diff bằng không.
 
-**Task 2 — DONE: Lead Terra high; review Luna high PASS.**
+**Next action: Task 4 — Classic CAN receive/transmit hai chiều.** Lead `Sol ultra`; test review `Luna xhigh`; code review `Terra xhigh`. Không commit/push nếu người dùng chưa yêu cầu.
 
-Luna review đã xác nhận:
-
-1. `MockHardwareService` triển khai song song seam legacy và `ICanHardwareDriver` mới, không làm đổi UI/binding.
-2. `MockCanGatewaySession` có queue receive/transmit tách biệt, RX→TX và TX→RX không tạo echo.
-3. Fault plan map đúng discovery/open driver/open session/configure/activate/transmit sang `HardwareFailure` typed.
-4. `StopAsync`/`DisposeAsync` idempotent, kết thúc queue và không chấp nhận transmit sau stop; race với `TryWrite` không báo thành công giả.
-5. Test project MSTest không thêm dependency ngoài approval; test qua public seam thay vì private state.
-6. Không có finding Critical/Required; build/test và UI gate đều PASS.
-
-Task tiếp theo là Task 3 — **Sol ultra**, review **Terra xhigh**. Task 2 hiện chưa commit; chỉ tạo commit khi người dùng yêu cầu. Không bắt đầu Vector native lifecycle trước khi chuyển model sang Sol ultra.
+`NEEDS_VERIFY`: chưa cắm hardware Vector thật. `VectorCanGatewaySession` trong Task 3 chỉ hoàn thiện native lifecycle; receive/transmit/flush thực tế được cố ý hoãn sang Task 4 (Classic) và Task 5 (FD), không nối vào UI hiện tại.
 
 ## Task completion reminder
 
