@@ -4,7 +4,7 @@
 >
 > UI LOCK: Không sửa `App.xaml`, `MainWindow.xaml`, `MainWindow.xaml.cs` hoặc file UI/XAML nào nếu chưa có yêu cầu và cho phép rõ ràng từ người dùng.
 >
-> Coordinator status (2026-08-10): Task 3 đã hoàn tất sau review PASS của `Terra xhigh`; tiếp theo là Task 4 với lead `Sol ultra`, test review `Luna xhigh` và code review `Terra xhigh`. Build PASS, test 21/21 PASS và UI diff bằng không. Task completion reminder đã được bật. Bàn giao chi tiết: [`handoff.md`](../handoff.md).
+> Coordinator status (2026-08-11): Task 4 đã hoàn tất: implementation `Sol ultra`, test review `Luna xhigh` PASS và code review `Terra xhigh` PASS; build sạch và test 35/35 PASS. Tiếp theo là Task 5 — lead `Sol ultra`, review `Terra xhigh`. UI diff bằng không, hardware thật còn `NEEDS_VERIFY`, chưa commit/push. Task completion reminder đã được bật. Bàn giao chi tiết: [`handoff.md`](../handoff.md).
 
 ## Coordinator execution order
 
@@ -116,15 +116,17 @@
 
 **Description:** Mở RX/TX physical channels, nhận và phát Classic CAN frame, bảo toàn standard/extended ID và đóng session đúng thứ tự.
 
+**Implementation status:** DONE — implementation `Sol ultra`, test review `Luna xhigh` PASS và code review `Terra xhigh` PASS.
+
 **Acceptance criteria:**
-- [ ] Dùng interface V3 và Classic CAN receive/transmit APIs đúng wrapper hiện có.
-- [ ] RX/TX channel không được trùng; permission/configuration failure trả typed error.
-- [ ] Receive/transmit/flush/cancel hoạt động qua session seam.
+- [x] Dùng interface V3 và Classic CAN receive/transmit APIs đúng wrapper hiện có.
+- [x] RX/TX channel không được trùng; permission/configuration failure trả typed error.
+- [x] Receive/transmit/flush/cancel hoạt động qua session seam.
 
 **Verification:**
-- [ ] Contract/integration tests bằng Mock.
-- [ ] Manual Vector checklist được tạo, mục chưa cắm hardware ghi `NEEDS_VERIFY`.
-- [ ] Build/test sạch, UI diff bằng không.
+- [x] Contract/integration tests bằng Mock và fake Vector SDK boundary.
+- [x] Manual Vector checklist đã tạo tại [`tasks/vector-classic-can-hardware-checklist.md`](vector-classic-can-hardware-checklist.md); mục chưa cắm hardware ghi `NEEDS_VERIFY`.
+- [x] Build/test sạch, UI diff bằng không tại checkpoint implementation.
 
 **Dependencies:** Task 3
 **Files likely touched:** Vector adapter/session files và tests
@@ -428,3 +430,36 @@ Mỗi mục trên cần một yêu cầu và approval UI riêng từ người d�
 - [x] Verification độc lập: `dotnet build Simulate.sln --no-restore` PASS 0 warning/0 error; `dotnet test Simulate.sln --no-build --no-restore` PASS 21/21; `git diff --check` PASS; UI diff bằng không.
 - [ ] `NEEDS_VERIFY`: Vector hardware thật và close-status của driver còn cần manual checklist ở Task 15; đây không chặn Task 3.
 - [x] Task 3 hoàn tất; next action là Task 4 — lead `Sol ultra`, test review `Luna xhigh`, code review `Terra xhigh`.
+
+## Work log — 2026-08-10 (Task 4 implementation)
+
+- [x] `Sol ultra` đã mở Classic frame I/O qua interface V3 và API chính thức `XL_Receive`, `XL_CanTransmit`, `XL_FlushReceiveQueue`, `XL_CanFlushTransmitQueue`.
+- [x] Một native port sở hữu combined RX/TX mask; `chanIndex` ánh xạ frame về `CanGatewaySide.Rx` hoặc `CanGatewaySide.Tx`, destination transmit dùng đúng physical mask.
+- [x] Standard/extended ID, DLC 0..8 và payload được bảo toàn; queue overrun, invalid DLC và native RX/TX/flush status trả typed failure.
+- [x] Receive chạy theo batch giới hạn 256 ngoài caller thread, có delay khi queue rỗng, caller cancellation và stop pending receive hữu hạn.
+- [x] Flush luôn xử lý cả receive queue và transmit queue; stop/dispose tiếp tục cleanup idempotent theo deactivate → close port → close driver.
+- [x] Source verification: Vector manual 20.30 pp.47, 49, 75-76, 79-80, 90-94; wrapper DLL `25.20.14.0` trong `Doc/XLDriver.txt`, `Doc/XLClass.txt`, `Doc/XLDefine.txt`.
+- [x] Verification implementation: `dotnet build Simulate.sln --no-restore` PASS 0 warning/0 error; `dotnet test Simulate.sln --no-build --no-restore` PASS 35/35; `git diff --check` PASS; self-review không còn finding Critical/Required.
+- [x] Targeted whitespace verification cho 5 file C# thuộc Task 4 PASS. Repo-wide formatter còn baseline EOL/charset ngoài phạm vi, gồm file UI; các file đó không bị sửa.
+- [x] UI/XAML/code-behind và binding `Connection.*`, `Messages`, `Signals`, `FaultQueue` không thay đổi.
+- [ ] `NEEDS_VERIFY`: chưa cắm Vector hardware thật; toàn bộ mục runtime được ghi tại [`tasks/vector-classic-can-hardware-checklist.md`](vector-classic-can-hardware-checklist.md).
+
+## Work log — 2026-08-11 (Task 4 Luna xhigh test review)
+
+- [x] Spec/acceptance review PASS: Classic V3, RX/TX channel distinct, session seam, receive/transmit/flush/cancellation và typed native failures đều có bằng chứng từ test/fake SDK.
+- [x] Edge-case review PASS: standard/extended ID, payload/DLC, queue overrun, invalid DLC, CAN FD rejection, destination mask, pending receive stop và repeated cleanup đều được kiểm tra.
+- [x] Independent verification: `dotnet build Simulate.sln --no-restore` PASS 0 warning/0 error; `dotnet test Simulate.sln --no-build --no-restore` PASS 35/35; `git diff --check` PASS; targeted whitespace verification PASS.
+- [x] UI/XAML/code-behind, binding `Connection.*`/`Messages`/`Signals`/`FaultQueue`, project và solution configuration không có diff.
+- [x] Luna xhigh review không còn finding Critical/Required.
+- [ ] `NEEDS_VERIFY`: Vector hardware thật chưa được cắm; runtime checklist vẫn ở [`tasks/vector-classic-can-hardware-checklist.md`](vector-classic-can-hardware-checklist.md).
+
+## Work log — 2026-08-11 (Task 4 Terra xhigh code review)
+
+- [x] Two-axis review PASS, không có finding Critical/Required.
+- [x] Trục spec: interface V3 và wrapper `XL_Receive`/`XL_CanTransmit`/flush khớp source local; combined RX/TX mask, `chanIndex`, standard/extended ID, DLC/payload, typed failure và cleanup đều đạt Task 4.
+- [x] Trục standards: Vector types vẫn bị cô lập sau `IVectorXlApi`; native I/O và cleanup được tuần tự hóa bằng cùng lock; batch receive giới hạn 256, queue-empty delay/cancellation hữu hạn; không có secret, package/project configuration hoặc UI thay đổi.
+- [x] Independent verification: `dotnet build Simulate.sln --no-restore` PASS 0 warning/0 error; `dotnet test Simulate.sln --no-build --no-restore` PASS 35/35; `git diff --check` PASS; targeted whitespace verification PASS.
+- [x] UI/XAML/code-behind, binding `Connection.*`/`Messages`/`Signals`/`FaultQueue`, project và solution configuration không có diff.
+- [x] Task 4 hoàn tất; chưa commit/push theo rào chắn người dùng.
+- [ ] `NEEDS_VERIFY`: Vector hardware thật, timestamp/latency và soak 50 chu kỳ vẫn cần thực hiện theo [`tasks/vector-classic-can-hardware-checklist.md`](vector-classic-can-hardware-checklist.md).
+- [ ] Next action: Task 5 — lead `Sol ultra`, review `Terra xhigh`.

@@ -60,6 +60,25 @@ namespace Simulate.Models
         public int? NativeStatus { get; }
     }
 
+    /// <summary>
+    /// Carries a typed hardware failure when an asynchronous stream cannot
+    /// return an operation result alongside its yielded values.
+    /// </summary>
+    public sealed class HardwareOperationException : Exception
+    {
+        public HardwareOperationException(
+            HardwareFailure failure,
+            Exception? innerException = null)
+            : base(
+                failure?.Message ?? throw new ArgumentNullException(nameof(failure)),
+                innerException)
+        {
+            Failure = failure;
+        }
+
+        public HardwareFailure Failure { get; }
+    }
+
     public sealed class HardwareOperationResult
     {
         private HardwareOperationResult(HardwareFailure? failure)

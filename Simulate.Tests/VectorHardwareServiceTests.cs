@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Simulate.Models;
@@ -224,6 +225,362 @@ namespace Simulate.Tests
         }
 
         [TestMethod]
+        public async Task Classic_session_transmits_a_classic_frame()
+        {
+            var api = new FakeVectorXlApi();
+            var service = new VectorHardwareService(() => api);
+            HardwareOperationResult<ICanGatewaySession> openResult =
+                await service.OpenGatewaySessionAsync(CreateClassicOptions());
+            Assert.IsTrue(openResult.IsSuccess);
+            await using ICanGatewaySession session = openResult.Value!;
+            CanFrame frame = CanFrame.CreateClassic(
+                0x321,
+                isExtendedIdentifier: false,
+                new byte[] { 0x10, 0x20, 0x30 });
+
+            HardwareOperationResult transmitResult =
+                await session.TransmitAsync(CanGatewaySide.Tx, frame);
+
+            Assert.IsTrue(transmitResult.IsSuccess);
+            Assert.AreEqual(2UL, api.LastTransmitAccessMask);
+            Assert.AreEqual(0x321u, api.LastTransmitIdentifier);
+            Assert.AreEqual(false, api.LastTransmitIsExtendedIdentifier);
+            CollectionAssert.AreEqual(
+                new byte[] { 0x10, 0x20, 0x30 },
+                api.LastTransmitData);
+            Assert.AreEqual(VectorCanInterfaceVersion.Version3, api.OpenedInterfaceVersion);
+            Assert.AreEqual(3UL, api.OpenedAccessMask);
+        }
+
+        [TestMethod]
+        public async Task Classic_session_receives_a_standard_frame_from_the_RX_channel()
+        {
+            var api = new FakeVectorXlApi();
+            api.ReceiveEvents.Enqueue(new VectorClassicCanEvent(
+                channelIndex: 0,
+                rawIdentifier: 0x123,
+                dataLength: 3,
+                flags: VectorClassicCanEventFlags.None,
+                data: new byte[] { 0xAA, 0xBB, 0xCC },
+                timestampNanoseconds: 8_000));
+            var service = new VectorHardwareService(() => api);
+            HardwareOperationResult<ICanGatewaySession> openResult =
+                await service.OpenGatewaySessionAsync(CreateClassicOptions());
+            Assert.IsTrue(openResult.IsSuccess);
+            await using ICanGatewaySession session = openResult.Value!;
+
+            RoutedCanFrame received = await ReadNextAsync(session.ReceiveAsync());
+
+            Assert.AreEqual(CanGatewaySide.Rx, received.Source);
+            Assert.AreEqual(0x123u, received.Frame.Identifier);
+            Assert.IsFalse(received.Frame.IsExtendedIdentifier);
+            CollectionAssert.AreEqual(
+                new byte[] { 0xAA, 0xBB, 0xCC },
+                received.Frame.Data.ToArray());
+        }
+
+        [TestMethod]
+        public async Task Classic_session_receives_an_extended_frame_from_the_TX_channel()
+        {
+            var api = new FakeVectorXlApi();
+            api.ReceiveEvents.Enqueue(new VectorClassicCanEvent(
+                channelIndex: 1,
+                rawIdentifier: 0x98DAF110,
+                dataLength: 4,
+                flags: VectorClassicCanEventFlags.None,
+                data: new byte[] { 0x01, 0x02, 0x03, 0x04 },
+                timestampNanoseconds: 16_000));
+            var service = new VectorHardwareService(() => api);
+            HardwareOperationResult<ICanGatewaySession> openResult =
+                await service.OpenGatewaySessionAsync(CreateClassicOptions());
+            Assert.IsTrue(openResult.IsSuccess);
+            await using ICanGatewaySession session = openResult.Value!;
+
+            RoutedCanFrame received = await ReadNextAsync(session.ReceiveAsync());
+
+            Assert.AreEqual(CanGatewaySide.Tx, received.Source);
+            Assert.AreEqual(0x18DAF110u, received.Frame.Identifier);
+            Assert.IsTrue(received.Frame.IsExtendedIdentifier);
+            CollectionAssert.AreEqual(
+                new byte[] { 0x01, 0x02, 0x03, 0x04 },
+                received.Frame.Data.ToArray());
+        }
+
+        [TestMethod]
+        public async Task Classic_session_flushes_native_receive_and_transmit_queues()
+        {
+            var api = new FakeVectorXlApi();
+            var service = new VectorHardwareService(() => api);
+            HardwareOperationResult<ICanGatewaySession> openResult =
+                await service.OpenGatewaySessionAsync(CreateClassicOptions());
+            Assert.IsTrue(openResult.IsSuccess);
+            await using ICanGatewaySession session = openResult.Value!;
+
+            HardwareOperationResult flushResult = await session.FlushAsync();
+
+            Assert.IsTrue(flushResult.IsSuccess);
+            Assert.AreEqual(1, api.FlushReceiveCallCount);
+            Assert.AreEqual(1, api.FlushTransmitCallCount);
+            Assert.AreEqual(3UL, api.LastFlushTransmitAccessMask);
+        }
+
+        [TestMethod]
+        public async Task Classic_receive_failure_throws_typed_native_hardware_error()
+        {
+            var api = new FakeVectorXlApi
+            {
+                ReceiveStatus = new VectorNativeStatus(201, "XL_ERR_INVALID_PORTHANDLE")
+            };
+            var service = new VectorHardwareService(() => api);
+            HardwareOperationResult<ICanGatewaySession> openResult =
+                await service.OpenGatewaySessionAsync(CreateClassicOptions());
+            Assert.IsTrue(openResult.IsSuccess);
+            await using ICanGatewaySession session = openResult.Value!;
+            await using IAsyncEnumerator<RoutedCanFrame> enumerator =
+                session.ReceiveAsync().GetAsyncEnumerator();
+
+            HardwareOperationException exception =
+                await Assert.ThrowsExceptionAsync<HardwareOperationException>(
+                    async () => await enumerator.MoveNextAsync().AsTask());
+
+            Assert.AreEqual(HardwareOperation.Receive, exception.Failure.Operation);
+            Assert.AreEqual(HardwareErrorCode.ReceiveFailed, exception.Failure.Code);
+            Assert.AreEqual(201, exception.Failure.NativeStatus);
+            StringAssert.Contains(exception.Failure.Message, "XL_Receive");
+            StringAssert.Contains(exception.Failure.Message, "XL_ERR_INVALID_PORTHANDLE");
+        }
+
+        [TestMethod]
+        public async Task Classic_receive_queue_overrun_throws_a_typed_data_loss_error()
+        {
+            var api = new FakeVectorXlApi();
+            api.ReceiveEvents.Enqueue(new VectorClassicCanEvent(
+                channelIndex: 0,
+                rawIdentifier: 0x123,
+                dataLength: 1,
+                flags: VectorClassicCanEventFlags.QueueOverrun,
+                data: new byte[] { 0x01 },
+                timestampNanoseconds: 8_000));
+            var service = new VectorHardwareService(() => api);
+            HardwareOperationResult<ICanGatewaySession> openResult =
+                await service.OpenGatewaySessionAsync(CreateClassicOptions());
+            Assert.IsTrue(openResult.IsSuccess);
+            await using ICanGatewaySession session = openResult.Value!;
+            await using IAsyncEnumerator<RoutedCanFrame> enumerator =
+                session.ReceiveAsync().GetAsyncEnumerator();
+
+            HardwareOperationException exception =
+                await Assert.ThrowsExceptionAsync<HardwareOperationException>(
+                    async () => await enumerator.MoveNextAsync().AsTask());
+
+            Assert.AreEqual(HardwareOperation.Receive, exception.Failure.Operation);
+            Assert.AreEqual(HardwareErrorCode.ReceiveFailed, exception.Failure.Code);
+            StringAssert.Contains(exception.Failure.Message, "overrun");
+        }
+
+        [TestMethod]
+        public async Task Classic_receive_rejects_a_native_event_with_an_invalid_DLC()
+        {
+            var api = new FakeVectorXlApi();
+            api.ReceiveEvents.Enqueue(new VectorClassicCanEvent(
+                channelIndex: 0,
+                rawIdentifier: 0x123,
+                dataLength: 9,
+                flags: VectorClassicCanEventFlags.None,
+                data: new byte[9],
+                timestampNanoseconds: 8_000));
+            var service = new VectorHardwareService(() => api);
+            HardwareOperationResult<ICanGatewaySession> openResult =
+                await service.OpenGatewaySessionAsync(CreateClassicOptions());
+            Assert.IsTrue(openResult.IsSuccess);
+            await using ICanGatewaySession session = openResult.Value!;
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+            await using IAsyncEnumerator<RoutedCanFrame> enumerator =
+                session.ReceiveAsync(timeout.Token).GetAsyncEnumerator();
+
+            HardwareOperationException exception =
+                await Assert.ThrowsExceptionAsync<HardwareOperationException>(
+                    async () => await enumerator.MoveNextAsync().AsTask());
+
+            Assert.AreEqual(HardwareOperation.Receive, exception.Failure.Operation);
+            Assert.AreEqual(HardwareErrorCode.ReceiveFailed, exception.Failure.Code);
+            StringAssert.Contains(exception.Failure.Message, "DLC");
+        }
+
+        [TestMethod]
+        public async Task Classic_receive_honors_caller_cancellation_while_the_queue_is_empty()
+        {
+            var api = new FakeVectorXlApi();
+            var service = new VectorHardwareService(() => api);
+            HardwareOperationResult<ICanGatewaySession> openResult =
+                await service.OpenGatewaySessionAsync(CreateClassicOptions());
+            Assert.IsTrue(openResult.IsSuccess);
+            await using ICanGatewaySession session = openResult.Value!;
+            using var cancellation = new CancellationTokenSource();
+            await using IAsyncEnumerator<RoutedCanFrame> enumerator =
+                session.ReceiveAsync(cancellation.Token).GetAsyncEnumerator();
+
+            Task<bool> pendingReceive = enumerator.MoveNextAsync().AsTask();
+            cancellation.Cancel();
+
+            try
+            {
+                await pendingReceive.WaitAsync(TimeSpan.FromSeconds(1));
+                Assert.Fail("The pending receive completed without observing cancellation.");
+            }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+            {
+                // TaskCanceledException is also a valid cancellation outcome.
+            }
+        }
+
+        [TestMethod]
+        public async Task Classic_transmit_failure_returns_typed_native_error()
+        {
+            var api = new FakeVectorXlApi
+            {
+                TransmitStatus = new VectorNativeStatus(11, "XL_ERR_QUEUE_IS_FULL")
+            };
+            var service = new VectorHardwareService(() => api);
+            HardwareOperationResult<ICanGatewaySession> openResult =
+                await service.OpenGatewaySessionAsync(CreateClassicOptions());
+            Assert.IsTrue(openResult.IsSuccess);
+            await using ICanGatewaySession session = openResult.Value!;
+            CanFrame frame = CanFrame.CreateClassic(
+                0x456,
+                isExtendedIdentifier: false,
+                new byte[] { 0x5A });
+
+            HardwareOperationResult result =
+                await session.TransmitAsync(CanGatewaySide.Rx, frame);
+
+            Assert.IsFalse(result.IsSuccess);
+            Assert.IsNotNull(result.Failure);
+            Assert.AreEqual(HardwareOperation.Transmit, result.Failure.Operation);
+            Assert.AreEqual(HardwareErrorCode.TransmitFailed, result.Failure.Code);
+            Assert.AreEqual(11, result.Failure.NativeStatus);
+            StringAssert.Contains(result.Failure.Message, "XL_CanTransmit");
+            StringAssert.Contains(result.Failure.Message, "XL_ERR_QUEUE_IS_FULL");
+            Assert.AreEqual(1UL, api.LastTransmitAccessMask);
+        }
+
+        [TestMethod]
+        public async Task Classic_flush_failure_reports_both_native_queue_statuses()
+        {
+            var api = new FakeVectorXlApi
+            {
+                FlushReceiveStatus = new VectorNativeStatus(201, "XL_ERR_INVALID_PORTHANDLE"),
+                FlushTransmitStatus = new VectorNativeStatus(11, "XL_ERR_QUEUE_IS_FULL")
+            };
+            var service = new VectorHardwareService(() => api);
+            HardwareOperationResult<ICanGatewaySession> openResult =
+                await service.OpenGatewaySessionAsync(CreateClassicOptions());
+            Assert.IsTrue(openResult.IsSuccess);
+            await using ICanGatewaySession session = openResult.Value!;
+
+            HardwareOperationResult result = await session.FlushAsync();
+
+            Assert.IsFalse(result.IsSuccess);
+            Assert.IsNotNull(result.Failure);
+            Assert.AreEqual(HardwareOperation.Flush, result.Failure.Operation);
+            Assert.AreEqual(HardwareErrorCode.FlushFailed, result.Failure.Code);
+            Assert.AreEqual(201, result.Failure.NativeStatus);
+            StringAssert.Contains(result.Failure.Message, "XL_FlushReceiveQueue");
+            StringAssert.Contains(result.Failure.Message, "XL_ERR_INVALID_PORTHANDLE");
+            StringAssert.Contains(result.Failure.Message, "XL_CanFlushTransmitQueue");
+            StringAssert.Contains(result.Failure.Message, "XL_ERR_QUEUE_IS_FULL");
+            Assert.AreEqual(1, api.FlushReceiveCallCount);
+            Assert.AreEqual(1, api.FlushTransmitCallCount);
+        }
+
+        [TestMethod]
+        public async Task Classic_session_rejects_a_CAN_FD_frame_before_calling_the_native_API()
+        {
+            var api = new FakeVectorXlApi();
+            var service = new VectorHardwareService(() => api);
+            HardwareOperationResult<ICanGatewaySession> openResult =
+                await service.OpenGatewaySessionAsync(CreateClassicOptions());
+            Assert.IsTrue(openResult.IsSuccess);
+            await using ICanGatewaySession session = openResult.Value!;
+            CanFrame frame = CanFrame.CreateFlexibleDataRate(
+                0x123,
+                isExtendedIdentifier: false,
+                CanDataLengthCode.Bytes12,
+                isBitRateSwitchEnabled: true,
+                new byte[12]);
+
+            HardwareOperationResult result =
+                await session.TransmitAsync(CanGatewaySide.Tx, frame);
+
+            Assert.IsFalse(result.IsSuccess);
+            Assert.IsNotNull(result.Failure);
+            Assert.AreEqual(HardwareOperation.Transmit, result.Failure.Operation);
+            Assert.AreEqual(HardwareErrorCode.InvalidConfiguration, result.Failure.Code);
+            Assert.IsNull(api.LastTransmitAccessMask);
+        }
+
+        [TestMethod]
+        public async Task Classic_session_rejects_an_unknown_destination_before_calling_the_native_API()
+        {
+            var api = new FakeVectorXlApi();
+            var service = new VectorHardwareService(() => api);
+            HardwareOperationResult<ICanGatewaySession> openResult =
+                await service.OpenGatewaySessionAsync(CreateClassicOptions());
+            Assert.IsTrue(openResult.IsSuccess);
+            await using ICanGatewaySession session = openResult.Value!;
+            CanFrame frame = CanFrame.CreateClassic(
+                0x123,
+                isExtendedIdentifier: false,
+                new byte[] { 0x01 });
+
+            HardwareOperationResult result =
+                await session.TransmitAsync((CanGatewaySide)99, frame);
+
+            Assert.IsFalse(result.IsSuccess);
+            Assert.IsNotNull(result.Failure);
+            Assert.AreEqual(HardwareOperation.Transmit, result.Failure.Operation);
+            Assert.AreEqual(HardwareErrorCode.InvalidConfiguration, result.Failure.Code);
+            Assert.IsNull(api.LastTransmitAccessMask);
+        }
+
+        [TestMethod]
+        public async Task Stopping_a_Classic_session_completes_a_pending_receive()
+        {
+            var api = new FakeVectorXlApi();
+            var service = new VectorHardwareService(() => api);
+            HardwareOperationResult<ICanGatewaySession> openResult =
+                await service.OpenGatewaySessionAsync(CreateClassicOptions());
+            Assert.IsTrue(openResult.IsSuccess);
+            ICanGatewaySession session = openResult.Value!;
+            await using IAsyncEnumerator<RoutedCanFrame> enumerator =
+                session.ReceiveAsync().GetAsyncEnumerator();
+            Task<bool> pendingReceive = enumerator.MoveNextAsync().AsTask();
+
+            HardwareOperationResult stopResult = await session.StopAsync();
+            bool receivedFrame = await pendingReceive.WaitAsync(TimeSpan.FromSeconds(1));
+            await session.DisposeAsync();
+
+            Assert.IsTrue(stopResult.IsSuccess);
+            Assert.IsFalse(receivedFrame);
+        }
+
+        [TestMethod]
+        public void Classic_options_reject_the_same_physical_channel_for_RX_and_TX()
+        {
+            var channel = new HardwareChannel
+            {
+                Name = "CH1",
+                ChannelIndex = 0,
+                ChannelMask = 1
+            };
+
+            ArgumentException exception = Assert.ThrowsException<ArgumentException>(
+                () => CanGatewayOptions.CreateClassic(channel, channel, 500_000));
+
+            StringAssert.Contains(exception.Message, "different hardware channels");
+        }
+
+        [TestMethod]
         public async Task Successful_session_stop_is_idempotent_and_releases_all_native_resources()
         {
             var api = new FakeVectorXlApi();
@@ -340,6 +697,21 @@ namespace Simulate.Tests
             };
         }
 
+        private static async Task<T> ReadNextAsync<T>(IAsyncEnumerable<T> source)
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+            await using IAsyncEnumerator<T> enumerator =
+                source.GetAsyncEnumerator(timeout.Token);
+
+            if (await enumerator.MoveNextAsync())
+            {
+                return enumerator.Current;
+            }
+
+            throw new AssertFailedException(
+                "The asynchronous sequence completed before yielding an item.");
+        }
+
         private sealed class FakeVectorXlApi : IVectorXlApi
         {
             private const int OpenPortHandle = 42;
@@ -362,6 +734,18 @@ namespace Simulate.Tests
             public VectorNativeStatus DeactivationStatus { get; init; } =
                 new VectorNativeStatus(0, "XL_SUCCESS");
 
+            public VectorNativeStatus TransmitStatus { get; init; } =
+                new VectorNativeStatus(0, "XL_SUCCESS");
+
+            public VectorNativeStatus ReceiveStatus { get; init; } =
+                new VectorNativeStatus(10, "XL_ERR_QUEUE_IS_EMPTY");
+
+            public VectorNativeStatus FlushReceiveStatus { get; init; } =
+                new VectorNativeStatus(0, "XL_SUCCESS");
+
+            public VectorNativeStatus FlushTransmitStatus { get; init; } =
+                new VectorNativeStatus(0, "XL_SUCCESS");
+
             public bool IsDriverOpen { get; private set; }
 
             public bool IsPortOpen { get; private set; }
@@ -374,8 +758,26 @@ namespace Simulate.Tests
 
             public VectorCanInterfaceVersion? OpenedInterfaceVersion { get; private set; }
 
+            public ulong? OpenedAccessMask { get; private set; }
+
             public IReadOnlyList<VectorChannelDescriptor> Channels { get; init; } =
                 Array.Empty<VectorChannelDescriptor>();
+
+            public Queue<VectorClassicCanEvent> ReceiveEvents { get; } = new();
+
+            public ulong? LastTransmitAccessMask { get; private set; }
+
+            public uint? LastTransmitIdentifier { get; private set; }
+
+            public bool? LastTransmitIsExtendedIdentifier { get; private set; }
+
+            public byte[]? LastTransmitData { get; private set; }
+
+            public int FlushReceiveCallCount { get; private set; }
+
+            public int FlushTransmitCallCount { get; private set; }
+
+            public ulong? LastFlushTransmitAccessMask { get; private set; }
 
             public VectorNativeStatus OpenDriver()
             {
@@ -406,6 +808,7 @@ namespace Simulate.Tests
                 VectorCanInterfaceVersion interfaceVersion)
             {
                 OpenedInterfaceVersion = interfaceVersion;
+                OpenedAccessMask = accessMask;
                 bool returnsPortHandle = OpenPortStatus.IsSuccess || ReturnPortHandleOnOpenFailure;
                 IsPortOpen = returnsPortHandle;
                 return new VectorPortOpenResult(
@@ -439,6 +842,50 @@ namespace Simulate.Tests
                 }
 
                 return ActivationStatus;
+            }
+
+            public VectorNativeStatus TransmitClassicCanFrame(
+                int portHandle,
+                ulong accessMask,
+                uint identifier,
+                bool isExtendedIdentifier,
+                ReadOnlyMemory<byte> data)
+            {
+                LastTransmitAccessMask = accessMask;
+                LastTransmitIdentifier = identifier;
+                LastTransmitIsExtendedIdentifier = isExtendedIdentifier;
+                LastTransmitData = data.ToArray();
+                return TransmitStatus;
+            }
+
+            public VectorClassicReceiveBatchResult ReceiveClassicCanEvents(
+                int portHandle,
+                int maximumEventCount)
+            {
+                var events = new List<VectorClassicCanEvent>();
+                while (events.Count < maximumEventCount && ReceiveEvents.TryDequeue(out VectorClassicCanEvent? receivedEvent))
+                {
+                    events.Add(receivedEvent);
+                }
+
+                return new VectorClassicReceiveBatchResult(
+                    ReceiveStatus,
+                    events);
+            }
+
+            public VectorNativeStatus FlushReceiveQueue(int portHandle)
+            {
+                FlushReceiveCallCount++;
+                return FlushReceiveStatus;
+            }
+
+            public VectorNativeStatus FlushClassicTransmitQueue(
+                int portHandle,
+                ulong accessMask)
+            {
+                FlushTransmitCallCount++;
+                LastFlushTransmitAccessMask = accessMask;
+                return FlushTransmitStatus;
             }
 
             public VectorNativeStatus DeactivateChannels(int portHandle, ulong accessMask)

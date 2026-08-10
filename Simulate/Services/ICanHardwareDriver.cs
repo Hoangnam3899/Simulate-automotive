@@ -25,6 +25,8 @@ namespace Simulate.Services
 
         public bool IsOpen { get; }
 
+        // Native receive failures are surfaced as HardwareOperationException so
+        // operation, error code, and native status remain available to callers.
         public IAsyncEnumerable<RoutedCanFrame> ReceiveAsync(
             CancellationToken cancellationToken = default);
 

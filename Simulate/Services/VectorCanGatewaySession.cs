@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -51,6 +52,62 @@ namespace Simulate.Services
         public void MarkChannelsActive()
         {
             _channelsAreActive = true;
+        }
+
+        public VectorNativeStatus? TransmitClassicCanFrame(
+            ulong destinationMask,
+            CanFrame frame,
+            CancellationToken cancellationToken)
+        {
+            lock (_sync)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!_channelsAreActive || _cleanupResult is not null)
+                {
+                    return null;
+                }
+
+                return _api.TransmitClassicCanFrame(
+                    _portHandle,
+                    destinationMask,
+                    frame.Identifier,
+                    frame.IsExtendedIdentifier,
+                    frame.Data);
+            }
+        }
+
+        public VectorClassicReceiveBatchResult? ReceiveClassicCanEvents(
+            int maximumEventCount,
+            CancellationToken cancellationToken)
+        {
+            lock (_sync)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!_channelsAreActive || _cleanupResult is not null)
+                {
+                    return null;
+                }
+
+                return _api.ReceiveClassicCanEvents(_portHandle, maximumEventCount);
+            }
+        }
+
+        public VectorClassicFlushResult? FlushClassicQueues(
+            CancellationToken cancellationToken)
+        {
+            lock (_sync)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!_channelsAreActive || _cleanupResult is not null)
+                {
+                    return null;
+                }
+
+                VectorNativeStatus receiveStatus = _api.FlushReceiveQueue(_portHandle);
+                VectorNativeStatus transmitStatus =
+                    _api.FlushClassicTransmitQueue(_portHandle, _accessMask);
+                return new VectorClassicFlushResult(receiveStatus, transmitStatus);
+            }
         }
 
         public HardwareOperationResult Cleanup()
@@ -125,10 +182,13 @@ namespace Simulate.Services
         }
     }
 
-    // Task 3 establishes native ownership only. Task 4/5 replace the explicit I/O
-    // unavailability results below with Classic CAN and CAN FD frame operations.
+    // Task 4 provides Classic CAN I/O. CAN FD frame operations remain deliberately
+    // unavailable until Task 5 adds the interface V4 event mapping.
     internal sealed class VectorCanGatewaySession : ICanGatewaySession
     {
+        private const int MaximumReceiveBatchSize = 256;
+        private const uint ExtendedIdentifierFlag = 0x80000000;
+
         private readonly VectorNativeSessionResources _resources;
 
         public VectorCanGatewaySession(
@@ -147,15 +207,78 @@ namespace Simulate.Services
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            await Task.Yield();
-
-            if (IsOpen)
+            if (Options.BusMode != CanBusMode.Classic)
             {
                 throw new NotSupportedException(
-                    "Native Vector frame reception is not available in the lifecycle adapter.");
+                    "Native Vector CAN FD frame reception is deferred to Task 5.");
             }
 
-            yield break;
+            while (true)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                VectorClassicReceiveBatchResult? batch;
+                try
+                {
+                    batch = await Task.Run(
+                        () => _resources.ReceiveClassicCanEvents(
+                            MaximumReceiveBatchSize,
+                            cancellationToken),
+                        cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception exception)
+                {
+                    throw new HardwareOperationException(
+                        new HardwareFailure(
+                            HardwareOperation.Receive,
+                            HardwareErrorCode.ReceiveFailed,
+                            $"XL_Receive threw while receiving Classic CAN frames: {exception.Message}"),
+                        exception);
+                }
+
+                if (batch is null)
+                {
+                    yield break;
+                }
+
+                VectorClassicReceiveBatchResult receivedBatch = batch.Value;
+                foreach (VectorClassicCanEvent nativeEvent in receivedBatch.Events)
+                {
+                    if ((nativeEvent.Flags & VectorClassicCanEventFlags.QueueOverrun) != 0)
+                    {
+                        throw new HardwareOperationException(new HardwareFailure(
+                            HardwareOperation.Receive,
+                            HardwareErrorCode.ReceiveFailed,
+                            "XL_Receive reported a Classic CAN queue overrun; one or more events were lost."));
+                    }
+
+                    if (!TryMapClassicEvent(nativeEvent, out RoutedCanFrame? routedFrame))
+                    {
+                        continue;
+                    }
+
+                    yield return routedFrame;
+                }
+
+                if (!receivedBatch.Status.IsSuccess && !receivedBatch.Status.IsQueueEmpty)
+                {
+                    throw new HardwareOperationException(new HardwareFailure(
+                        HardwareOperation.Receive,
+                        HardwareErrorCode.ReceiveFailed,
+                        $"XL_Receive failed with XL_Status {receivedBatch.Status.Name} " +
+                        $"({receivedBatch.Status.Code}).",
+                        receivedBatch.Status.Code));
+                }
+
+                if (receivedBatch.Status.IsQueueEmpty)
+                {
+                    await Task.Delay(TimeSpan.FromMilliseconds(2), cancellationToken)
+                        .ConfigureAwait(false);
+                }
+            }
         }
 
         public ValueTask<HardwareOperationResult> TransmitAsync(
@@ -166,24 +289,139 @@ namespace Simulate.Services
             ArgumentNullException.ThrowIfNull(frame);
             cancellationToken.ThrowIfCancellationRequested();
 
-            return ValueTask.FromResult(IsOpen
-                ? CreateUnavailableFailure(
+            if (!IsOpen)
+            {
+                return ValueTask.FromResult(
+                    CreateSessionNotOpenFailure(HardwareOperation.Transmit));
+            }
+
+            if (Options.BusMode != CanBusMode.Classic)
+            {
+                return ValueTask.FromResult(CreateUnavailableFailure(
                     HardwareOperation.Transmit,
                     HardwareErrorCode.TransmitFailed,
-                    "Native Vector frame transmission is not available in the lifecycle adapter.")
-                : CreateSessionNotOpenFailure(HardwareOperation.Transmit));
+                    "Native Vector CAN FD frame transmission is deferred to Task 5."));
+            }
+
+            if (frame.Format != CanFrameFormat.Classic)
+            {
+                return ValueTask.FromResult(HardwareOperationResult.Failed(
+                    new HardwareFailure(
+                        HardwareOperation.Transmit,
+                        HardwareErrorCode.InvalidConfiguration,
+                        "A Classic CAN session cannot transmit a CAN FD frame.")));
+            }
+
+            ulong destinationMask = destination switch
+            {
+                CanGatewaySide.Rx => Options.RxChannel.ChannelMask,
+                CanGatewaySide.Tx => Options.TxChannel.ChannelMask,
+                _ => 0
+            };
+            if (destinationMask == 0)
+            {
+                return ValueTask.FromResult(HardwareOperationResult.Failed(
+                    new HardwareFailure(
+                        HardwareOperation.Transmit,
+                        HardwareErrorCode.InvalidConfiguration,
+                        $"Unknown CAN gateway destination value {(int)destination}.")));
+            }
+
+            try
+            {
+                VectorNativeStatus? status = _resources.TransmitClassicCanFrame(
+                    destinationMask,
+                    frame,
+                    cancellationToken);
+                if (!status.HasValue)
+                {
+                    return ValueTask.FromResult(
+                        CreateSessionNotOpenFailure(HardwareOperation.Transmit));
+                }
+
+                return ValueTask.FromResult(status.Value.IsSuccess
+                    ? HardwareOperationResult.Succeeded()
+                    : CreateNativeFailure(
+                        HardwareOperation.Transmit,
+                        HardwareErrorCode.TransmitFailed,
+                        "XL_CanTransmit",
+                        status.Value));
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                return ValueTask.FromResult(HardwareOperationResult.Failed(
+                    new HardwareFailure(
+                        HardwareOperation.Transmit,
+                        HardwareErrorCode.TransmitFailed,
+                        $"XL_CanTransmit threw while transmitting a Classic CAN frame: {exception.Message}")));
+            }
         }
 
         public ValueTask<HardwareOperationResult> FlushAsync(
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return ValueTask.FromResult(IsOpen
-                ? CreateUnavailableFailure(
+            if (!IsOpen)
+            {
+                return ValueTask.FromResult(
+                    CreateSessionNotOpenFailure(HardwareOperation.Flush));
+            }
+
+            if (Options.BusMode != CanBusMode.Classic)
+            {
+                return ValueTask.FromResult(CreateUnavailableFailure(
                     HardwareOperation.Flush,
                     HardwareErrorCode.FlushFailed,
-                    "Native Vector transmit flushing is not available in the lifecycle adapter.")
-                : CreateSessionNotOpenFailure(HardwareOperation.Flush));
+                    "Native Vector CAN FD queue flushing is deferred to Task 5."));
+            }
+
+            try
+            {
+                VectorClassicFlushResult? result =
+                    _resources.FlushClassicQueues(cancellationToken);
+                if (!result.HasValue)
+                {
+                    return ValueTask.FromResult(
+                        CreateSessionNotOpenFailure(HardwareOperation.Flush));
+                }
+
+                if (result.Value.ReceiveStatus.IsSuccess &&
+                    result.Value.TransmitStatus.IsSuccess)
+                {
+                    return ValueTask.FromResult(HardwareOperationResult.Succeeded());
+                }
+
+                VectorNativeStatus firstFailure = !result.Value.ReceiveStatus.IsSuccess
+                    ? result.Value.ReceiveStatus
+                    : result.Value.TransmitStatus;
+                string diagnostics =
+                    $"XL_FlushReceiveQueue={result.Value.ReceiveStatus.Name} " +
+                    $"({result.Value.ReceiveStatus.Code}); " +
+                    $"XL_CanFlushTransmitQueue={result.Value.TransmitStatus.Name} " +
+                    $"({result.Value.TransmitStatus.Code}).";
+                return ValueTask.FromResult(HardwareOperationResult.Failed(
+                    new HardwareFailure(
+                        HardwareOperation.Flush,
+                        HardwareErrorCode.FlushFailed,
+                        $"Vector Classic CAN queue flush failed: {diagnostics}",
+                        firstFailure.Code)));
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                return ValueTask.FromResult(HardwareOperationResult.Failed(
+                    new HardwareFailure(
+                        HardwareOperation.Flush,
+                        HardwareErrorCode.FlushFailed,
+                        $"Vector Classic CAN queue flush threw: {exception.Message}")));
+            }
         }
 
         public ValueTask<HardwareOperationResult> StopAsync()
@@ -196,6 +434,73 @@ namespace Simulate.Services
             await StopAsync();
         }
 
+        private bool TryMapClassicEvent(
+            VectorClassicCanEvent nativeEvent,
+            [NotNullWhen(true)] out RoutedCanFrame? routedFrame)
+        {
+            routedFrame = null;
+            const VectorClassicCanEventFlags unsupportedFlags =
+                VectorClassicCanEventFlags.ErrorFrame |
+                VectorClassicCanEventFlags.RemoteFrame |
+                VectorClassicCanEventFlags.TransmitCompleted |
+                VectorClassicCanEventFlags.TransmitRequest;
+            if ((nativeEvent.Flags & unsupportedFlags) != 0)
+            {
+                return false;
+            }
+
+            if (nativeEvent.DataLength > CanFrame.MaximumClassicPayloadLength ||
+                nativeEvent.Data.Length < nativeEvent.DataLength)
+            {
+                throw new HardwareOperationException(new HardwareFailure(
+                    HardwareOperation.Receive,
+                    HardwareErrorCode.ReceiveFailed,
+                    $"XL_Receive returned an invalid Classic CAN DLC " +
+                    $"{nativeEvent.DataLength} for a {nativeEvent.Data.Length}-byte buffer."));
+            }
+
+            CanGatewaySide source;
+            if (nativeEvent.ChannelIndex == Options.RxChannel.ChannelIndex)
+            {
+                source = CanGatewaySide.Rx;
+            }
+            else if (nativeEvent.ChannelIndex == Options.TxChannel.ChannelIndex)
+            {
+                source = CanGatewaySide.Tx;
+            }
+            else
+            {
+                return false;
+            }
+
+            bool isExtendedIdentifier =
+                (nativeEvent.RawIdentifier & ExtendedIdentifierFlag) != 0;
+            uint identifier = isExtendedIdentifier
+                ? nativeEvent.RawIdentifier & CanFrame.MaximumExtendedIdentifier
+                : nativeEvent.RawIdentifier;
+            CanFrame frame;
+            try
+            {
+                frame = CanFrame.CreateClassic(
+                    identifier,
+                    isExtendedIdentifier,
+                    nativeEvent.Data.AsSpan(0, nativeEvent.DataLength));
+            }
+            catch (ArgumentException exception)
+            {
+                throw new HardwareOperationException(
+                    new HardwareFailure(
+                        HardwareOperation.Receive,
+                        HardwareErrorCode.ReceiveFailed,
+                        $"XL_Receive returned an invalid Classic CAN identifier: " +
+                        $"{exception.Message}"),
+                    exception);
+            }
+
+            routedFrame = new RoutedCanFrame(source, frame, DateTimeOffset.UtcNow);
+            return true;
+        }
+
         private static HardwareOperationResult CreateUnavailableFailure(
             HardwareOperation operation,
             HardwareErrorCode errorCode,
@@ -203,6 +508,19 @@ namespace Simulate.Services
         {
             return HardwareOperationResult.Failed(
                 new HardwareFailure(operation, errorCode, message));
+        }
+
+        private static HardwareOperationResult CreateNativeFailure(
+            HardwareOperation operation,
+            HardwareErrorCode errorCode,
+            string apiName,
+            VectorNativeStatus status)
+        {
+            return HardwareOperationResult.Failed(new HardwareFailure(
+                operation,
+                errorCode,
+                $"{apiName} failed with XL_Status {status.Name} ({status.Code}).",
+                status.Code));
         }
 
         private static HardwareOperationResult CreateSessionNotOpenFailure(HardwareOperation operation)

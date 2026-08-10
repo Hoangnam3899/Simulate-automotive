@@ -28,11 +28,12 @@ Tài liệu này bàn giao trạng thái để model/agent tiếp theo thực hi
 - Phần implementation Task 1 bằng `Sol xhigh` đã hoàn tất: domain frame/options/result và hardware/session seam đã compile sạch.
 - Task 1 đã commit tại `5a14071 feat: define CAN gateway session contracts`.
 - Task 2 đã commit tại `8eae6fa feat: add in-memory mock gateway session`.
-- Task 3 đã hoàn tất: `Sol ultra` implementation, `Terra xhigh` review PASS; chưa commit/push.
+- Task 3 đã hoàn tất và commit tại `2cf43de feat: harden Vector gateway lifecycle`; chưa push.
+- Task 4 đã hoàn tất: Classic CAN RX/TX/flush/cancellation qua session seam; test review `Luna xhigh` và code review `Terra xhigh` đều PASS, 35/35 tests PASS. Hardware thật còn `NEEDS_VERIFY` theo checklist.
 
 ## Trạng thái repository
 
-- PLAN, Task 1 và Task 2 đã commit; Task 3 cùng cập nhật coordinator hiện chưa commit/push.
+- PLAN và Task 1-3 đã commit; Task 4 cùng cập nhật coordinator hiện chưa commit/push.
 - Worktree còn thay đổi không thuộc phạm vi coordinator và không được stage/commit:
   - `AGENTS.md`
   - `CLAUDE.md`
@@ -69,23 +70,28 @@ Vector-specific handles, masks, permissions và `XLDriver` phải nằm trong se
 - `ICanConnectionDriver` là seam chuyển tiếp cho luồng ViewModel đồng bộ hiện tại; Task 6 sẽ xóa seam này sau khi Vector/Mock adapters triển khai contract mới.
 - Dự án tham chiếu có kiến trúc MITM hai channel, receive/transmit hai chiều, override signal, DBC, echo filtering và E2E. Chỉ học hành vi; không bê nguyên monolith hoặc UI code-behind.
 - CAN Classic/FD cần tách implementation nội bộ: V3/Classic API so với V4/CAN FD API.
+- Task 4 dùng một V3 port với combined RX/TX access mask; `XLevent.chanIndex` ánh xạ source side, còn transmit chọn từng destination mask riêng.
+- `ReceiveAsync` báo native/data-loss failure bằng `HardwareOperationException`; caller vẫn lấy được typed `HardwareFailure` và numeric `XL_Status`.
+- Checklist hardware Task 4 ở `tasks/vector-classic-can-hardware-checklist.md`; mọi mục chưa cắm thiết bị là `NEEDS_VERIFY`.
 
 ## Next action
 
-**Task 3 — DONE: Lead Sol ultra; independent review Terra xhigh PASS.**
+**Task 4 — DONE: implementation Sol ultra; reviews Luna xhigh và Terra xhigh PASS.**
 
-Terra xác nhận không còn finding Critical/Required:
+Implementation hiện có:
 
-1. `VectorHardwareService` triển khai typed discovery/open session và giữ legacy connection seam mà không đổi UI/binding.
-2. `IVectorXlApi` cô lập `vxlapi_NET`; discovery lọc `XL_BUS_ACTIVE_CAP_CAN`, valid channel index/mask và luôn đóng driver trong `finally`.
-3. Session sở hữu driver/port/channel activation; setup failure và stop cleanup theo thứ tự deactivate → close port → close driver.
-4. Tất cả native failure giữ operation, error code, numeric `XL_Status`, enum name và API name; cleanup failure không bị nuốt.
-5. Manual local 20.30 xác nhận active CAN capability ở p.61, interface V3/V4 và `permissionMask` ở pp.43-44, cleanup flow ở p.103. DLL đang dùng là 25.20.14.0 và trùng hash với bản trong `Doc/`.
-6. Verification độc lập: build 0 warning/0 error, full suite 21/21 PASS, `git diff --check` PASS, UI diff bằng không.
+1. `VectorXlApi` dùng đúng Classic V3 wrapper: `XL_Receive`, `XL_CanTransmit`, `XL_FlushReceiveQueue`, `XL_CanFlushTransmitQueue`.
+2. Session nhận hai phía theo `chanIndex`, bảo toàn standard/extended ID và payload; transmit chọn đúng RX/TX destination mask.
+3. Receive batch giới hạn 256, queue-empty polling có cancellation; stop pending receive kết thúc hữu hạn và cleanup lifecycle Task 3 được giữ nguyên.
+4. Native RX/TX/flush error, queue overrun và invalid DLC giữ typed operation/error/native status; Classic session chặn CAN FD frame trước native call.
+5. Source local: manual 20.30 pp.47, 49, 75-76, 79-80, 90-94; DLL `25.20.14.0`.
+6. Self-review hai trục không còn finding Critical/Required; full suite hiện PASS 35/35. Không có UI/XAML/code-behind diff.
 
-**Next action: Task 4 — Classic CAN receive/transmit hai chiều.** Lead `Sol ultra`; test review `Luna xhigh`; code review `Terra xhigh`. Không commit/push nếu người dùng chưa yêu cầu.
+**Review status:** `Luna xhigh` test review và `Terra xhigh` code review đều PASS, không còn finding Critical/Required. Build/test, UI diff và targeted formatting đều PASS; hardware thật vẫn `NEEDS_VERIFY`.
 
-`NEEDS_VERIFY`: chưa cắm hardware Vector thật. `VectorCanGatewaySession` trong Task 3 chỉ hoàn thiện native lifecycle; receive/transmit/flush thực tế được cố ý hoãn sang Task 4 (Classic) và Task 5 (FD), không nối vào UI hiện tại.
+**Next action:** Task 5 — chuyển sang `Sol ultra` để triển khai CAN FD frame I/O qua V4, sau đó `Terra xhigh` review. Task 4 vẫn chưa commit/push; chỉ làm khi có lệnh người dùng.
+
+`NEEDS_VERIFY`: chưa cắm Vector hardware thật; dùng `tasks/vector-classic-can-hardware-checklist.md`. CAN FD frame I/O vẫn cố ý hoãn sang Task 5. Không nối frame I/O mới vào UI hiện tại.
 
 ## Task completion reminder
 
