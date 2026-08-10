@@ -1,11 +1,14 @@
- Simulate — Agent Instructions
+# Simulate — Agent Instructions
 
-> This file is the root entry point for AI coding agents (Codex, Claude Code, Cursor, Copilot, Gemini, etc.).
-> All agent skills, references, and configuration live in [`.agents/`](.agents/).
+> **MANDATORY FOR ALL SESSIONS / BẮT BUỘC TRONG MỌI PHIÊN LÀM VIỆC:**
+> Agent (Antigravity, Codex, Claude Code, Cursor, Copilot, Gemini, v.v.) **BẮT BUỘC PHẢI ĐỌC TẤT CẢ TỆP LUẬT VÀ SKILL DÙ Ở BẤT CỨ HOÀN CẢNH NÀO** trước khi thực hiện bất kỳ thao tác sửa đổi hay phản hồi nào:
+> 1. Read `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`
+> 2. Read `PROJECT_RULES_COMBINED.md`
+> 3. Read `.agents/skills/using-agent-skills/SKILL.md` hoặc `.agents/SKILL-CATALOG.md` để chọn và áp dụng đúng skill từ `.agents/skills/`
 
 ## Project Overview
 
-This is a **C# WPF desktop application** built with .NET. The project source lives in `Simulate.sln`.
+This is a **C# WPF desktop application** built with .NET 8.0. The project source lives in `Simulate.sln`.
 
 ## Commands
 
@@ -17,24 +20,26 @@ This is a **C# WPF desktop application** built with .NET. The project source liv
 
 ## Key Conventions
 
-- **Language**: C# (.NET), XAML for UI
-- **Architecture**: MVVM (Model-View-ViewModel)
+- **Language**: C# (.NET 8.0), XAML for UI
+- **Architecture**: MVVM (Model-View-ViewModel) with `CommunityToolkit.Mvvm`
 - **Tests**: colocated in test projects within the solution
 - **Git**: trunk-based development, conventional commits (`feat:`, `fix:`, `chore:`, `refactor:`, `test:`, `docs:`)
 
-## Boundaries
+## Boundaries & Strict Rules
 
-- **Never** commit secrets, API keys, or credentials to version control
-- **Never** modify files outside the solution without explicit user permission
-- **Ask first** before adding NuGet package dependencies
-- **Ask first** before changing project structure or solution configuration
-- **Always** run `dotnet build` after code changes to verify compilation
+- **ALWAYS** read all rules (`AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `PROJECT_RULES_COMBINED.md`) and relevant skills (`.agents/skills/`) at the start of every session without exception.
+- **NEVER** modify any UI component/XAML file without explicit user permission (`user_global`).
+- **NEVER** commit secrets, API keys, or credentials to version control.
+- **NEVER** modify files outside the solution without explicit user permission.
+- **Ask first** before adding NuGet package dependencies.
+- **Ask first** before changing project structure or solution configuration.
+- **ALWAYS** run `dotnet build` after code changes to verify compilation.
 
 ## Agent Skills
 
 This project uses a unified skill system. Skills are located in `.agents/skills/`.
 
-To discover which skill to use for a given task, read [`.agents/SKILL-CATALOG.md`](.agents/SKILL-CATALOG.md) or invoke the `using-agent-skills` skill.
+To discover which skill to use for a given task, read [`.agents/SKILL-CATALOG.md`](.agents/SKILL-CATALOG.md) or invoke the `using-agent-skills` skill at [`.agents/skills/using-agent-skills/SKILL.md`](.agents/skills/using-agent-skills/SKILL.md).
 
 ## Domain Context
 

@@ -1,10 +1,11 @@
 # Simulate — Claude Code Instructions
 
-> Read this file at the start of every session. All skills live in `.agents/skills/`.
+> **MANDATORY FOR ALL SESSIONS / BẮT BUỘC TRONG MỌI PHIÊN LÀM VIỆC:**
+> Read `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, `PROJECT_RULES_COMBINED.md`, and relevant skills in `.agents/skills/` at the start of EVERY session regardless of circumstances.
 
 ## Project
 
-C# WPF desktop application. Solution: `Simulate.sln`. Architecture: MVVM.
+C# WPF desktop application (.NET 8.0). Solution: `Simulate.sln`. Architecture: MVVM (`CommunityToolkit.Mvvm`).
 
 ## Commands
 
@@ -14,7 +15,7 @@ C# WPF desktop application. Solution: `Simulate.sln`. Architecture: MVVM.
 
 ## Code Conventions
 
-- C# with .NET, XAML for UI
+- C# with .NET 8.0, XAML for UI
 - MVVM pattern (Model-View-ViewModel)
 - Conventional commits: `feat:`, `fix:`, `chore:`, `refactor:`, `test:`, `docs:`
 - Named types over anonymous objects
@@ -22,17 +23,17 @@ C# WPF desktop application. Solution: `Simulate.sln`. Architecture: MVVM.
 
 ## Boundaries
 
-- Never commit secrets or credentials
-- Never modify files outside the solution without permission
-- Ask before adding NuGet dependencies
-- Ask before changing project/solution structure
-- Always verify build after changes: `dotnet build`
+- ALWAYS read rules and skills at the start of every session without exception.
+- NEVER modify UI components / XAML files without explicit user permission.
+- Never commit secrets or credentials.
+- Never modify files outside the solution without permission.
+- Ask before adding NuGet dependencies.
+- Ask before changing project/solution structure.
+- Always verify build after changes: `dotnet build`.
 
 ## Skills
 
-Skills are in `.agents/skills/`. Read `.agents/SKILL-CATALOG.md` for the full catalog.
-
-When starting a complex task, consult the catalog to find the right skill before proceeding.
+Skills are in `.agents/skills/`. Read `.agents/SKILL-CATALOG.md` for the full catalog or read `.agents/skills/using-agent-skills/SKILL.md`.
 
 ## Domain
 
