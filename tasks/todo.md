@@ -3,6 +3,30 @@
 > Trạng thái ban đầu: PLAN ONLY — chưa triển khai code.
 >
 > UI LOCK: Không sửa `App.xaml`, `MainWindow.xaml`, `MainWindow.xaml.cs` hoặc file UI/XAML nào nếu chưa có yêu cầu và cho phép rõ ràng từ người dùng.
+>
+> Coordinator status (2026-08-10): Task 1 đã hoàn tất và contract freeze PASS sau review `Terra xhigh`. Tiếp theo là Task 2 với lead `Terra high`, review `Luna high`. Task completion reminder đã được bật. Bàn giao chi tiết: [`handoff.md`](../handoff.md).
+
+## Coordinator execution order
+
+| Thứ tự | Task | Lead model | Gate trước khi chạy |
+|---|---|---|---|
+| 1 | Task 0 — Approval/baseline | Luna high | Xác nhận test project/NuGet, x64 và cấu trúc module |
+| 2 | Task 1 — Hardware/session seam | Sol xhigh | Task 0 hoàn tất |
+| 3 | Task 2 — Mock gateway | Terra high | Contract Task 1 được review |
+| 4 | Tasks 3-5 — Vector lifecycle, Classic, FD | Sol ultra | Mock contract tests pass |
+| 5 | Task 6 — Async connection | Terra xhigh | Hardware session ổn định |
+| 6 | Tasks 7-9 — DBC, codec/E2E, validation | Terra/Sol | Không cần UI approval |
+| 7 | Tasks 10-12 — Gateway/inject/scheduler | Sol ultra/xhigh | Hardware + simulation domain pass |
+| 8 | Tasks 13-15 — ViewModel/test/review | Terra/Luna/Sol | UI vẫn bị khóa |
+
+## Task completion reminder — bắt buộc sau mỗi task
+
+- [ ] Cập nhật checkbox/status trong PLAN và todo.
+- [ ] Chạy build/test phù hợp và ghi kết quả.
+- [ ] Kiểm tra `git diff --check`, UI diff và file scope.
+- [ ] Ghi work log và `NEEDS_VERIFY`/approval còn thiếu.
+- [ ] Cập nhật [`handoff.md`](../handoff.md) với next action và model tiếp theo.
+- [ ] Báo cáo người dùng task đã xong và nhắc model/reviewer của task kế tiếp.
 
 ## Task 0: Chốt approval gates và baseline
 
@@ -10,12 +34,14 @@
 
 **Acceptance criteria:**
 - [x] Ghi lại kết quả `dotnet build Simulate.sln` hiện tại: PASS ngày 2026-08-10, 0 warning, 0 error.
-- [ ] Xác nhận có/không tạo `Simulate.Tests` và package test tương ứng.
-- [ ] Xác nhận có/không ép target x64 trong project configuration.
+- [x] Người dùng cho phép tạo `Simulate.Tests` và package test tương ứng ở task implementation phù hợp.
+- [x] Người dùng cho phép đánh giá/áp dụng target x64 khi verification Vector DLL yêu cầu; chưa đổi target trong Task 0.
 
 **Verification:**
-- [ ] `git status --short` được ghi nhận, không ghi đè thay đổi của người dùng.
-- [ ] UI diff bằng không.
+- [x] `git status --short` đã được ghi nhận; thay đổi của người dùng không bị ghi đè.
+- [x] UI diff bằng không.
+- [x] `dotnet build Simulate.sln`: PASS, 0 warning, 0 error.
+- [x] Người dùng đã xác nhận approval decisions cho test project/NuGet, target x64 và module backend.
 
 **Dependencies:** None
 **Files likely touched:** chỉ tài liệu PLAN cho đến khi có approval
@@ -28,14 +54,14 @@
 **Description:** Thiết kế typed models cho frame, endpoint, bus mode, bitrate, connection options/result và seam tạo gateway session mà không lộ type của Vector XL.
 
 **Acceptance criteria:**
-- [ ] Contract biểu diễn được CAN Classic/CAN FD, standard/extended ID và hai phía RX/TX.
-- [ ] `ICanHardwareDriver` có surface nhỏ cho discovery và mở session.
-- [ ] Session định nghĩa receive/transmit/flush/stop và cleanup idempotent.
+- [x] Contract biểu diễn được CAN Classic/CAN FD, standard/extended ID và hai phía RX/TX.
+- [x] `ICanHardwareDriver` có surface nhỏ cho discovery và mở session.
+- [x] Session định nghĩa receive/transmit/flush/stop và cleanup idempotent.
 
 **Verification:**
-- [ ] Contract review bằng deletion/depth test.
-- [ ] `dotnet build Simulate.sln` thành công.
-- [ ] UI diff bằng không.
+- [x] Contract review bằng deletion/depth test: PASS bởi `Terra xhigh`, không còn finding Critical/Required.
+- [x] `dotnet build Simulate.sln` thành công: 0 warning, 0 error.
+- [x] UI diff bằng không.
 
 **Dependencies:** Task 0
 **Files likely touched:** `Models/*.cs`, `Services/ICanHardwareDriver.cs`
@@ -340,3 +366,29 @@ Mỗi mục trên cần một yêu cầu và approval UI riêng từ người d�
 - [x] Verification: `dotnet build Simulate.sln` PASS, 0 warning, 0 error.
 - [ ] Tests: chưa chạy vì solution hiện chưa có test project.
 - [ ] `NEEDS_APPROVAL`: test project/NuGet, target x64, cấu trúc module mới và mọi UI integration.
+
+## Work log — 2026-08-10 (Coordinator readiness)
+
+- [x] Đã bổ sung coordinator execution order và lead/reviewer model cho toàn bộ task.
+- [x] Đã tạo [`handoff.md`](../handoff.md) với next action, rào chắn và suggested skills.
+- [x] Verification: `git diff --check` PASS; UI/XAML/code-behind diff bằng không.
+- [x] Verification: `dotnet build Simulate.sln` PASS, 0 warning, 0 error.
+- [x] Approval gate đã được gỡ cho test project/NuGet, target x64 có điều kiện và cấu trúc module backend.
+
+## Work log — 2026-08-10 (Task 0 coordinator update)
+
+- [x] Task 0 baseline được xác nhận: build PASS, 0 warning, 0 error.
+- [x] Đã thêm task completion reminder vào PLAN/todo/handoff.
+- [x] UI/XAML/code-behind không thay đổi.
+- [x] Task 0 hoàn tất; next action là Task 1 — `Sol xhigh`, review `Terra xhigh`.
+
+## Work log — 2026-08-10 (Task 1 implementation)
+
+- [x] `Sol xhigh` đã thêm `CanFrame`, RX/TX source metadata, Classic/FD connection options và typed hardware result/error.
+- [x] `ICanHardwareDriver` chỉ còn hai trách nhiệm: discovery và mở gateway session; `ICanGatewaySession` định nghĩa receive/transmit/flush/stop/dispose.
+- [x] Native type của Vector không xuất hiện trong domain/session contract.
+- [x] Luồng đồng bộ hiện tại được giữ qua `ICanConnectionDriver` tạm thời; không đổi binding hoặc hành vi UI.
+- [x] Verification: `dotnet build Simulate.sln` PASS, 0 warning, 0 error; `git diff --check` PASS; UI diff bằng không.
+- [ ] Tests: chưa chạy vì solution chưa có test project; contract tests được tạo ở Task 2 cùng in-memory adapter.
+- [x] Terra review đã xử lý: `CanFrame` giữ frame format/DLC/BRS; channel-mask overlap bị chặn; `StopAsync` không còn cancellable giữa cleanup.
+- [x] Task 1 hoàn tất; next action là Task 2 — lead `Terra high`, review `Luna high`.

@@ -8,7 +8,7 @@ namespace Simulate.ViewModels
 {
     public partial class ConnectionViewModel : ObservableObject
     {
-        private readonly ICanHardwareDriver _hardwareDriver;
+        private readonly ICanConnectionDriver _hardwareDriver;
 
         [ObservableProperty]
         private ObservableCollection<HardwareInterface> _availableInterfaces = new();
@@ -72,7 +72,7 @@ namespace Simulate.ViewModels
         [ObservableProperty]
         private bool _isConnected;
 
-        public ConnectionViewModel(ICanHardwareDriver hardwareDriver)
+        public ConnectionViewModel(ICanConnectionDriver hardwareDriver)
         {
             _hardwareDriver = hardwareDriver;
             RefreshInterfaces();

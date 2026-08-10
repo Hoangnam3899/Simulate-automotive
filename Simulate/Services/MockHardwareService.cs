@@ -3,7 +3,7 @@ using Simulate.Models;
 
 namespace Simulate.Services
 {
-    public class MockHardwareService : ICanHardwareDriver
+    public class MockHardwareService : ICanConnectionDriver
     {
         public bool IsConnected { get; private set; }
 

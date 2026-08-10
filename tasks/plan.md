@@ -122,15 +122,15 @@ Nguyên tắc:
 
 ### Phase 0 — Governance và baseline
 
-- [ ] Task 0: Chốt approval gates và baseline hiện tại — **Luna high**, review **Terra high**.
-- [ ] Task 1: Thiết kế domain contracts và session seam — **Sol xhigh**, review **Terra xhigh**.
+- [x] Task 0: Chốt approval gates và baseline hiện tại — **Luna high**, review **Terra high**. Baseline pass và approval decisions đã được người dùng xác nhận.
+- [x] Task 1: Thiết kế domain contracts và session seam — **Sol xhigh**, review **Terra xhigh**. Terra review PASS; contract đã được freeze.
 
 ### Checkpoint A — Contract freeze
 
-- [ ] Người dùng duyệt mọi thay đổi project/package cần thiết.
-- [ ] Contract đủ cho Vector và Mock nhưng không lộ `vxlapi_NET` ra caller.
-- [ ] Không có diff ở XAML/code-behind UI.
-- [ ] `dotnet build Simulate.sln` thành công.
+- [x] Người dùng duyệt mọi thay đổi project/package cần thiết.
+- [x] Contract đủ cho Vector và Mock nhưng không lộ `vxlapi_NET` ra caller.
+- [x] Không có diff ở XAML/code-behind UI.
+- [x] `dotnet build Simulate.sln` thành công.
 
 ### Phase 1 — Hardware foundation
 
@@ -217,6 +217,19 @@ Ngoài ra:
 - gateway: bidirectional integration test, cancellation test và soak test;
 - mọi lỗi native phải giữ lại `XL_Status` trong result/log chẩn đoán.
 
+## 9.1. Task completion reminder bắt buộc
+
+Sau khi một task đạt acceptance criteria, coordinator phải nhắc và thực hiện đủ chuỗi sau trước khi chuyển model/task:
+
+1. Đánh dấu task và checkpoint tương ứng trong `tasks/todo.md`/`tasks/plan.md`.
+2. Chạy `dotnet build`; chạy `dotnet test` nếu test project đã được duyệt.
+3. Kiểm tra `git diff --check`, UI diff và danh sách file thay đổi.
+4. Ghi work log, `NEEDS_VERIFY` hoặc approval còn thiếu.
+5. Tạo/cập nhật `handoff.md` với next action và model lead/reviewer.
+6. Báo cáo cho người dùng: task đã xong, verification, file thay đổi và model tiếp theo.
+
+Không được tự chuyển sang task tiếp theo nếu bước nhắc/bàn giao này chưa hoàn tất.
+
 ## 10. Rủi ro và giảm thiểu
 
 | Rủi ro | Mức | Giảm thiểu |
@@ -248,4 +261,5 @@ Trước Task 0/1 cần người dùng phê duyệt riêng nếu thực hiện:
 - Simulation engine độc lập WPF và Vector implementation.
 - Diff UI bằng không, trừ khi có approval mới bằng văn bản từ người dùng.
 - PLAN/todo được cập nhật sau mỗi checkpoint.
+- Sau mỗi task phải hoàn tất task completion reminder và handoff checkpoint.
 - Không commit/push khi chưa được yêu cầu.

@@ -5,7 +5,7 @@ using vxlapi_NET;
 
 namespace Simulate.Services
 {
-    public class VectorHardwareService : ICanHardwareDriver
+    public class VectorHardwareService : ICanConnectionDriver
     {
         private XLDriver _driver;
         private int _portHandle = -1;
