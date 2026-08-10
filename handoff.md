@@ -80,7 +80,18 @@ Contract freeze đã chốt các điểm sau:
 4. `StopAsync` không cancellable giữa cleanup; `DisposeAsync` tiếp tục có contract idempotent.
 5. UI/XAML/code-behind và binding không thay đổi; `ICanConnectionDriver` chỉ là seam chuyển tiếp đến Task 6.
 
-Chuyển sang **Terra high** cho **Task 2 — in-memory Mock gateway session**; reviewer là **Luna high**. Không triển khai Vector native I/O hoặc thay đổi UI trong Task 2.
+**Task 2 — DONE: Lead Terra high; review Luna high PASS.**
+
+Luna review đã xác nhận:
+
+1. `MockHardwareService` triển khai song song seam legacy và `ICanHardwareDriver` mới, không làm đổi UI/binding.
+2. `MockCanGatewaySession` có queue receive/transmit tách biệt, RX→TX và TX→RX không tạo echo.
+3. Fault plan map đúng discovery/open driver/open session/configure/activate/transmit sang `HardwareFailure` typed.
+4. `StopAsync`/`DisposeAsync` idempotent, kết thúc queue và không chấp nhận transmit sau stop; race với `TryWrite` không báo thành công giả.
+5. Test project MSTest không thêm dependency ngoài approval; test qua public seam thay vì private state.
+6. Không có finding Critical/Required; build/test và UI gate đều PASS.
+
+Task tiếp theo là Task 3 — **Sol ultra**, review **Terra xhigh**. Task 2 hiện chưa commit; chỉ tạo commit khi người dùng yêu cầu. Không bắt đầu Vector native lifecycle trước khi chuyển model sang Sol ultra.
 
 ## Task completion reminder
 

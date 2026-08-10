@@ -4,7 +4,7 @@
 >
 > UI LOCK: Không sửa `App.xaml`, `MainWindow.xaml`, `MainWindow.xaml.cs` hoặc file UI/XAML nào nếu chưa có yêu cầu và cho phép rõ ràng từ người dùng.
 >
-> Coordinator status (2026-08-10): Task 1 đã hoàn tất và contract freeze PASS sau review `Terra xhigh`. Tiếp theo là Task 2 với lead `Terra high`, review `Luna high`. Task completion reminder đã được bật. Bàn giao chi tiết: [`handoff.md`](../handoff.md).
+> Coordinator status (2026-08-10): Task 2 đã hoàn tất sau review PASS của `Luna high`; tiếp theo là Task 3 với lead `Sol ultra`, review `Terra xhigh`. Task completion reminder đã được bật. Bàn giao chi tiết: [`handoff.md`](../handoff.md).
 
 ## Coordinator execution order
 
@@ -74,14 +74,14 @@
 **Description:** Cung cấp adapter test có hai chiều frame, fault injection cho lifecycle và state quan sát được qua cùng hardware seam.
 
 **Acceptance criteria:**
-- [ ] Có thể enqueue frame từ RX/TX và quan sát frame phát tới phía đối diện.
-- [ ] Có thể mô phỏng lỗi discovery/open/configure/activate/transmit.
-- [ ] Stop/dispose gọi nhiều lần không lỗi và không phát frame sau stop.
+- [x] Có thể enqueue frame từ RX/TX và quan sát frame phát tới phía đối diện.
+- [x] Có thể mô phỏng lỗi discovery/open/configure/activate/transmit.
+- [x] Stop/dispose gọi nhiều lần không lỗi và không phát frame sau stop.
 
 **Verification:**
-- [ ] Contract tests chạy trên Mock adapter.
-- [ ] Build/test thành công.
-- [ ] UI diff bằng không.
+- [x] Contract tests chạy trên Mock adapter: 10/10 PASS.
+- [x] Build/test thành công: 0 warning, 0 error.
+- [x] UI diff bằng không.
 
 **Dependencies:** Task 1
 **Files likely touched:** `Services/MockHardwareService.cs`, model/session test files
@@ -392,3 +392,13 @@ Mỗi mục trên cần một yêu cầu và approval UI riêng từ người d�
 - [ ] Tests: chưa chạy vì solution chưa có test project; contract tests được tạo ở Task 2 cùng in-memory adapter.
 - [x] Terra review đã xử lý: `CanFrame` giữ frame format/DLC/BRS; channel-mask overlap bị chặn; `StopAsync` không còn cancellable giữa cleanup.
 - [x] Task 1 hoàn tất; next action là Task 2 — lead `Terra high`, review `Luna high`.
+
+## Work log — 2026-08-10 (Task 2 implementation)
+
+- [x] Đã tạo `Simulate.Tests` bằng MSTest và thêm vào solution theo approval đã được xác nhận ở Task 0.
+- [x] `MockHardwareService` hiện triển khai `ICanHardwareDriver`, mở `MockCanGatewaySession` in-memory với queue receive/transmit tách biệt.
+- [x] Thêm fault plan cho discovery, open driver/session, configure, activate và transmit; từng điểm trả `HardwareFailure` typed.
+- [x] Contract tests chứng minh RX→TX, TX→RX, fault mapping, Classic/FD boundary, flush và stop/dispose idempotent.
+- [x] Verification: `dotnet build Simulate.sln` PASS, 0 warning, 0 error; `dotnet test Simulate.sln` PASS, 10/10; `git diff --check` PASS; UI diff bằng không.
+- [x] Luna high review Task 2 PASS, không còn finding Critical/Required.
+- [x] Task 2 hoàn tất; next action là Task 3 — lead `Sol ultra`, review `Terra xhigh`.

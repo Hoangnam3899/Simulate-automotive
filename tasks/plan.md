@@ -134,7 +134,7 @@ Nguyên tắc:
 
 ### Phase 1 — Hardware foundation
 
-- [ ] Task 2: Nâng Mock adapter thành in-memory gateway session — **Terra high**, review **Luna high**.
+- [x] Task 2: Nâng Mock adapter thành in-memory gateway session — **Terra high**, review **Luna high**. Luna review PASS; task đã hoàn tất.
 - [ ] Task 3: Hardening discovery và native lifecycle — **Sol ultra**, review **Terra xhigh**.
 - [ ] Task 4: Classic CAN receive/transmit hai chiều — **Sol ultra**, review **Luna xhigh** + **Terra xhigh**.
 - [ ] Task 5: CAN FD receive/transmit hai chiều — **Sol ultra**, review **Terra xhigh**.
@@ -142,7 +142,7 @@ Nguyên tắc:
 
 ### Checkpoint B — Hardware session
 
-- [ ] Mock session chứng minh connect, receive, transmit, flush và disconnect.
+- [x] Mock session chứng minh connect, receive, transmit, flush và disconnect qua contract tests; đang chờ review độc lập.
 - [ ] Mọi nhánh lỗi Vector đều đóng port/driver đúng một lần.
 - [ ] Classic dùng interface V3; CAN FD dùng V4 và API receive/transmit tương ứng.
 - [ ] Connect/refresh/disconnect không block UI thread.
