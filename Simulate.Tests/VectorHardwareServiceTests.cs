@@ -207,7 +207,7 @@ namespace Simulate.Tests
         }
 
         [TestMethod]
-        public void Legacy_connect_activation_failure_does_not_leak_port_or_driver()
+        public async Task Gateway_open_activation_failure_does_not_leak_port_or_driver()
         {
             var api = new FakeVectorXlApi
             {
@@ -216,14 +216,10 @@ namespace Simulate.Tests
             var service = new VectorHardwareService(() => api);
             CanGatewayOptions options = CreateClassicOptions();
 
-            bool connected = service.Connect(
-                options.TxChannel,
-                options.RxChannel,
-                options.NominalBitrate,
-                isCanFd: false);
+            HardwareOperationResult<ICanGatewaySession> result =
+                await service.OpenGatewaySessionAsync(options);
 
-            Assert.IsFalse(connected);
-            Assert.IsFalse(service.IsConnected);
+            Assert.IsFalse(result.IsSuccess);
             Assert.IsFalse(api.AreChannelsActive);
             Assert.IsFalse(api.IsPortOpen);
             Assert.IsFalse(api.IsDriverOpen);

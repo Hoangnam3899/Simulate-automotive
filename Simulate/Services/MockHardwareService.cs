@@ -33,7 +33,7 @@ namespace Simulate.Services
         }
     }
 
-    public class MockHardwareService : ICanConnectionDriver, ICanHardwareDriver
+    public class MockHardwareService : ICanHardwareDriver
     {
         private readonly MockHardwareFaultPlan _faultPlan;
 
@@ -42,9 +42,7 @@ namespace Simulate.Services
             _faultPlan = faultPlan ?? new MockHardwareFaultPlan();
         }
 
-        public bool IsConnected { get; private set; }
-
-        public List<HardwareInterface> GetAvailableInterfaces()
+        private static List<HardwareInterface> CreateAvailableInterfaces()
         {
             var virtualCan = new HardwareInterface
             {
@@ -55,7 +53,7 @@ namespace Simulate.Services
                     new HardwareChannel { Name = "Virtual CAN 2", ChannelIndex = 1, ChannelMask = 2 }
                 }
             };
-            
+
             var vn1640 = new HardwareInterface
             {
                 Name = "Vector VN1640",
@@ -69,19 +67,6 @@ namespace Simulate.Services
             return new List<HardwareInterface> { virtualCan, vn1640 };
         }
 
-        public bool Connect(HardwareChannel txChannel, HardwareChannel rxChannel, uint baudrate, bool isCanFd)
-        {
-            if (txChannel == null || rxChannel == null) return false;
-            IsConnected = true;
-            return true;
-        }
-
-        public bool Disconnect()
-        {
-            IsConnected = false;
-            return true;
-        }
-
         public Task<HardwareOperationResult<IReadOnlyList<HardwareInterface>>> DiscoverInterfacesAsync(
             CancellationToken cancellationToken = default)
         {
@@ -93,7 +78,7 @@ namespace Simulate.Services
                     CreateFaultFailure(MockHardwareFaultPoint.DiscoverInterfaces)));
             }
 
-            IReadOnlyList<HardwareInterface> interfaces = GetAvailableInterfaces();
+            IReadOnlyList<HardwareInterface> interfaces = CreateAvailableInterfaces();
             return Task.FromResult(HardwareOperationResult.Succeeded(interfaces));
         }
 

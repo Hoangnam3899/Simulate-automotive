@@ -43,20 +43,4 @@ namespace Simulate.Services
         public ValueTask<HardwareOperationResult> StopAsync();
     }
 
-    // Transitional seam for the current synchronous ConnectionViewModel. Task 6 migrates
-    // the caller to ICanHardwareDriver after the Vector and mock session adapters exist.
-    public interface ICanConnectionDriver
-    {
-        public bool IsConnected { get; }
-
-        public List<HardwareInterface> GetAvailableInterfaces();
-
-        public bool Connect(
-            HardwareChannel txChannel,
-            HardwareChannel rxChannel,
-            uint baudrate,
-            bool isCanFd);
-
-        public bool Disconnect();
-    }
 }

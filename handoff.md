@@ -62,9 +62,9 @@ Vector-specific handles, masks, permissions và `XLDriver` phải nằm trong se
 ## Điểm kỹ thuật cần chú ý
 
 - Lỗi cleanup cũ của `VectorHardwareService.Connect()` khi activate fail đã được sửa trong Task 3 và có regression test qua legacy seam.
-- Discovery và command hiện đồng bộ; không gọi hardware blocking trong ViewModel constructor hoặc Dispatcher.
+- Discovery/open/cleanup của connection orchestration đều chạy bất đồng bộ; không gọi hardware blocking trong ViewModel constructor hoặc Dispatcher.
 - `ICanHardwareDriver` mới chỉ làm discovery/open session; `ICanGatewaySession` giữ receive/transmit/flush/stop/dispose và không lộ type Vector.
-- `ICanConnectionDriver` là seam chuyển tiếp cho luồng ViewModel đồng bộ hiện tại; Task 6 sẽ xóa seam này sau khi Vector/Mock adapters triển khai contract mới.
+- `ICanConnectionDriver` đã được xóa ở Task 6; `ConnectionViewModel` chỉ dùng `ICanHardwareDriver` và sở hữu gateway session đang mở.
 - Dự án tham chiếu có kiến trúc MITM hai channel, receive/transmit hai chiều, override signal, DBC, echo filtering và E2E. Chỉ học hành vi; không bê nguyên monolith hoặc UI code-behind.
 - CAN Classic/FD cần tách implementation nội bộ: V3/Classic API so với V4/CAN FD API.
 - Task 4 dùng một V3 port với combined RX/TX access mask; `XLevent.chanIndex` ánh xạ source side, còn transmit chọn từng destination mask riêng.
@@ -77,7 +77,7 @@ Vector-specific handles, masks, permissions và `XLDriver` phải nằm trong se
 
 ## Next action
 
-**Task 5 — DONE: implementation Sol ultra; Terra xhigh review PASS.**
+**Task 6 — DONE: Terra xhigh implementation/fix; Luna high re-review PASS.**
 
 Implementation hiện có:
 
@@ -90,7 +90,19 @@ Implementation hiện có:
 
 **Review status:** `Terra xhigh` independent two-axis review PASS; không có finding Critical/Required. Build/test, formatter, diff check và UI/project scope gate đều PASS.
 
-**Next action:** Task 6 — chuyển sang `Terra xhigh` để triển khai async connection orchestration, sau đó `Luna high` review. Đọc rules và các skill implementation phù hợp trước khi sửa; UI/XAML vẫn khóa. Không tự commit/push.
+**Task 6 implementation/review:**
+
+1. `ConnectionViewModel` dùng `ICanHardwareDriver` bất đồng bộ, không discovery trong constructor và giữ nguyên `RefreshInterfacesCommand`, `ConnectCommand`, `DisconnectCommand` cho binding hiện hữu.
+2. `IsBusy`, `LastFailure`, atomic operation gate và `CancelPendingOperation()` biểu diễn trạng thái/cancellation; discovery/connect/disconnect không chạy chồng nhau.
+3. ViewModel sở hữu `ICanGatewaySession`: connect thành công mới set `IsConnected`; disconnect và cancel-after-open stop/dispose trên worker task để native cleanup không block Dispatcher.
+4. Xóa transitional `ICanConnectionDriver`/sync adapter code; Vector discovery/open chạy trên worker thread để không block Dispatcher, vẫn giữ nguyên public hardware seam.
+5. Thêm 6 tests tại `ConnectionViewModelTests`; full suite 71/71 PASS, build 0 warning/0 error, formatter/diff check/UI scope PASS.
+
+**Required-finding fix:** `ConnectionViewModel` schedule stop/dispose session lên worker task tại disconnect và cancel-after-open. Regression test `Disconnect_returns_control_while_session_cleanup_runs` đưa một `ICanGatewaySession` cleanup chặn đồng bộ qua public seam và xác nhận command trả control trước khi cleanup được giải phóng; test 71/71, build 0 warning/0 error, UI scope sạch.
+
+**Review result:** Luna high re-review PASS, không còn finding Critical/Required. Task 6 DONE; đã commit, chưa push.
+
+**Next action:** Task 7 — chuyển sang `Terra xhigh` triển khai DBC domain/parser tối thiểu, sau đó `Luna xhigh` review. UI/XAML vẫn khóa.
 
 `NEEDS_VERIFY`: chưa cắm Vector hardware thật; dùng `tasks/vector-can-fd-hardware-checklist.md`. Không nối frame I/O mới vào UI hiện tại.
 

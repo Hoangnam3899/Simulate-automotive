@@ -4,7 +4,7 @@
 >
 > UI LOCK: Không sửa `App.xaml`, `MainWindow.xaml`, `MainWindow.xaml.cs` hoặc file UI/XAML nào nếu chưa có yêu cầu và cho phép rõ ràng từ người dùng.
 >
-> Coordinator status (2026-08-11): Task 5 đã hoàn tất: implementation `Sol ultra`, independent code review `Terra xhigh` PASS; build sạch và test 65/65 PASS. Đã commit `feat: add Vector CAN FD frame I/O`, chưa push. Tiếp theo là Task 6 — lead `Terra xhigh`, review `Luna high`. UI diff bằng không, hardware thật còn `NEEDS_VERIFY`. Task completion reminder đã được bật. Bàn giao chi tiết: [`handoff.md`](../handoff.md).
+> Coordinator status (2026-08-11): Task 6 đã hoàn tất implementation `Terra xhigh` và re-review `Luna high` PASS; build sạch và test 71/71 PASS. Task 6 đã commit, chưa push. Task 5 đã commit `feat: add Vector CAN FD frame I/O`, chưa push. UI diff bằng không, hardware thật còn `NEEDS_VERIFY`. Task completion reminder đã được bật. Bàn giao chi tiết: [`handoff.md`](../handoff.md).
 
 ## Coordinator execution order
 
@@ -162,21 +162,48 @@
 
 **Description:** Chuyển discovery/connect/disconnect sang async command, busy state và cancellation trong ViewModel, giữ nguyên binding paths hiện tại.
 
+**Implementation status:** `DONE` — Terra xhigh đã sửa finding Required, Luna high re-review PASS; đã commit, chưa push.
+
 **Acceptance criteria:**
-- [ ] Constructor không gọi hardware blocking trên Dispatcher.
-- [ ] Connect/refresh/disconnect không chạy đồng thời và có state/error rõ ràng.
-- [ ] `Connection.*` bindings và public command names hiện tại được giữ nguyên.
+- [x] Constructor không gọi hardware blocking trên Dispatcher.
+- [x] Connect/refresh/disconnect không chạy đồng thời và có state/error rõ ràng.
+- [x] `Connection.*` bindings và public command names hiện tại được giữ nguyên.
 
 **Verification:**
-- [ ] ViewModel tests với Mock adapter.
-- [ ] Build/test sạch.
-- [ ] Không sửa XAML hoặc code-behind UI.
+- [x] ViewModel tests với Mock adapter và public session seam: 6 Task 6 tests.
+- [x] Build/test sạch: 0 warning/0 error, 71/71 PASS.
+- [x] Không sửa XAML hoặc code-behind UI.
 
 **Dependencies:** Tasks 2, 4, 5
 **Files likely touched:** `ViewModels/ConnectionViewModel.cs`, `ViewModels/MainViewModel.cs`, tests
 **Estimated scope:** M
 **Model allocation:** Lead `Terra xhigh`; review `Luna high`
 **Skills khi triển khai:** `test-driven-development`, `incremental-implementation`
+
+## Work log — 2026-08-11 (Task 6 Terra xhigh implementation)
+
+- [x] `ConnectionViewModel` giờ dùng trực tiếp deep seam `ICanHardwareDriver`; constructor không còn discovery/call native blocking.
+- [x] Giữ nguyên public command names/binding hiện hữu `RefreshInterfacesCommand`, `ConnectCommand`, `DisconnectCommand`; các command nay async, bị khóa theo `IsBusy`, serialize bằng atomic operation gate và có `CancelPendingOperation()`.
+- [x] Session gateway được ViewModel sở hữu: open thành công mới đặt `IsConnected`; disconnect luôn stop/dispose session và giữ typed `LastFailure` cho lỗi hardware/cleanup.
+- [x] Xóa transitional `ICanConnectionDriver` và legacy sync path khỏi Vector/Mock adapters; `VectorHardwareService` chạy discovery/open native trên worker thread nhưng giữ nguyên `ICanHardwareDriver` contract.
+- [x] Thêm ViewModel seam tests: constructor không discovery, refresh/select mặc định, connect/disconnect, typed open failure và cancellation/command concurrency.
+- [x] Verification: targeted formatter PASS; `dotnet build Simulate.sln --no-restore` PASS 0 warning/0 error; `dotnet test Simulate.sln --no-build --no-restore` PASS 70/70; `git diff --check` và UI/XAML/code-behind/project scope diff PASS.
+- [x] Đã sửa finding Required: stop/dispose được schedule ngoài Dispatcher cho disconnect và cancel-after-open; regression test chặn đồng bộ chứng minh command trả control trước native cleanup.
+- [x] Luna high re-review PASS: acceptance criteria đạt, Required finding đã được giải quyết; Task 6 DONE. Đã commit, push vẫn chờ lệnh người dùng.
+
+## Work log — 2026-08-11 (Task 6 Luna high review)
+
+- [x] Axis Spec: đạt constructor không discovery, async command names/binding giữ nguyên, busy/serialization/cancellation, typed error, session ownership và ViewModel seam tests.
+- [x] Axis Standards: boundary `ICanHardwareDriver` sạch, Vector open/discovery chạy worker thread, không secret/package/project/UI diff; build 0 warning/0 error và test 70/70 PASS.
+- [x] **Required resolved:** disconnect cleanup từng gọi trực tiếp `session.StopAsync()`/`DisposeAsync()` trong khi `VectorCanGatewaySession` thực thi `_resources.Cleanup()` đồng bộ; Terra fix đưa cleanup ra worker task và thêm regression test seam.
+- [x] Luna high re-review PASS: không còn finding Critical/Required; Task 6 DONE.
+
+## Work log — 2026-08-11 (Task 6 Terra xhigh Required-finding fix)
+
+- [x] `ConnectionViewModel` đưa `ICanGatewaySession.StopAsync()` và `DisposeAsync()` ra worker task ở disconnect và cancel-after-open; không đổi session/interface public hay binding/UI.
+- [x] Regression test `Disconnect_returns_control_while_session_cleanup_runs` dùng public session seam có cleanup chặn đồng bộ: test RED trước fix, GREEN sau fix; đồng thời xác nhận disconnect hoàn tất và session dispose.
+- [x] Verification: targeted formatter PASS; `dotnet test Simulate.sln --no-restore` PASS 71/71; `dotnet build Simulate.sln --no-restore` PASS 0 warning/0 error; `git diff --check` và UI/XAML/code-behind/project scope diff PASS.
+- [x] Luna high re-review xác nhận finding Required đã được giải quyết; Task 6 DONE, đã commit, chưa push.
 
 ## Task 7: DBC domain và parser tối thiểu
 

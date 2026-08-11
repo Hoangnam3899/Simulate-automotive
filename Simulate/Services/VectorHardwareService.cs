@@ -6,12 +6,9 @@ using Simulate.Models;
 
 namespace Simulate.Services
 {
-    public class VectorHardwareService : ICanConnectionDriver, ICanHardwareDriver
+    public class VectorHardwareService : ICanHardwareDriver
     {
         private readonly Func<IVectorXlApi> _apiFactory;
-        private ICanGatewaySession? _legacySession;
-
-        public bool IsConnected { get; private set; }
 
         public VectorHardwareService()
             : this(() => new VectorXlApi())
@@ -23,18 +20,14 @@ namespace Simulate.Services
             _apiFactory = apiFactory ?? throw new ArgumentNullException(nameof(apiFactory));
         }
 
-        public List<HardwareInterface> GetAvailableInterfaces()
-        {
-            HardwareOperationResult<IReadOnlyList<HardwareInterface>> result =
-                DiscoverInterfacesAsync().GetAwaiter().GetResult();
-
-            return result.IsSuccess
-                ? new List<HardwareInterface>(result.Value!)
-                : new List<HardwareInterface>();
-        }
-
         public Task<HardwareOperationResult<IReadOnlyList<HardwareInterface>>> DiscoverInterfacesAsync(
             CancellationToken cancellationToken = default)
+        {
+            return Task.Run(() => DiscoverInterfaces(cancellationToken), cancellationToken);
+        }
+
+        private HardwareOperationResult<IReadOnlyList<HardwareInterface>> DiscoverInterfaces(
+            CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -117,12 +110,20 @@ namespace Simulate.Services
             HardwareOperationResult<IReadOnlyList<HardwareInterface>> result = failure is null
                 ? HardwareOperationResult.Succeeded(interfaces)
                 : HardwareOperationResult.Failed<IReadOnlyList<HardwareInterface>>(failure);
-            return Task.FromResult(result);
+            return result;
         }
 
         public Task<HardwareOperationResult<ICanGatewaySession>> OpenGatewaySessionAsync(
             CanGatewayOptions options,
             CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(options);
+            return Task.Run(() => OpenGatewaySession(options, cancellationToken), cancellationToken);
+        }
+
+        private HardwareOperationResult<ICanGatewaySession> OpenGatewaySession(
+            CanGatewayOptions options,
+            CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(options);
             cancellationToken.ThrowIfCancellationRequested();
@@ -256,73 +257,11 @@ namespace Simulate.Services
                     }
                 }
 
-                return Task.FromResult(
-                    HardwareOperationResult.Failed<ICanGatewaySession>(failure));
+                return HardwareOperationResult.Failed<ICanGatewaySession>(failure);
             }
 
             ICanGatewaySession session = new VectorCanGatewaySession(options, resources!);
-            return Task.FromResult(HardwareOperationResult.Succeeded(session));
-        }
-
-        public bool Connect(HardwareChannel txChannel, HardwareChannel rxChannel, uint baudrate, bool isCanFd)
-        {
-            if (IsConnected)
-            {
-                return true;
-            }
-
-            try
-            {
-                CanGatewayOptions options = isCanFd
-                    ? CanGatewayOptions.CreateFlexibleDataRate(
-                        rxChannel,
-                        txChannel,
-                        baudrate,
-                        checked(baudrate * 4))
-                    : CanGatewayOptions.CreateClassic(rxChannel, txChannel, baudrate);
-                HardwareOperationResult<ICanGatewaySession> result =
-                    OpenGatewaySessionAsync(options).GetAwaiter().GetResult();
-                if (!result.IsSuccess)
-                {
-                    return false;
-                }
-
-                _legacySession = result.Value;
-                IsConnected = true;
-                return true;
-            }
-            catch (ArgumentException)
-            {
-                return false;
-            }
-            catch (OverflowException)
-            {
-                return false;
-            }
-        }
-
-        public bool Disconnect()
-        {
-            ICanGatewaySession? session = _legacySession;
-            _legacySession = null;
-            IsConnected = false;
-
-            if (session is null)
-            {
-                return true;
-            }
-
-            try
-            {
-                HardwareOperationResult stopResult =
-                    session.StopAsync().AsTask().GetAwaiter().GetResult();
-                session.DisposeAsync().AsTask().GetAwaiter().GetResult();
-                return stopResult.IsSuccess;
-            }
-            catch (Exception)
-            {
-                return false;
-            }
+            return HardwareOperationResult.Succeeded(session);
         }
 
         private static List<HardwareInterface> MapCanInterfaces(

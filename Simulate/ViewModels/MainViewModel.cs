@@ -52,7 +52,7 @@ namespace Simulate.ViewModels
 
         public MainViewModel()
         {
-            ICanConnectionDriver hardwareDriver = new VectorHardwareService();
+            ICanHardwareDriver hardwareDriver = new VectorHardwareService();
             Connection = new ConnectionViewModel(hardwareDriver);
 
             Messages = new ObservableCollection<MessageModel>
