@@ -150,7 +150,7 @@ Nguyên tắc:
 
 ### Phase 2 — Simulation domain
 
-- [ ] Task 7: DBC domain và parser tối thiểu — **Terra xhigh**, review **Luna xhigh**.
+- [x] Task 7: DBC domain và parser tối thiểu — implementation/fix **Terra xhigh** PASS; re-review **Luna xhigh** PASS; DBC tests 9/9, full suite 80/80, build 0 warning/0 error, UI diff bằng không.
 - [ ] Task 8: Signal codec và E2E protection — **Sol xhigh**, review **Luna xhigh**.
 - [ ] Task 9: Simulation configuration và validation — **Terra high**, review **Luna high**.
 

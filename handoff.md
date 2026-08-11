@@ -97,12 +97,17 @@ Implementation hiện có:
 3. ViewModel sở hữu `ICanGatewaySession`: connect thành công mới set `IsConnected`; disconnect và cancel-after-open stop/dispose trên worker task để native cleanup không block Dispatcher.
 4. Xóa transitional `ICanConnectionDriver`/sync adapter code; Vector discovery/open chạy trên worker thread để không block Dispatcher, vẫn giữ nguyên public hardware seam.
 5. Thêm 6 tests tại `ConnectionViewModelTests`; full suite 71/71 PASS, build 0 warning/0 error, formatter/diff check/UI scope PASS.
+6. Đã bổ sung 8 DBC input nguyên trạng vào `DBC/`: 4 CAN Classic và 4 CAN FD; SHA-256 khớp nguồn `C:\Users\Hnam\Downloads\DBC`.
 
 **Required-finding fix:** `ConnectionViewModel` schedule stop/dispose session lên worker task tại disconnect và cancel-after-open. Regression test `Disconnect_returns_control_while_session_cleanup_runs` đưa một `ICanGatewaySession` cleanup chặn đồng bộ qua public seam và xác nhận command trả control trước khi cleanup được giải phóng; test 71/71, build 0 warning/0 error, UI scope sạch.
 
-**Review result:** Luna high re-review PASS, không còn finding Critical/Required. Task 6 DONE; đã commit, chưa push.
+**Review result:** Luna high re-review PASS, không còn finding Critical/Required. Task 6 DONE; đã commit và push.
 
-**Next action:** Task 7 — chuyển sang `Terra xhigh` triển khai DBC domain/parser tối thiểu, sau đó `Luna xhigh` review. UI/XAML vẫn khóa.
+**Task 7 implementation:** `Terra xhigh` đã hoàn tất DBC domain/parser pure, 9 parser tests gồm cả 8 DBC thật PASS; full suite 80/80, build 0 warning/0 error, formatter/diff/UI scope PASS. Multiplexing và metadata ngoài phạm vi Task 7 trả warning có line/context, không bị silently diễn giải. Chưa commit/push.
+
+**Luna xhigh review / Terra xhigh fix:** Luna tìm thấy finding `Required` về signal span vượt payload. Terra đã bổ sung validation cho span little-endian liên tiếp và DBC sawtooth big-endian, cùng hai regression tests cho `63|2@1+` và `56|2@0+` trong payload 8 byte. Luna xhigh re-review PASS, không còn finding Critical/Required. DBC tests 9/9 PASS, full suite 80/80 PASS, build 0 warning/0 error, formatter/diff/UI scope PASS. Task 7 DONE.
+
+**Next action:** Task 8 — lead `Sol xhigh`, review `Luna xhigh`. UI/XAML vẫn khóa.
 
 `NEEDS_VERIFY`: chưa cắm Vector hardware thật; dùng `tasks/vector-can-fd-hardware-checklist.md`. Không nối frame I/O mới vào UI hiện tại.
 

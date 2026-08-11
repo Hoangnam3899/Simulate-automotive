@@ -4,7 +4,7 @@
 >
 > UI LOCK: Không sửa `App.xaml`, `MainWindow.xaml`, `MainWindow.xaml.cs` hoặc file UI/XAML nào nếu chưa có yêu cầu và cho phép rõ ràng từ người dùng.
 >
-> Coordinator status (2026-08-11): Task 6 đã hoàn tất implementation `Terra xhigh` và re-review `Luna high` PASS; build sạch và test 71/71 PASS. Task 6 đã commit, chưa push. Task 5 đã commit `feat: add Vector CAN FD frame I/O`, chưa push. UI diff bằng không, hardware thật còn `NEEDS_VERIFY`. Task completion reminder đã được bật. Bàn giao chi tiết: [`handoff.md`](../handoff.md).
+> Coordinator status (2026-08-11): Task 7 đã hoàn tất implementation/fix `Terra xhigh` và re-review `Luna xhigh` PASS; build sạch và full suite 80/80 PASS. Task 7 chưa commit/push. Đã bổ sung 8 DBC input vào `DBC/`; UI diff bằng không, hardware thật còn `NEEDS_VERIFY`. Task completion reminder đã được bật. Bàn giao chi tiết: [`handoff.md`](../handoff.md).
 
 ## Coordinator execution order
 
@@ -209,20 +209,44 @@
 
 **Description:** Parse các phần DBC cần cho simulation: node/message/signal, CAN ID, DLC, start bit, length, endian, signedness, factor, offset, min/max và unit.
 
+**Input data available:** 8 DBC files đã được copy nguyên trạng vào `DBC/`: 4 CAN Classic (`DBC/CAN class`) và 4 CAN FD (`DBC/CAN FD`). SHA-256 đã đối chiếu khớp với `C:\Users\Hnam\Downloads\DBC`.
+
+**Implementation status:** `DONE` — Terra xhigh đã hoàn tất implementation/fix; Luna xhigh re-review PASS.
+
 **Acceptance criteria:**
-- [ ] Parser trả typed result kèm lỗi line/context; không phụ thuộc WPF.
-- [ ] Standard và extended CAN ID được chuẩn hóa nhất quán với `CanFrame`.
-- [ ] Unsupported construct được báo rõ, không silently đoán.
+- [x] Parser trả typed result kèm lỗi line/context; không phụ thuộc WPF.
+- [x] Standard và extended CAN ID được chuẩn hóa nhất quán với `CanFrame`.
+- [x] Unsupported construct được báo rõ, không silently đoán.
 
 **Verification:**
-- [ ] Fixture tests gồm file hợp lệ, malformed và boundary values.
-- [ ] Build/test sạch, UI diff bằng không.
+- [x] Fixture tests gồm file hợp lệ, malformed và boundary values.
+- [x] Build/test sạch, UI diff bằng không.
 
 **Dependencies:** Task 1
 **Files likely touched:** DBC model/parser files và tests
 **Estimated scope:** M
 **Model allocation:** Lead `Terra xhigh`; review `Luna xhigh`
 **Skills khi triển khai:** `test-driven-development`, `incremental-implementation`
+
+## Work log — 2026-08-11 (Task 7 Terra xhigh implementation)
+
+- [x] Thêm glossary `CONTEXT.md` cho DBC document, node, message, signal, normalized CAN identifier và parse issue.
+- [x] Thêm domain bất biến `DbcDocument`/`DbcNode`/`DbcMessage`/`DbcSignal` cùng `DbcParseResult`/`DbcParseIssue`; parser là pure static seam `DbcParser.Parse(string)` không phụ thuộc WPF hay hardware.
+- [x] Parse core `BU_`, `BO_`, `SG_`: node/message/signal, CAN ID, payload length, start bit, bit length, endian, signedness, factor, offset, min/max, unit và receivers.
+- [x] Chuẩn hóa raw extended DBC identifier theo cờ bit 31 thành `Identifier` 29-bit + `IsExtendedIdentifier`, đúng boundary của `CanFrame`.
+- [x] Core malformed definitions trả error có severity/code/line/context; metadata và multiplexing ngoài phạm vi Task 7 trả warning rõ ràng, không tạo signal partial hoặc silently diễn giải.
+- [x] Thêm 7 test parser: valid typed metadata, standard/extended ID, ID/payload boundaries, malformed ID, multiplex warning, unsupported statement warning và đọc cả 8 DBC thật.
+- [x] Verification: formatter targeted PASS; `dotnet build Simulate.sln --no-restore` PASS 0 warning/0 error; `dotnet test Simulate.sln --no-restore` PASS 78/78; `git diff --check` và UI/XAML/code-behind/project scope diff PASS.
+- [x] `Luna xhigh` independent review và re-review đã hoàn tất; Task 7 chưa commit/push theo rào chắn người dùng.
+
+## Work log — 2026-08-11 (Task 7 Luna xhigh review)
+
+- [x] Axis Spec: core node/message/signal, normalized standard/extended ID, physical signal metadata, typed line/context issues và explicit unsupported warnings đều khớp Task 7.
+- [x] **Required finding đã phát hiện:** `DbcParser` chỉ kiểm tra `startBit < payloadBits`, chưa kiểm tra toàn bộ signal span theo `bitLength` và endian. Ví dụ `BO_ ...: 8` + `SG_ Bad : 63|2@1+ ...` đang được nhận dù signal vượt payload; đã bổ sung regression test và validation.
+- [x] Axis Standards: pure boundary không phụ thuộc WPF/hardware, immutable result, no UI/project/package diff; formatter PASS, build 0 warning/0 error, full test 78/78 PASS.
+- [x] Terra xhigh đã sửa finding: little-endian kiểm tra span liên tiếp; big-endian kiểm tra DBC sawtooth bit order; hai regression tests `63|2@1+` và `56|2@0+` trong payload 8 byte đều trả `InvalidSignalLayout`.
+- [x] Verification sau fix: DBC parser tests 9/9 PASS; `dotnet build Simulate.sln --no-restore` PASS 0 warning/0 error; `dotnet test Simulate.sln --no-restore` PASS 80/80; formatter targeted và `git diff --check` PASS.
+- [x] Luna xhigh re-review PASS: signal-span validation đã xử lý little-endian liên tiếp và big-endian DBC sawtooth; không còn finding Critical/Required. Task 7 DONE.
 
 ## Task 8: Signal codec và E2E protection
 
