@@ -43,3 +43,27 @@ _Avoid_: CAN CRC, complete AUTOSAR profile
 **Alive counter**:
 A bounded sequence value carried in protected payload bits to expose repetition, loss, or incorrect ordering.
 _Avoid_: message count, transmit statistic
+
+**Simulation plan**:
+An immutable set of simulation message rules bound to one parsed DBC document.
+_Avoid_: UI setup, editable grid state
+
+**Simulation message rule**:
+The configuration that selects one DBC message and declares its gateway behavior, send behavior, timing, signal overrides, and E2E settings.
+_Avoid_: runtime frame, UI row
+
+**Gateway mode**:
+The selected treatment for a matching message: pass through, block, or inject.
+_Avoid_: send type, scheduler state
+
+**Simulation send type**:
+The trigger shape for a configured send: one-shot, cyclic, or event-driven.
+_Avoid_: gateway mode, UI button label
+
+**Simulation timing**:
+The start delay, optional cycle interval, and repeat count declared for a simulation rule.
+_Avoid_: wall-clock timestamp, hardware latency
+
+**Signal override**:
+A finite physical value selected to replace one named DBC signal during injection.
+_Avoid_: raw payload replacement, live signal value

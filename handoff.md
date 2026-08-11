@@ -35,9 +35,9 @@ Tài liệu này bàn giao trạng thái để model/agent tiếp theo thực hi
 
 ## Trạng thái repository
 
-- Branch `chore/merge-agent-skills` đang track và đồng bộ với `origin/chore/merge-agent-skills` tại `54168e3` trước Task 5.
-- Worktree chỉ có thay đổi Task 5 ở Vector adapter/session, tests và tài liệu coordinator/checklist.
-- Task 5 đã commit `feat: add Vector CAN FD frame I/O`; chưa push. Không commit/push thêm nếu chưa có lệnh người dùng.
+- Branch `chore/merge-agent-skills` đang track và đồng bộ với `origin/chore/merge-agent-skills` tại `7ad4e72`.
+- Tasks 7-8 đã được commit/push; Task 8 là `7ad4e72 feat: add signal codec and E2E protection`.
+- Worktree chỉ có thay đổi uncommitted của Task 9: `SimulationPlan`/validation, tests và tài liệu coordinator. Không commit/push thêm nếu chưa có lệnh người dùng.
 
 ## Rào chắn không được vi phạm
 
@@ -103,15 +103,19 @@ Implementation hiện có:
 
 **Review result:** Luna high re-review PASS, không còn finding Critical/Required. Task 6 DONE; đã commit và push.
 
-**Task 7 implementation:** `Terra xhigh` đã hoàn tất DBC domain/parser pure, 9 parser tests gồm cả 8 DBC thật PASS; full suite 80/80, build 0 warning/0 error, formatter/diff/UI scope PASS. Multiplexing và metadata ngoài phạm vi Task 7 trả warning có line/context, không bị silently diễn giải. Đã commit `2c7df0f`, chưa push.
+**Task 7 implementation:** `Terra xhigh` đã hoàn tất DBC domain/parser pure, 9 parser tests gồm cả 8 DBC thật PASS; full suite 80/80, build 0 warning/0 error, formatter/diff/UI scope PASS. Multiplexing và metadata ngoài phạm vi Task 7 trả warning có line/context, không bị silently diễn giải. Đã commit `2c7df0f` và được push cùng chuỗi Tasks 7-8.
 
 **Luna xhigh review / Terra xhigh fix:** Luna tìm thấy finding `Required` về signal span vượt payload. Terra đã bổ sung validation cho span little-endian liên tiếp và DBC sawtooth big-endian, cùng hai regression tests cho `63|2@1+` và `56|2@0+` trong payload 8 byte. Luna xhigh re-review PASS, không còn finding Critical/Required. DBC tests 9/9 PASS, full suite 80/80 PASS, build 0 warning/0 error, formatter/diff/UI scope PASS. Task 7 DONE.
 
 **Task 8 implementation:** `Sol xhigh` đã hoàn tất pure `SignalCodec`, CRC-8/SAE-J1850 và stateless `E2eProtector`. Codec hỗ trợ little/big DBC sawtooth, signedness, factor/offset, min/max/raw/layout validation và bảo toàn bit ngoài target. E2E disabled là no-op; enabled validate payload/index, contiguous counter mask, counter range/wrap và CRC range trước mutation. Đây là configurable checksum/counter scheme theo reference, không phải full AUTOSAR Profile vì chưa có Data ID/Profile mode.
 
-**Task 8 verification:** focused tests 18/18 PASS; full suite 98/98 PASS; Debug build dùng isolated output do app Debug đang chạy và Release build đều 0 warning/0 error; targeted formatter, `git diff --check`, UI/XAML/project scope PASS. Luna xhigh independent review hai trục spec/standards PASS, không có finding Critical/Required. Task 8 DONE; chưa commit/push.
+**Task 8 verification:** focused tests 18/18 PASS; full suite 98/98 PASS; Debug build dùng isolated output do app Debug đang chạy và Release build đều 0 warning/0 error; targeted formatter, `git diff --check`, UI/XAML/project scope PASS. Luna xhigh independent review hai trục spec/standards PASS, không có finding Critical/Required. Task 8 DONE, commit `7ad4e72` đã push.
 
-**Next action:** Task 9 — lead `Terra high`, review `Luna high`. UI/XAML vẫn khóa.
+**Task 9 implementation:** `Terra high` đã thêm pure `SimulationPlan`/`SimulationMessageRule` cùng `GatewayMode`, `SimulationSendType`, `SimulationTiming` và `SignalOverride`. Plan luôn bind rule vào DBC document; validate normalized CAN ID + extended state duy nhất, message/signal reference, timing, enum, duplicate override và physical override range. E2E config được giữ typed bằng immutable `E2eProtectionConfiguration`; việc apply payload vẫn thuộc Tasks 8/11.
+
+**Task 9 verification:** focused tests 17/17 PASS; full suite 115/115 PASS; Debug build 0 warning/0 error; targeted formatter, `git diff --check`, UI/XAML/project scope và secret scan PASS. Luna high independent review hai trục spec/standards PASS, không có finding Critical/Required. Task 9 DONE; chưa commit/push.
+
+**Next action:** Task 10 — lead `Sol ultra`, review `Terra xhigh`. UI/XAML vẫn khóa.
 
 `NEEDS_VERIFY`: chưa cắm Vector hardware thật; dùng `tasks/vector-can-fd-hardware-checklist.md`. Không nối frame I/O mới vào UI hiện tại.
 

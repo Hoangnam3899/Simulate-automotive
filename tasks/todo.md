@@ -4,7 +4,7 @@
 >
 > UI LOCK: Không sửa `App.xaml`, `MainWindow.xaml`, `MainWindow.xaml.cs` hoặc file UI/XAML nào nếu chưa có yêu cầu và cho phép rõ ràng từ người dùng.
 >
-> Coordinator status (2026-08-11): Task 8 đã DONE — implementation `Sol xhigh` và independent review `Luna xhigh` đều PASS; focused tests 18/18 và full suite 98/98 PASS, build 0 warning/0 error. Task 7 đã commit `2c7df0f`, chưa push; UI diff bằng không, hardware thật còn `NEEDS_VERIFY`. Task completion reminder đã được bật. Bàn giao chi tiết: [`handoff.md`](../handoff.md).
+> Coordinator status (2026-08-12): Task 9 đã DONE — implementation `Terra high` và independent review `Luna high` đều PASS; focused tests 17/17 và full suite 115/115, build 0 warning/0 error. Tasks 7-8 đã commit/push; Task 9 chưa commit/push theo rào chắn người dùng. UI diff bằng không, hardware thật còn `NEEDS_VERIFY`. Task completion reminder đã được bật. Bàn giao chi tiết: [`handoff.md`](../handoff.md).
 
 ## Coordinator execution order
 
@@ -278,26 +278,37 @@
 - [x] Thêm immutable `E2eProtectionConfiguration`/result, `Crc8SaeJ1850` và stateless `E2eProtector`; disabled là no-op, enabled validate index/range/mask/counter trước khi ghi counter rồi CRC.
 - [x] Task 8 focused tests 18/18 PASS; full suite 98/98 PASS. Build Debug qua isolated output và Release đều PASS 0 warning/0 error; targeted formatter và `git diff --check` PASS; UI/XAML/project diff bằng không.
 - [x] Luna xhigh independent review hai trục spec/standards PASS: không có finding Critical/Required; các biên endian/signed/range/mutation/E2E được đối chiếu với acceptance và test vector.
-- [x] Task 8 DONE; chưa commit/push theo rào chắn người dùng. Next action: Task 9 — lead `Terra high`, review `Luna high`.
+- [x] Task 8 DONE; commit `7ad4e72` đã được push. Next action: Task 9 — lead `Terra high`, review `Luna high`.
 
 ## Task 9: Simulation configuration và validation
 
 **Description:** Thay model placeholder bằng typed simulation plan gồm message rule, gateway mode, overrides, send type, timing và E2E config.
 
+**Implementation status:** `DONE` — Terra high implementation và Luna high independent review đều PASS.
+
 **Acceptance criteria:**
-- [ ] Mode/send type dùng enum hoặc discriminated model, không dùng string làm logic.
-- [ ] Validate duplicate CAN ID, invalid timing, missing DBC reference và out-of-range override.
-- [ ] Model không phụ thuộc control/WPF type.
+- [x] Mode/send type dùng enum hoặc discriminated model, không dùng string làm logic.
+- [x] Validate duplicate CAN ID, invalid timing, missing DBC reference và out-of-range override.
+- [x] Model không phụ thuộc control/WPF type.
 
 **Verification:**
-- [ ] Validation tests cho happy path và invalid combinations.
-- [ ] Build/test sạch, UI diff bằng không.
+- [x] Validation tests cho happy path và invalid combinations.
+- [x] Build/test sạch, UI diff bằng không.
 
 **Dependencies:** Tasks 7-8
 **Files likely touched:** simulation model/validation files và tests
 **Estimated scope:** M
 **Model allocation:** Lead `Terra high`; review `Luna high`
 **Skills khi triển khai:** `domain-modeling`, `test-driven-development`
+
+## Work log — 2026-08-12 (Task 9 Terra high implementation)
+
+- [x] Thêm immutable `SimulationPlan`, `SimulationMessageRule`, `SimulationTiming` và `SignalOverride`; `GatewayMode`/`SimulationSendType` là enum, model chỉ tham chiếu DBC/E2E domain và không có WPF/Vector/UI type.
+- [x] Validation tại public boundary chặn enum không xác định, duplicate CAN ID theo cặp normalized ID + extended state, message/signal không tồn tại trong DBC, duplicate override, override rỗng/non-finite/out-of-range và timing/schedule mâu thuẫn.
+- [x] TDD qua public `SimulationPlan` seam: happy path và 17 focused assertions PASS; full suite 115/115 PASS, build 0 warning/0 error, targeted formatter và `git diff --check` PASS; UI/XAML/project diff bằng không.
+- [x] Self-review hai trục spec/standards: ambiguity OneShot repeat khác 1 đã được fix bằng regression tests; không còn finding Critical/Required.
+- [x] Luna high independent review hai trục spec/standards PASS: identity DBC, timing, duplicate/missing references, override bounds và pure boundary đều đạt; không có finding Critical/Required.
+- [x] Task 9 DONE; chưa commit/push theo rào chắn người dùng. Next action: Task 10 — lead `Sol ultra`, review `Terra xhigh`.
 
 ## Task 10: Gateway hai chiều với PassThrough và Block
 
