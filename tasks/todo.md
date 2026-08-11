@@ -4,7 +4,7 @@
 >
 > UI LOCK: Không sửa `App.xaml`, `MainWindow.xaml`, `MainWindow.xaml.cs` hoặc file UI/XAML nào nếu chưa có yêu cầu và cho phép rõ ràng từ người dùng.
 >
-> Coordinator status (2026-08-11): Task 7 đã hoàn tất implementation/fix `Terra xhigh` và re-review `Luna xhigh` PASS; build sạch và full suite 80/80 PASS. Task 7 chưa commit/push. Đã bổ sung 8 DBC input vào `DBC/`; UI diff bằng không, hardware thật còn `NEEDS_VERIFY`. Task completion reminder đã được bật. Bàn giao chi tiết: [`handoff.md`](../handoff.md).
+> Coordinator status (2026-08-11): Task 8 đã DONE — implementation `Sol xhigh` và independent review `Luna xhigh` đều PASS; focused tests 18/18 và full suite 98/98 PASS, build 0 warning/0 error. Task 7 đã commit `2c7df0f`, chưa push; UI diff bằng không, hardware thật còn `NEEDS_VERIFY`. Task completion reminder đã được bật. Bàn giao chi tiết: [`handoff.md`](../handoff.md).
 
 ## Coordinator execution order
 
@@ -252,21 +252,33 @@
 
 **Description:** Tạo pure module pack/unpack signal và E2E counter/CRC dùng payload hiện hữu làm baseline.
 
+**Implementation status:** `DONE` — Sol xhigh implementation và Luna xhigh independent review đều PASS.
+
 **Acceptance criteria:**
-- [ ] Hỗ trợ endian/signedness/scale đã chốt ở Task 7.
-- [ ] Không sửa bit ngoài signal target.
-- [ ] E2E chỉ áp dụng khi enabled và có bounds validation.
+- [x] Hỗ trợ endian/signedness/scale đã chốt ở Task 7.
+- [x] Không sửa bit ngoài signal target.
+- [x] E2E chỉ áp dụng khi enabled và có bounds validation.
 
 **Verification:**
-- [ ] Golden vectors độc lập cho pack/unpack và CRC/counter.
-- [ ] Boundary tests cho min/max, overflow và payload ngắn.
-- [ ] Build/test sạch, UI diff bằng không.
+- [x] Golden vectors độc lập cho pack/unpack và CRC/counter.
+- [x] Boundary tests cho min/max, overflow và payload ngắn.
+- [x] Build/test sạch, UI diff bằng không.
 
 **Dependencies:** Task 7
 **Files likely touched:** signal codec/E2E files và tests
 **Estimated scope:** M
 **Model allocation:** Lead `Sol xhigh`; review `Luna xhigh`
 **Skills khi triển khai:** `test-driven-development`, `source-driven-development`
+
+## Work log — 2026-08-11 (Task 8 Sol xhigh implementation)
+
+- [x] Đối chiếu `SignalEncoder.cs`/`E2EHelper.cs` của dự án tham chiếu và AUTOSAR CRC/E2E source; giữ CRC-8/SAE-J1850 + alive counter nhưng không tuyên bố full AUTOSAR Profile vì Task 8 chưa có Data ID/Profile mode.
+- [x] Thêm pure `SignalCodec` pack/unpack physical value cho little-endian liên tiếp và big-endian DBC sawtooth; hỗ trợ signed two's-complement, factor/offset, min/max, raw range và payload tối đa 64 byte.
+- [x] Mọi validation pack chạy trước mutation; golden vectors xác nhận các bit ngoài signal target được giữ nguyên và payload invalid không bị sửa dở.
+- [x] Thêm immutable `E2eProtectionConfiguration`/result, `Crc8SaeJ1850` và stateless `E2eProtector`; disabled là no-op, enabled validate index/range/mask/counter trước khi ghi counter rồi CRC.
+- [x] Task 8 focused tests 18/18 PASS; full suite 98/98 PASS. Build Debug qua isolated output và Release đều PASS 0 warning/0 error; targeted formatter và `git diff --check` PASS; UI/XAML/project diff bằng không.
+- [x] Luna xhigh independent review hai trục spec/standards PASS: không có finding Critical/Required; các biên endian/signed/range/mutation/E2E được đối chiếu với acceptance và test vector.
+- [x] Task 8 DONE; chưa commit/push theo rào chắn người dùng. Next action: Task 9 — lead `Terra high`, review `Luna high`.
 
 ## Task 9: Simulation configuration và validation
 

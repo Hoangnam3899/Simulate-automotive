@@ -20,6 +20,14 @@ _Avoid_: signal, runtime frame
 A named bit field within one DBC message, with bit layout and physical conversion metadata.
 _Avoid_: message field, payload byte
 
+**Raw signal value**:
+The signed or unsigned integer represented directly by a signal's payload bits before physical conversion.
+_Avoid_: physical value, displayed value
+
+**Physical signal value**:
+The engineering value obtained from a raw signal value through its declared factor and offset.
+_Avoid_: raw value, encoded bits
+
 **Normalized CAN identifier**:
 The CAN identifier value without the DBC extended-identifier flag, paired with an explicit extended-identifier state.
 _Avoid_: raw DBC identifier
@@ -27,3 +35,11 @@ _Avoid_: raw DBC identifier
 **Parse issue**:
 A line-specific diagnostic emitted while reading an external DBC document; it is either an error that invalidates the document or a warning about an unrepresented construct.
 _Avoid_: hardware failure
+
+**E2E protection**:
+Per-message payload protection made of a checksum and an alive counter; it is distinct from the CAN link-layer CRC.
+_Avoid_: CAN CRC, complete AUTOSAR profile
+
+**Alive counter**:
+A bounded sequence value carried in protected payload bits to expose repetition, loss, or incorrect ordering.
+_Avoid_: message count, transmit statistic

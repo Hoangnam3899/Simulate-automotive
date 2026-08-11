@@ -103,11 +103,15 @@ Implementation hiện có:
 
 **Review result:** Luna high re-review PASS, không còn finding Critical/Required. Task 6 DONE; đã commit và push.
 
-**Task 7 implementation:** `Terra xhigh` đã hoàn tất DBC domain/parser pure, 9 parser tests gồm cả 8 DBC thật PASS; full suite 80/80, build 0 warning/0 error, formatter/diff/UI scope PASS. Multiplexing và metadata ngoài phạm vi Task 7 trả warning có line/context, không bị silently diễn giải. Chưa commit/push.
+**Task 7 implementation:** `Terra xhigh` đã hoàn tất DBC domain/parser pure, 9 parser tests gồm cả 8 DBC thật PASS; full suite 80/80, build 0 warning/0 error, formatter/diff/UI scope PASS. Multiplexing và metadata ngoài phạm vi Task 7 trả warning có line/context, không bị silently diễn giải. Đã commit `2c7df0f`, chưa push.
 
 **Luna xhigh review / Terra xhigh fix:** Luna tìm thấy finding `Required` về signal span vượt payload. Terra đã bổ sung validation cho span little-endian liên tiếp và DBC sawtooth big-endian, cùng hai regression tests cho `63|2@1+` và `56|2@0+` trong payload 8 byte. Luna xhigh re-review PASS, không còn finding Critical/Required. DBC tests 9/9 PASS, full suite 80/80 PASS, build 0 warning/0 error, formatter/diff/UI scope PASS. Task 7 DONE.
 
-**Next action:** Task 8 — lead `Sol xhigh`, review `Luna xhigh`. UI/XAML vẫn khóa.
+**Task 8 implementation:** `Sol xhigh` đã hoàn tất pure `SignalCodec`, CRC-8/SAE-J1850 và stateless `E2eProtector`. Codec hỗ trợ little/big DBC sawtooth, signedness, factor/offset, min/max/raw/layout validation và bảo toàn bit ngoài target. E2E disabled là no-op; enabled validate payload/index, contiguous counter mask, counter range/wrap và CRC range trước mutation. Đây là configurable checksum/counter scheme theo reference, không phải full AUTOSAR Profile vì chưa có Data ID/Profile mode.
+
+**Task 8 verification:** focused tests 18/18 PASS; full suite 98/98 PASS; Debug build dùng isolated output do app Debug đang chạy và Release build đều 0 warning/0 error; targeted formatter, `git diff --check`, UI/XAML/project scope PASS. Luna xhigh independent review hai trục spec/standards PASS, không có finding Critical/Required. Task 8 DONE; chưa commit/push.
+
+**Next action:** Task 9 — lead `Terra high`, review `Luna high`. UI/XAML vẫn khóa.
 
 `NEEDS_VERIFY`: chưa cắm Vector hardware thật; dùng `tasks/vector-can-fd-hardware-checklist.md`. Không nối frame I/O mới vào UI hiện tại.
 
