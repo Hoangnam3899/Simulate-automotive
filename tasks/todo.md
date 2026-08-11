@@ -4,7 +4,7 @@
 >
 > UI LOCK: Không sửa `App.xaml`, `MainWindow.xaml`, `MainWindow.xaml.cs` hoặc file UI/XAML nào nếu chưa có yêu cầu và cho phép rõ ràng từ người dùng.
 >
-> Coordinator status (2026-08-11): Task 4 đã hoàn tất: implementation `Sol ultra`, test review `Luna xhigh` PASS và code review `Terra xhigh` PASS; build sạch và test 35/35 PASS. Tiếp theo là Task 5 — lead `Sol ultra`, review `Terra xhigh`. UI diff bằng không, hardware thật còn `NEEDS_VERIFY`, chưa commit/push. Task completion reminder đã được bật. Bàn giao chi tiết: [`handoff.md`](../handoff.md).
+> Coordinator status (2026-08-11): Task 5 đã hoàn tất: implementation `Sol ultra`, independent code review `Terra xhigh` PASS; build sạch và test 65/65 PASS. Đã commit `feat: add Vector CAN FD frame I/O`, chưa push. Tiếp theo là Task 6 — lead `Terra xhigh`, review `Luna high`. UI diff bằng không, hardware thật còn `NEEDS_VERIFY`. Task completion reminder đã được bật. Bàn giao chi tiết: [`handoff.md`](../handoff.md).
 
 ## Coordinator execution order
 
@@ -138,15 +138,19 @@
 
 **Description:** Thêm mode CAN FD dùng interface V4, nominal/data bitrate, DLC-length mapping và transmit/receive event phù hợp.
 
+**Implementation status:** `DONE` — implementation `Sol ultra`, independent code review `Terra xhigh` PASS.
+
 **Acceptance criteria:**
-- [ ] Cấu hình arbitration/data bitrate được validate và kiểm tra status.
-- [ ] Payload length/DLC hợp lệ cho CAN FD; classic path không bị thay đổi hành vi.
-- [ ] Session cleanup/cancellation đạt cùng contract với Classic CAN.
+- [x] Cấu hình arbitration/data bitrate được validate và kiểm tra status.
+- [x] Payload length/DLC hợp lệ cho CAN FD; classic path không bị thay đổi hành vi.
+- [x] Session cleanup/cancellation đạt cùng contract với Classic CAN.
 
 **Verification:**
-- [ ] Golden tests cho DLC-length mapping.
-- [ ] Contract tests chạy cho cả Classic và FD modes.
-- [ ] Build/test sạch, UI diff bằng không.
+- [x] Golden tests cho toàn bộ DLC `0..15` và payload length tương ứng.
+- [x] Contract tests chạy cho cả Classic V3 và CAN/CAN FD V4 modes.
+- [x] `dotnet build Simulate.sln --no-restore`: PASS 0 warning/0 error; `dotnet test Simulate.sln --no-build --no-restore`: PASS 65/65; UI diff bằng không.
+- [x] Manual checklist đã tạo tại [`tasks/vector-can-fd-hardware-checklist.md`](vector-can-fd-hardware-checklist.md).
+- [ ] `NEEDS_VERIFY`: Vector hardware thật, CAN FD mode/bit timing, timestamp/latency và soak 50 chu kỳ.
 
 **Dependencies:** Task 4
 **Files likely touched:** Vector adapter/session, CAN FD mapping và tests
@@ -462,4 +466,26 @@ Mỗi mục trên cần một yêu cầu và approval UI riêng từ người d�
 - [x] UI/XAML/code-behind, binding `Connection.*`/`Messages`/`Signals`/`FaultQueue`, project và solution configuration không có diff.
 - [x] Task 4 hoàn tất; chưa commit/push theo rào chắn người dùng.
 - [ ] `NEEDS_VERIFY`: Vector hardware thật, timestamp/latency và soak 50 chu kỳ vẫn cần thực hiện theo [`tasks/vector-classic-can-hardware-checklist.md`](vector-classic-can-hardware-checklist.md).
-- [ ] Next action: Task 5 — lead `Sol ultra`, review `Terra xhigh`.
+- [x] Next action completed: Task 5 independent code review `Terra xhigh` PASS.
+
+## Work log — 2026-08-11 (Task 5 Sol ultra implementation)
+
+- [x] `VectorXlApi` dùng interface V4 với `XL_CanTransmitEx`/`XL_CanReceive`; TX tạo đúng event tag, extended-ID bit, DLC và EDL/BRS flags; RX chỉ nhận exact `RX_OK` tag và phát hiện `XL_CAN_QUEUE_OVERFLOW`.
+- [x] V4 session hỗ trợ cả Classic frame và CAN FD frame; source được ánh xạ bằng `channelIndex`, destination transmit dùng đúng RX/TX physical mask.
+- [x] DLC `0..15` ánh xạ độc lập sang `0..8,12,16,20,24,32,48,64`; event có DLC/EDL/BRS không hợp lệ trả typed receive failure.
+- [x] Native RX/TX status, `messageCounterSent != 1`, queue overflow và flush failure giữ operation/error/native diagnostics phù hợp.
+- [x] Receive batch vẫn giới hạn 256, queue-empty polling có cancellation; FD caller cancellation và stop pending receive đạt cùng contract với Classic.
+- [x] Source verification: Vector manual 20.30 CAN FD flow pp.103-104; wrapper DLL `25.20.14.0` và `Doc/XLDriver.txt`, `Doc/XLClass.txt`, `Doc/XLDefine.txt`.
+- [x] Self-review đã loại bỏ lựa chọn legacy `NO_ISO` bị ẩn từ Task 3: orchestration nay truyền `VectorCanFdProtocolMode.Iso`, adapter map rõ thành `options=0`; test khóa quyết định mặc định này.
+- [x] Verification implementation: formatter targeted PASS; `dotnet build Simulate.sln --no-restore` PASS 0 warning/0 error; `dotnet test Simulate.sln --no-build --no-restore` PASS 65/65.
+- [x] `git diff --check` và UI/XAML/code-behind diff PASS; không đổi binding, package, project hoặc solution configuration.
+- [x] Independent code review `Terra xhigh` PASS; không có finding Critical/Required. Task 5 đã DONE và đã commit; chưa push.
+- [ ] `NEEDS_VERIFY`: thực hiện toàn bộ runtime bench tại [`tasks/vector-can-fd-hardware-checklist.md`](vector-can-fd-hardware-checklist.md); đặc biệt xác nhận ISO CAN FD mặc định và bit timing tương thích peer.
+
+## Work log — 2026-08-11 (Task 5 Terra xhigh code review)
+
+- [x] Trục spec PASS: V4 dùng đúng `XL_CanTransmitEx`/`XL_CanReceive`, exact RX/TX tag, EDL/BRS, extended ID, DLC `0..15`, Classic-over-V4, nominal/data bitrate, typed error, flush và cleanup/cancellation đều đạt Task 5.
+- [x] Trục standards PASS: Vector types vẫn cô lập sau `IVectorXlApi`; receive batch giới hạn 256, queue-empty wait có cancellation, native I/O/cleanup tuần tự dưới cùng lock; không có secret, UI, binding, package hay project/solution configuration thay đổi.
+- [x] Independent verification: `dotnet build Simulate.sln --no-restore` PASS 0 warning/0 error; `dotnet test Simulate.sln --no-build --no-restore` PASS 65/65; targeted formatter và `git diff --check` PASS.
+- [x] Không có finding Critical/Required. Optional/FYI: timestamp/latency và CAN FD ISO mode/bit timing cần bench thật; đã được quản lý bởi checklist, không suy diễn từ fake SDK.
+- [x] Task 5 DONE; đã commit, chưa push. Next action: Task 6 — lead `Terra xhigh`, review `Luna high`.

@@ -62,6 +62,12 @@ namespace Simulate.Services
         Version4 = 4
     }
 
+    internal enum VectorCanFdProtocolMode
+    {
+        Iso,
+        NonIso
+    }
+
     internal readonly record struct VectorPortOpenResult(
         VectorNativeStatus Status,
         int PortHandle,
@@ -113,9 +119,60 @@ namespace Simulate.Services
         VectorNativeStatus Status,
         IReadOnlyList<VectorClassicCanEvent> Events);
 
-    internal readonly record struct VectorClassicFlushResult(
+    internal readonly record struct VectorCanFlushResult(
         VectorNativeStatus ReceiveStatus,
         VectorNativeStatus TransmitStatus);
+
+    [Flags]
+    internal enum VectorCanFdEventFlags
+    {
+        None = 0,
+        FlexibleDataRate = 1,
+        BitRateSwitch = 2,
+        ErrorStateIndicator = 4,
+        RemoteFrame = 8,
+        ErrorFrame = 16
+    }
+
+    internal readonly record struct VectorCanFdTransmitResult(
+        VectorNativeStatus Status,
+        uint MessageCountSent);
+
+    internal sealed class VectorCanFdEvent
+    {
+        public VectorCanFdEvent(
+            int channelIndex,
+            uint rawIdentifier,
+            byte dataLengthCode,
+            VectorCanFdEventFlags flags,
+            byte[] data,
+            ulong timestampNanoseconds)
+        {
+            ChannelIndex = channelIndex;
+            RawIdentifier = rawIdentifier;
+            DataLengthCode = dataLengthCode;
+            Flags = flags;
+            Data = data is null ? throw new ArgumentNullException(nameof(data)) : (byte[])data.Clone();
+            TimestampNanoseconds = timestampNanoseconds;
+        }
+
+        public int ChannelIndex { get; }
+
+        public uint RawIdentifier { get; }
+
+        public byte DataLengthCode { get; }
+
+        public VectorCanFdEventFlags Flags { get; }
+
+        public byte[] Data { get; }
+
+        public ulong TimestampNanoseconds { get; }
+    }
+
+    internal readonly record struct VectorCanFdReceiveBatchResult(
+        VectorNativeStatus Status,
+        IReadOnlyList<VectorCanFdEvent> Events,
+        bool QueueOverflow);
 
     internal interface IVectorXlApi
     {
@@ -139,7 +196,8 @@ namespace Simulate.Services
             int portHandle,
             ulong accessMask,
             uint nominalBitrate,
-            uint dataBitrate);
+            uint dataBitrate,
+            VectorCanFdProtocolMode protocolMode);
 
         VectorNativeStatus ActivateCanChannels(int portHandle, ulong accessMask);
 
@@ -150,13 +208,26 @@ namespace Simulate.Services
             bool isExtendedIdentifier,
             ReadOnlyMemory<byte> data);
 
+        VectorCanFdTransmitResult TransmitCanFdFrame(
+            int portHandle,
+            ulong accessMask,
+            uint identifier,
+            bool isExtendedIdentifier,
+            byte dataLengthCode,
+            VectorCanFdEventFlags flags,
+            ReadOnlyMemory<byte> data);
+
+        VectorCanFdReceiveBatchResult ReceiveCanFdEvents(
+            int portHandle,
+            int maximumEventCount);
+
         VectorClassicReceiveBatchResult ReceiveClassicCanEvents(
             int portHandle,
             int maximumEventCount);
 
         VectorNativeStatus FlushReceiveQueue(int portHandle);
 
-        VectorNativeStatus FlushClassicTransmitQueue(int portHandle, ulong accessMask);
+        VectorNativeStatus FlushCanTransmitQueue(int portHandle, ulong accessMask);
 
         VectorNativeStatus DeactivateChannels(int portHandle, ulong accessMask);
 
@@ -249,7 +320,8 @@ namespace Simulate.Services
             int portHandle,
             ulong accessMask,
             uint nominalBitrate,
-            uint dataBitrate)
+            uint dataBitrate,
+            VectorCanFdProtocolMode protocolMode)
         {
             var configuration = new XLClass.XLcanFdConf
             {
@@ -261,7 +333,16 @@ namespace Simulate.Services
                 sjwDbr = 2,
                 tseg1Dbr = 5,
                 tseg2Dbr = 2,
-                options = (byte)XLDefine.XL_CANFD_ConfigOptions.XL_CANFD_CONFOPT_NO_ISO
+                options = protocolMode switch
+                {
+                    VectorCanFdProtocolMode.Iso => 0,
+                    VectorCanFdProtocolMode.NonIso =>
+                        (byte)XLDefine.XL_CANFD_ConfigOptions.XL_CANFD_CONFOPT_NO_ISO,
+                    _ => throw new ArgumentOutOfRangeException(
+                        nameof(protocolMode),
+                        protocolMode,
+                        "The Vector CAN FD protocol mode is not supported.")
+                }
             };
 
             return VectorNativeStatus.From(
@@ -299,6 +380,113 @@ namespace Simulate.Services
             // (pp. 90-94): Classic CAN uses XL_TRANSMIT_MSG with xlCanTransmit.
             return VectorNativeStatus.From(
                 _driver.XL_CanTransmit(portHandle, accessMask, transmitEvent));
+        }
+
+        public VectorCanFdTransmitResult TransmitCanFdFrame(
+            int portHandle,
+            ulong accessMask,
+            uint identifier,
+            bool isExtendedIdentifier,
+            byte dataLengthCode,
+            VectorCanFdEventFlags flags,
+            ReadOnlyMemory<byte> data)
+        {
+            if (dataLengthCode > 15)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(dataLengthCode),
+                    dataLengthCode,
+                    "A Vector CAN/CAN FD data length code must be between 0 and 15.");
+            }
+
+            if (data.Length > 64)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(data),
+                    data.Length,
+                    "A Vector CAN FD payload cannot exceed 64 bytes.");
+            }
+
+            var transmitEvent = new XLClass.XLcanTxEvent
+            {
+                tag = XLDefine.XL_CANFD_TX_EventTags.XL_CAN_EV_TAG_TX_MSG
+            };
+            transmitEvent.tagData.canId = isExtendedIdentifier
+                ? identifier | (uint)XLDefine.XL_MessageFlagsExtended.XL_CAN_EXT_MSG_ID
+                : identifier;
+            transmitEvent.tagData.dlc = (XLDefine.XL_CANFD_DLC)dataLengthCode;
+            transmitEvent.tagData.msgFlags = XLDefine.XL_CANFD_TX_MessageFlags.XL_CAN_TXMSG_FLAG_NONE;
+            if ((flags & VectorCanFdEventFlags.FlexibleDataRate) != 0)
+            {
+                transmitEvent.tagData.msgFlags |=
+                    XLDefine.XL_CANFD_TX_MessageFlags.XL_CAN_TXMSG_FLAG_EDL;
+            }
+
+            if ((flags & VectorCanFdEventFlags.BitRateSwitch) != 0)
+            {
+                transmitEvent.tagData.msgFlags |=
+                    XLDefine.XL_CANFD_TX_MessageFlags.XL_CAN_TXMSG_FLAG_BRS;
+            }
+
+            data.Span.CopyTo(transmitEvent.tagData.data);
+            uint messageCountSent = 0;
+
+            // XL Driver Library Manual 20.30, CAN FD flow (pp. 103-104):
+            // interface V4 transmits both CAN and CAN FD frames via XL_CanTransmitEx.
+            VectorNativeStatus status = VectorNativeStatus.From(
+                _driver.XL_CanTransmitEx(
+                    portHandle,
+                    accessMask,
+                    ref messageCountSent,
+                    transmitEvent));
+            return new VectorCanFdTransmitResult(status, messageCountSent);
+        }
+
+        public VectorCanFdReceiveBatchResult ReceiveCanFdEvents(
+            int portHandle,
+            int maximumEventCount)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumEventCount);
+            List<VectorCanFdEvent>? receivedEvents = null;
+            VectorNativeStatus status = VectorNativeStatus.From(XLDefine.XL_Status.XL_SUCCESS);
+            bool queueOverflow = false;
+
+            for (int index = 0; index < maximumEventCount; index++)
+            {
+                var nativeEvent = new XLClass.XLcanRxEvent();
+                status = VectorNativeStatus.From(_driver.XL_CanReceive(portHandle, ref nativeEvent));
+                if (!status.IsSuccess)
+                {
+                    break;
+                }
+
+                if ((nativeEvent.flagsChip &
+                    XLDefine.XL_CANFD_FLAGSCHIP.XL_CAN_QUEUE_OVERFLOW) != 0)
+                {
+                    queueOverflow = true;
+                }
+
+                if (nativeEvent.tag != XLDefine.XL_CANFD_RX_EventTags.XL_CAN_EV_TAG_RX_OK)
+                {
+                    continue;
+                }
+
+                XLClass.XL_CAN_EV_RX_MSG message = nativeEvent.tagData.canRxOkMsg;
+                receivedEvents ??= new List<VectorCanFdEvent>(
+                    Math.Min(maximumEventCount, 32));
+                receivedEvents.Add(new VectorCanFdEvent(
+                    nativeEvent.channelIndex,
+                    message.canId,
+                    (byte)message.dlc,
+                    MapCanFdEventFlags(message.msgFlags),
+                    message.data,
+                    nativeEvent.timeStamp));
+            }
+
+            IReadOnlyList<VectorCanFdEvent> events = receivedEvents is null
+                ? Array.Empty<VectorCanFdEvent>()
+                : receivedEvents;
+            return new VectorCanFdReceiveBatchResult(status, events, queueOverflow);
         }
 
         public VectorClassicReceiveBatchResult ReceiveClassicCanEvents(
@@ -352,7 +540,7 @@ namespace Simulate.Services
             return VectorNativeStatus.From(_driver.XL_FlushReceiveQueue(portHandle));
         }
 
-        public VectorNativeStatus FlushClassicTransmitQueue(int portHandle, ulong accessMask)
+        public VectorNativeStatus FlushCanTransmitQueue(int portHandle, ulong accessMask)
         {
             // Manual 20.30, section 4.3.14 (p. 91).
             return VectorNativeStatus.From(
@@ -388,6 +576,38 @@ namespace Simulate.Services
             if ((messageFlags & XLDefine.XL_MessageFlags.XL_CAN_MSG_FLAG_TX_REQUEST) != 0)
             {
                 result |= VectorClassicCanEventFlags.TransmitRequest;
+            }
+
+            return result;
+        }
+
+        private static VectorCanFdEventFlags MapCanFdEventFlags(
+            XLDefine.XL_CANFD_RX_MessageFlags messageFlags)
+        {
+            VectorCanFdEventFlags result = VectorCanFdEventFlags.None;
+            if ((messageFlags & XLDefine.XL_CANFD_RX_MessageFlags.XL_CAN_RXMSG_FLAG_EDL) != 0)
+            {
+                result |= VectorCanFdEventFlags.FlexibleDataRate;
+            }
+
+            if ((messageFlags & XLDefine.XL_CANFD_RX_MessageFlags.XL_CAN_RXMSG_FLAG_BRS) != 0)
+            {
+                result |= VectorCanFdEventFlags.BitRateSwitch;
+            }
+
+            if ((messageFlags & XLDefine.XL_CANFD_RX_MessageFlags.XL_CAN_RXMSG_FLAG_ESI) != 0)
+            {
+                result |= VectorCanFdEventFlags.ErrorStateIndicator;
+            }
+
+            if ((messageFlags & XLDefine.XL_CANFD_RX_MessageFlags.XL_CAN_RXMSG_FLAG_RTR) != 0)
+            {
+                result |= VectorCanFdEventFlags.RemoteFrame;
+            }
+
+            if ((messageFlags & XLDefine.XL_CANFD_RX_MessageFlags.XL_CAN_RXMSG_FLAG_EF) != 0)
+            {
+                result |= VectorCanFdEventFlags.ErrorFrame;
             }
 
             return result;

@@ -201,7 +201,8 @@ namespace Simulate.Services
                                 openPortResult.PortHandle,
                                 accessMask,
                                 options.NominalBitrate,
-                                options.DataBitrate!.Value);
+                                options.DataBitrate!.Value,
+                                VectorCanFdProtocolMode.Iso);
 
                         if (!configurationStatus.IsSuccess)
                         {

@@ -11,6 +11,32 @@ namespace Simulate.Tests
     [TestClass]
     public sealed class VectorHardwareServiceTests
     {
+        [DataTestMethod]
+        [DataRow(CanDataLengthCode.Bytes0, 0)]
+        [DataRow(CanDataLengthCode.Bytes1, 1)]
+        [DataRow(CanDataLengthCode.Bytes2, 2)]
+        [DataRow(CanDataLengthCode.Bytes3, 3)]
+        [DataRow(CanDataLengthCode.Bytes4, 4)]
+        [DataRow(CanDataLengthCode.Bytes5, 5)]
+        [DataRow(CanDataLengthCode.Bytes6, 6)]
+        [DataRow(CanDataLengthCode.Bytes7, 7)]
+        [DataRow(CanDataLengthCode.Bytes8, 8)]
+        [DataRow(CanDataLengthCode.Bytes12, 12)]
+        [DataRow(CanDataLengthCode.Bytes16, 16)]
+        [DataRow(CanDataLengthCode.Bytes20, 20)]
+        [DataRow(CanDataLengthCode.Bytes24, 24)]
+        [DataRow(CanDataLengthCode.Bytes32, 32)]
+        [DataRow(CanDataLengthCode.Bytes48, 48)]
+        [DataRow(CanDataLengthCode.Bytes64, 64)]
+        public void CAN_FD_DLC_maps_to_the_Vector_payload_length(
+            CanDataLengthCode dataLengthCode,
+            int expectedPayloadLength)
+        {
+            Assert.AreEqual(
+                expectedPayloadLength,
+                CanFrame.GetPayloadLength(dataLengthCode));
+        }
+
         [TestMethod]
         public async Task Discovery_failure_returns_native_status_and_closes_the_driver()
         {
@@ -250,6 +276,372 @@ namespace Simulate.Tests
                 api.LastTransmitData);
             Assert.AreEqual(VectorCanInterfaceVersion.Version3, api.OpenedInterfaceVersion);
             Assert.AreEqual(3UL, api.OpenedAccessMask);
+        }
+
+        [TestMethod]
+        public async Task CAN_FD_session_transmits_an_extended_BRS_frame_with_its_DLC_and_payload()
+        {
+            var api = new FakeVectorXlApi();
+            var service = new VectorHardwareService(() => api);
+            HardwareOperationResult<ICanGatewaySession> openResult =
+                await service.OpenGatewaySessionAsync(CreateFlexibleDataRateOptions());
+            Assert.IsTrue(openResult.IsSuccess);
+            await using ICanGatewaySession session = openResult.Value!;
+            byte[] payload = new byte[64];
+            payload[0] = 0x10;
+            payload[63] = 0xA5;
+            CanFrame frame = CanFrame.CreateFlexibleDataRate(
+                0x18DAF110,
+                isExtendedIdentifier: true,
+                CanDataLengthCode.Bytes64,
+                isBitRateSwitchEnabled: true,
+                payload);
+
+            HardwareOperationResult transmitResult =
+                await session.TransmitAsync(CanGatewaySide.Tx, frame);
+
+            Assert.IsTrue(transmitResult.IsSuccess);
+            Assert.AreEqual(VectorCanInterfaceVersion.Version4, api.OpenedInterfaceVersion);
+            Assert.AreEqual(2UL, api.LastCanFdTransmitAccessMask);
+            Assert.AreEqual(0x18DAF110u, api.LastCanFdTransmitIdentifier);
+            Assert.AreEqual(true, api.LastCanFdTransmitIsExtendedIdentifier);
+            Assert.AreEqual(CanFrameFormat.FlexibleDataRate, api.LastCanFdTransmitFormat);
+            Assert.AreEqual(true, api.LastCanFdTransmitBitRateSwitch);
+            Assert.AreEqual(CanDataLengthCode.Bytes64, api.LastCanFdTransmitDataLengthCode);
+            CollectionAssert.AreEqual(payload, api.LastCanFdTransmitData);
+        }
+
+        [TestMethod]
+        public async Task CAN_FD_session_receives_an_extended_BRS_frame_from_the_TX_channel()
+        {
+            var api = new FakeVectorXlApi();
+            byte[] payload = new byte[12];
+            payload[0] = 0x62;
+            payload[11] = 0x7E;
+            api.EnqueueCanFdReceiveEvent(
+                channelIndex: 1,
+                rawIdentifier: 0x98DAF110,
+                dataLengthCode: (byte)CanDataLengthCode.Bytes12,
+                isFlexibleDataRate: true,
+                isBitRateSwitchEnabled: true,
+                data: payload);
+            var service = new VectorHardwareService(() => api);
+            HardwareOperationResult<ICanGatewaySession> openResult =
+                await service.OpenGatewaySessionAsync(CreateFlexibleDataRateOptions());
+            Assert.IsTrue(openResult.IsSuccess);
+            await using ICanGatewaySession session = openResult.Value!;
+
+            RoutedCanFrame received = await ReadNextAsync(session.ReceiveAsync());
+
+            Assert.AreEqual(CanGatewaySide.Tx, received.Source);
+            Assert.AreEqual(0x18DAF110u, received.Frame.Identifier);
+            Assert.IsTrue(received.Frame.IsExtendedIdentifier);
+            Assert.AreEqual(CanFrameFormat.FlexibleDataRate, received.Frame.Format);
+            Assert.IsTrue(received.Frame.IsBitRateSwitchEnabled);
+            Assert.AreEqual(CanDataLengthCode.Bytes12, received.Frame.DataLengthCode);
+            CollectionAssert.AreEqual(payload, received.Frame.Data.ToArray());
+        }
+
+        [TestMethod]
+        public async Task CAN_FD_session_flushes_native_receive_and_transmit_queues()
+        {
+            var api = new FakeVectorXlApi();
+            var service = new VectorHardwareService(() => api);
+            HardwareOperationResult<ICanGatewaySession> openResult =
+                await service.OpenGatewaySessionAsync(CreateFlexibleDataRateOptions());
+            Assert.IsTrue(openResult.IsSuccess);
+            await using ICanGatewaySession session = openResult.Value!;
+
+            HardwareOperationResult flushResult = await session.FlushAsync();
+
+            Assert.IsTrue(flushResult.IsSuccess);
+            Assert.AreEqual(1, api.FlushReceiveCallCount);
+            Assert.AreEqual(1, api.FlushTransmitCallCount);
+            Assert.AreEqual(3UL, api.LastFlushTransmitAccessMask);
+        }
+
+        [TestMethod]
+        public async Task CAN_FD_session_forwards_nominal_and_data_bitrates_to_V4_configuration()
+        {
+            var api = new FakeVectorXlApi();
+            var service = new VectorHardwareService(() => api);
+
+            HardwareOperationResult<ICanGatewaySession> openResult =
+                await service.OpenGatewaySessionAsync(CreateFlexibleDataRateOptions());
+
+            Assert.IsTrue(openResult.IsSuccess);
+            await using ICanGatewaySession session = openResult.Value!;
+            Assert.AreEqual(VectorCanInterfaceVersion.Version4, api.OpenedInterfaceVersion);
+            Assert.AreEqual(500_000u, api.LastCanFdNominalBitrate);
+            Assert.AreEqual(2_000_000u, api.LastCanFdDataBitrate);
+            Assert.AreEqual(VectorCanFdProtocolMode.Iso, api.LastCanFdProtocolMode);
+        }
+
+        [TestMethod]
+        public async Task CAN_FD_session_transmits_a_Classic_frame_through_the_V4_API()
+        {
+            var api = new FakeVectorXlApi();
+            var service = new VectorHardwareService(() => api);
+            HardwareOperationResult<ICanGatewaySession> openResult =
+                await service.OpenGatewaySessionAsync(CreateFlexibleDataRateOptions());
+            Assert.IsTrue(openResult.IsSuccess);
+            await using ICanGatewaySession session = openResult.Value!;
+            CanFrame frame = CanFrame.CreateClassic(
+                0x321,
+                isExtendedIdentifier: false,
+                new byte[] { 0x10, 0x20, 0x30 });
+
+            HardwareOperationResult result =
+                await session.TransmitAsync(CanGatewaySide.Rx, frame);
+
+            Assert.IsTrue(result.IsSuccess);
+            Assert.AreEqual(1UL, api.LastCanFdTransmitAccessMask);
+            Assert.AreEqual(CanFrameFormat.Classic, api.LastCanFdTransmitFormat);
+            Assert.AreEqual(false, api.LastCanFdTransmitBitRateSwitch);
+            Assert.AreEqual(CanDataLengthCode.Bytes3, api.LastCanFdTransmitDataLengthCode);
+            CollectionAssert.AreEqual(
+                new byte[] { 0x10, 0x20, 0x30 },
+                api.LastCanFdTransmitData);
+            Assert.IsNull(api.LastTransmitAccessMask);
+        }
+
+        [TestMethod]
+        public async Task CAN_FD_transmit_failure_returns_a_typed_native_error()
+        {
+            var api = new FakeVectorXlApi
+            {
+                CanFdTransmitStatus = new VectorNativeStatus(11, "XL_ERR_QUEUE_IS_FULL")
+            };
+            var service = new VectorHardwareService(() => api);
+            HardwareOperationResult<ICanGatewaySession> openResult =
+                await service.OpenGatewaySessionAsync(CreateFlexibleDataRateOptions());
+            Assert.IsTrue(openResult.IsSuccess);
+            await using ICanGatewaySession session = openResult.Value!;
+            CanFrame frame = CanFrame.CreateFlexibleDataRate(
+                0x123,
+                isExtendedIdentifier: false,
+                CanDataLengthCode.Bytes8,
+                isBitRateSwitchEnabled: true,
+                new byte[8]);
+
+            HardwareOperationResult result =
+                await session.TransmitAsync(CanGatewaySide.Tx, frame);
+
+            Assert.IsFalse(result.IsSuccess);
+            Assert.IsNotNull(result.Failure);
+            Assert.AreEqual(HardwareOperation.Transmit, result.Failure.Operation);
+            Assert.AreEqual(HardwareErrorCode.TransmitFailed, result.Failure.Code);
+            Assert.AreEqual(11, result.Failure.NativeStatus);
+            StringAssert.Contains(result.Failure.Message, "XL_CanTransmitEx");
+            StringAssert.Contains(result.Failure.Message, "XL_ERR_QUEUE_IS_FULL");
+        }
+
+        [TestMethod]
+        public async Task CAN_FD_transmit_requires_exactly_one_reported_frame()
+        {
+            var api = new FakeVectorXlApi
+            {
+                CanFdTransmitMessageCount = 0
+            };
+            var service = new VectorHardwareService(() => api);
+            HardwareOperationResult<ICanGatewaySession> openResult =
+                await service.OpenGatewaySessionAsync(CreateFlexibleDataRateOptions());
+            Assert.IsTrue(openResult.IsSuccess);
+            await using ICanGatewaySession session = openResult.Value!;
+            CanFrame frame = CanFrame.CreateFlexibleDataRate(
+                0x123,
+                isExtendedIdentifier: false,
+                CanDataLengthCode.Bytes12,
+                isBitRateSwitchEnabled: false,
+                new byte[12]);
+
+            HardwareOperationResult result =
+                await session.TransmitAsync(CanGatewaySide.Tx, frame);
+
+            Assert.IsFalse(result.IsSuccess);
+            Assert.IsNotNull(result.Failure);
+            Assert.AreEqual(HardwareErrorCode.TransmitFailed, result.Failure.Code);
+            StringAssert.Contains(result.Failure.Message, "exactly one");
+        }
+
+        [TestMethod]
+        public async Task CAN_FD_session_receives_a_Classic_frame_through_the_V4_API()
+        {
+            var api = new FakeVectorXlApi();
+            api.EnqueueCanFdReceiveEvent(
+                channelIndex: 0,
+                rawIdentifier: 0x456,
+                dataLengthCode: (byte)CanDataLengthCode.Bytes3,
+                isFlexibleDataRate: false,
+                isBitRateSwitchEnabled: false,
+                data: new byte[] { 0x01, 0x02, 0x03 });
+            var service = new VectorHardwareService(() => api);
+            HardwareOperationResult<ICanGatewaySession> openResult =
+                await service.OpenGatewaySessionAsync(CreateFlexibleDataRateOptions());
+            Assert.IsTrue(openResult.IsSuccess);
+            await using ICanGatewaySession session = openResult.Value!;
+
+            RoutedCanFrame received = await ReadNextAsync(session.ReceiveAsync());
+
+            Assert.AreEqual(CanGatewaySide.Rx, received.Source);
+            Assert.AreEqual(CanFrameFormat.Classic, received.Frame.Format);
+            Assert.AreEqual(CanDataLengthCode.Bytes3, received.Frame.DataLengthCode);
+            Assert.IsFalse(received.Frame.IsBitRateSwitchEnabled);
+            CollectionAssert.AreEqual(
+                new byte[] { 0x01, 0x02, 0x03 },
+                received.Frame.Data.ToArray());
+        }
+
+        [TestMethod]
+        public async Task CAN_FD_receive_failure_throws_a_typed_native_error()
+        {
+            var api = new FakeVectorXlApi
+            {
+                CanFdReceiveStatus = new VectorNativeStatus(201, "XL_ERR_INVALID_PORTHANDLE")
+            };
+            var service = new VectorHardwareService(() => api);
+            HardwareOperationResult<ICanGatewaySession> openResult =
+                await service.OpenGatewaySessionAsync(CreateFlexibleDataRateOptions());
+            Assert.IsTrue(openResult.IsSuccess);
+            await using ICanGatewaySession session = openResult.Value!;
+            await using IAsyncEnumerator<RoutedCanFrame> enumerator =
+                session.ReceiveAsync().GetAsyncEnumerator();
+
+            HardwareOperationException exception =
+                await Assert.ThrowsExceptionAsync<HardwareOperationException>(
+                    async () => await enumerator.MoveNextAsync().AsTask());
+
+            Assert.AreEqual(HardwareOperation.Receive, exception.Failure.Operation);
+            Assert.AreEqual(HardwareErrorCode.ReceiveFailed, exception.Failure.Code);
+            Assert.AreEqual(201, exception.Failure.NativeStatus);
+            StringAssert.Contains(exception.Failure.Message, "XL_CanReceive");
+            StringAssert.Contains(exception.Failure.Message, "XL_ERR_INVALID_PORTHANDLE");
+        }
+
+        [TestMethod]
+        public async Task CAN_FD_receive_queue_overflow_throws_a_typed_data_loss_error()
+        {
+            var api = new FakeVectorXlApi
+            {
+                CanFdReceiveQueueOverflow = true
+            };
+            var service = new VectorHardwareService(() => api);
+            HardwareOperationResult<ICanGatewaySession> openResult =
+                await service.OpenGatewaySessionAsync(CreateFlexibleDataRateOptions());
+            Assert.IsTrue(openResult.IsSuccess);
+            await using ICanGatewaySession session = openResult.Value!;
+            await using IAsyncEnumerator<RoutedCanFrame> enumerator =
+                session.ReceiveAsync().GetAsyncEnumerator();
+
+            HardwareOperationException exception =
+                await Assert.ThrowsExceptionAsync<HardwareOperationException>(
+                    async () => await enumerator.MoveNextAsync().AsTask());
+
+            Assert.AreEqual(HardwareErrorCode.ReceiveFailed, exception.Failure.Code);
+            StringAssert.Contains(exception.Failure.Message, "overflow");
+        }
+
+        [TestMethod]
+        public async Task CAN_FD_receive_rejects_an_unknown_DLC()
+        {
+            var api = new FakeVectorXlApi();
+            api.EnqueueCanFdReceiveEvent(
+                channelIndex: 0,
+                rawIdentifier: 0x123,
+                dataLengthCode: 16,
+                isFlexibleDataRate: true,
+                isBitRateSwitchEnabled: false,
+                data: new byte[64]);
+            var service = new VectorHardwareService(() => api);
+            HardwareOperationResult<ICanGatewaySession> openResult =
+                await service.OpenGatewaySessionAsync(CreateFlexibleDataRateOptions());
+            Assert.IsTrue(openResult.IsSuccess);
+            await using ICanGatewaySession session = openResult.Value!;
+            await using IAsyncEnumerator<RoutedCanFrame> enumerator =
+                session.ReceiveAsync().GetAsyncEnumerator();
+
+            HardwareOperationException exception =
+                await Assert.ThrowsExceptionAsync<HardwareOperationException>(
+                    async () => await enumerator.MoveNextAsync().AsTask());
+
+            Assert.AreEqual(HardwareErrorCode.ReceiveFailed, exception.Failure.Code);
+            StringAssert.Contains(exception.Failure.Message, "DLC 16");
+        }
+
+        [TestMethod]
+        public async Task CAN_FD_receive_rejects_a_non_FD_event_with_DLC_above_eight()
+        {
+            var api = new FakeVectorXlApi();
+            api.EnqueueCanFdReceiveEvent(
+                channelIndex: 0,
+                rawIdentifier: 0x123,
+                dataLengthCode: (byte)CanDataLengthCode.Bytes12,
+                isFlexibleDataRate: false,
+                isBitRateSwitchEnabled: false,
+                data: new byte[12]);
+            var service = new VectorHardwareService(() => api);
+            HardwareOperationResult<ICanGatewaySession> openResult =
+                await service.OpenGatewaySessionAsync(CreateFlexibleDataRateOptions());
+            Assert.IsTrue(openResult.IsSuccess);
+            await using ICanGatewaySession session = openResult.Value!;
+            await using IAsyncEnumerator<RoutedCanFrame> enumerator =
+                session.ReceiveAsync().GetAsyncEnumerator();
+
+            HardwareOperationException exception =
+                await Assert.ThrowsExceptionAsync<HardwareOperationException>(
+                    async () => await enumerator.MoveNextAsync().AsTask());
+
+            Assert.AreEqual(HardwareErrorCode.ReceiveFailed, exception.Failure.Code);
+            StringAssert.Contains(exception.Failure.Message, "non-FD");
+            StringAssert.Contains(exception.Failure.Message, "DLC 9");
+        }
+
+        [TestMethod]
+        public async Task CAN_FD_receive_honors_caller_cancellation_while_the_queue_is_empty()
+        {
+            var api = new FakeVectorXlApi();
+            var service = new VectorHardwareService(() => api);
+            HardwareOperationResult<ICanGatewaySession> openResult =
+                await service.OpenGatewaySessionAsync(CreateFlexibleDataRateOptions());
+            Assert.IsTrue(openResult.IsSuccess);
+            await using ICanGatewaySession session = openResult.Value!;
+            using var cancellation = new CancellationTokenSource();
+            await using IAsyncEnumerator<RoutedCanFrame> enumerator =
+                session.ReceiveAsync(cancellation.Token).GetAsyncEnumerator();
+
+            Task<bool> pendingReceive = enumerator.MoveNextAsync().AsTask();
+            cancellation.Cancel();
+
+            try
+            {
+                await pendingReceive.WaitAsync(TimeSpan.FromSeconds(1));
+                Assert.Fail("The pending receive completed without observing cancellation.");
+            }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+            {
+                // TaskCanceledException is also a valid cancellation outcome.
+            }
+        }
+
+        [TestMethod]
+        public async Task Stopping_a_CAN_FD_session_completes_a_pending_receive()
+        {
+            var api = new FakeVectorXlApi();
+            var service = new VectorHardwareService(() => api);
+            HardwareOperationResult<ICanGatewaySession> openResult =
+                await service.OpenGatewaySessionAsync(CreateFlexibleDataRateOptions());
+            Assert.IsTrue(openResult.IsSuccess);
+            ICanGatewaySession session = openResult.Value!;
+            await using IAsyncEnumerator<RoutedCanFrame> enumerator =
+                session.ReceiveAsync().GetAsyncEnumerator();
+            Task<bool> pendingReceive = enumerator.MoveNextAsync().AsTask();
+
+            HardwareOperationResult stopResult = await session.StopAsync();
+            bool receivedFrame = await pendingReceive.WaitAsync(TimeSpan.FromSeconds(1));
+            await session.DisposeAsync();
+
+            Assert.IsTrue(stopResult.IsSuccess);
+            Assert.IsFalse(receivedFrame);
         }
 
         [TestMethod]
@@ -715,6 +1107,7 @@ namespace Simulate.Tests
         private sealed class FakeVectorXlApi : IVectorXlApi
         {
             private const int OpenPortHandle = 42;
+            private readonly Queue<FakeCanFdReceiveEvent> _canFdReceiveEvents = new();
 
             public VectorNativeStatus DriverConfigStatus { get; init; } =
                 new VectorNativeStatus(0, "XL_SUCCESS");
@@ -737,8 +1130,18 @@ namespace Simulate.Tests
             public VectorNativeStatus TransmitStatus { get; init; } =
                 new VectorNativeStatus(0, "XL_SUCCESS");
 
+            public VectorNativeStatus CanFdTransmitStatus { get; init; } =
+                new VectorNativeStatus(0, "XL_SUCCESS");
+
+            public uint CanFdTransmitMessageCount { get; init; } = 1;
+
             public VectorNativeStatus ReceiveStatus { get; init; } =
                 new VectorNativeStatus(10, "XL_ERR_QUEUE_IS_EMPTY");
+
+            public VectorNativeStatus CanFdReceiveStatus { get; init; } =
+                new VectorNativeStatus(10, "XL_ERR_QUEUE_IS_EMPTY");
+
+            public bool CanFdReceiveQueueOverflow { get; init; }
 
             public VectorNativeStatus FlushReceiveStatus { get; init; } =
                 new VectorNativeStatus(0, "XL_SUCCESS");
@@ -760,6 +1163,12 @@ namespace Simulate.Tests
 
             public ulong? OpenedAccessMask { get; private set; }
 
+            public uint? LastCanFdNominalBitrate { get; private set; }
+
+            public uint? LastCanFdDataBitrate { get; private set; }
+
+            public VectorCanFdProtocolMode? LastCanFdProtocolMode { get; private set; }
+
             public IReadOnlyList<VectorChannelDescriptor> Channels { get; init; } =
                 Array.Empty<VectorChannelDescriptor>();
 
@@ -773,11 +1182,42 @@ namespace Simulate.Tests
 
             public byte[]? LastTransmitData { get; private set; }
 
+            public ulong? LastCanFdTransmitAccessMask { get; private set; }
+
+            public uint? LastCanFdTransmitIdentifier { get; private set; }
+
+            public bool? LastCanFdTransmitIsExtendedIdentifier { get; private set; }
+
+            public CanFrameFormat? LastCanFdTransmitFormat { get; private set; }
+
+            public bool? LastCanFdTransmitBitRateSwitch { get; private set; }
+
+            public CanDataLengthCode? LastCanFdTransmitDataLengthCode { get; private set; }
+
+            public byte[]? LastCanFdTransmitData { get; private set; }
+
             public int FlushReceiveCallCount { get; private set; }
 
             public int FlushTransmitCallCount { get; private set; }
 
             public ulong? LastFlushTransmitAccessMask { get; private set; }
+
+            public void EnqueueCanFdReceiveEvent(
+                int channelIndex,
+                uint rawIdentifier,
+                byte dataLengthCode,
+                bool isFlexibleDataRate,
+                bool isBitRateSwitchEnabled,
+                byte[] data)
+            {
+                _canFdReceiveEvents.Enqueue(new FakeCanFdReceiveEvent(
+                    channelIndex,
+                    rawIdentifier,
+                    dataLengthCode,
+                    isFlexibleDataRate,
+                    isBitRateSwitchEnabled,
+                    (byte[])data.Clone()));
+            }
 
             public VectorNativeStatus OpenDriver()
             {
@@ -829,8 +1269,12 @@ namespace Simulate.Tests
                 int portHandle,
                 ulong accessMask,
                 uint nominalBitrate,
-                uint dataBitrate)
+                uint dataBitrate,
+                VectorCanFdProtocolMode protocolMode)
             {
+                LastCanFdNominalBitrate = nominalBitrate;
+                LastCanFdDataBitrate = dataBitrate;
+                LastCanFdProtocolMode = protocolMode;
                 return ConfigurationStatus;
             }
 
@@ -858,6 +1302,31 @@ namespace Simulate.Tests
                 return TransmitStatus;
             }
 
+            public VectorCanFdTransmitResult TransmitCanFdFrame(
+                int portHandle,
+                ulong accessMask,
+                uint identifier,
+                bool isExtendedIdentifier,
+                byte dataLengthCode,
+                VectorCanFdEventFlags flags,
+                ReadOnlyMemory<byte> data)
+            {
+                LastCanFdTransmitAccessMask = accessMask;
+                LastCanFdTransmitIdentifier = identifier;
+                LastCanFdTransmitIsExtendedIdentifier = isExtendedIdentifier;
+                LastCanFdTransmitFormat =
+                    (flags & VectorCanFdEventFlags.FlexibleDataRate) != 0
+                        ? CanFrameFormat.FlexibleDataRate
+                        : CanFrameFormat.Classic;
+                LastCanFdTransmitBitRateSwitch =
+                    (flags & VectorCanFdEventFlags.BitRateSwitch) != 0;
+                LastCanFdTransmitDataLengthCode = (CanDataLengthCode)dataLengthCode;
+                LastCanFdTransmitData = data.ToArray();
+                return new VectorCanFdTransmitResult(
+                    CanFdTransmitStatus,
+                    CanFdTransmitMessageCount);
+            }
+
             public VectorClassicReceiveBatchResult ReceiveClassicCanEvents(
                 int portHandle,
                 int maximumEventCount)
@@ -873,13 +1342,44 @@ namespace Simulate.Tests
                     events);
             }
 
+            public VectorCanFdReceiveBatchResult ReceiveCanFdEvents(
+                int portHandle,
+                int maximumEventCount)
+            {
+                var events = new List<VectorCanFdEvent>();
+                while (events.Count < maximumEventCount &&
+                    _canFdReceiveEvents.TryDequeue(out FakeCanFdReceiveEvent? receivedEvent))
+                {
+                    VectorCanFdEventFlags flags = receivedEvent.IsFlexibleDataRate
+                        ? VectorCanFdEventFlags.FlexibleDataRate
+                        : VectorCanFdEventFlags.None;
+                    if (receivedEvent.IsBitRateSwitchEnabled)
+                    {
+                        flags |= VectorCanFdEventFlags.BitRateSwitch;
+                    }
+
+                    events.Add(new VectorCanFdEvent(
+                        receivedEvent.ChannelIndex,
+                        receivedEvent.RawIdentifier,
+                        receivedEvent.DataLengthCode,
+                        flags,
+                        receivedEvent.Data,
+                        timestampNanoseconds: 8_000));
+                }
+
+                return new VectorCanFdReceiveBatchResult(
+                    CanFdReceiveStatus,
+                    events,
+                    CanFdReceiveQueueOverflow);
+            }
+
             public VectorNativeStatus FlushReceiveQueue(int portHandle)
             {
                 FlushReceiveCallCount++;
                 return FlushReceiveStatus;
             }
 
-            public VectorNativeStatus FlushClassicTransmitQueue(
+            public VectorNativeStatus FlushCanTransmitQueue(
                 int portHandle,
                 ulong accessMask)
             {
@@ -904,6 +1404,14 @@ namespace Simulate.Tests
                 AreChannelsActive = false;
                 return new VectorNativeStatus(0, "XL_SUCCESS");
             }
+
+            private sealed record FakeCanFdReceiveEvent(
+                int ChannelIndex,
+                uint RawIdentifier,
+                byte DataLengthCode,
+                bool IsFlexibleDataRate,
+                bool IsBitRateSwitchEnabled,
+                byte[] Data);
         }
     }
 }
