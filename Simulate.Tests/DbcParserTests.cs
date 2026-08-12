@@ -163,21 +163,47 @@ namespace Simulate.Tests
         }
 
         [TestMethod]
-        public void Parse_reports_an_unrepresented_dbc_statement_without_silently_interpreting_it()
+        public void Parse_attaches_typed_value_descriptions_to_their_signal()
         {
             const string documentText = """
-                BO_ 291 Status: 8 Gateway
-                VAL_ 291 Mode 0 "Off" 1 "On";
+                BO_ 291 Status: 1 Gateway
+                 SG_ Mode : 0|4@1+ (0.5,-1) [-1|6.5] "" Gateway
+                VAL_ 291 Mode 0 "Off" 3 "On";
+                """;
+
+            DbcParseResult result = DbcParser.Parse(documentText);
+
+            Assert.IsTrue(result.IsSuccess);
+            Assert.AreEqual(0, result.Issues.Count);
+
+            DbcSignal signal = result.Document?.Messages[0].Signals[0]
+                ?? throw new AssertFailedException("A valid value-description fixture must return its signal.");
+            Assert.AreEqual(2, signal.ValueDescriptions.Count);
+            Assert.AreEqual(0L, signal.ValueDescriptions[0].RawValue);
+            Assert.AreEqual(-1d, signal.ValueDescriptions[0].PhysicalValue);
+            Assert.AreEqual("Off", signal.ValueDescriptions[0].Description);
+            Assert.AreEqual(3L, signal.ValueDescriptions[1].RawValue);
+            Assert.AreEqual(0.5d, signal.ValueDescriptions[1].PhysicalValue);
+            Assert.AreEqual("On", signal.ValueDescriptions[1].Description);
+        }
+
+        [TestMethod]
+        public void Parse_does_not_attach_partial_metadata_from_an_invalid_value_description_statement()
+        {
+            const string documentText = """
+                BO_ 291 Status: 1 Gateway
+                 SG_ Mode : 0|4@1+ (1,0) [0|15] "" Gateway
+                VAL_ 291 Mode 0 "Off" invalid;
                 """;
 
             DbcParseResult result = DbcParser.Parse(documentText);
 
             Assert.IsTrue(result.IsSuccess);
             Assert.AreEqual(1, result.Issues.Count);
-            Assert.AreEqual(DbcParseIssueSeverity.Warning, result.Issues[0].Severity);
-            Assert.AreEqual(DbcParseIssueCode.UnsupportedStatement, result.Issues[0].Code);
-            Assert.AreEqual(2, result.Issues[0].LineNumber);
-            Assert.AreEqual("VAL_ 291 Mode 0 \"Off\" 1 \"On\";", result.Issues[0].Context);
+            Assert.AreEqual(DbcParseIssueCode.InvalidValueDescription, result.Issues[0].Code);
+            DbcSignal signal = result.Document?.Messages[0].Signals[0]
+                ?? throw new AssertFailedException("A non-core warning must still return its signal.");
+            Assert.AreEqual(0, signal.ValueDescriptions.Count);
         }
 
         [TestMethod]
@@ -207,6 +233,10 @@ namespace Simulate.Tests
                 Assert.IsTrue(
                     document.Messages.Sum(message => message.Signals.Count) > 0,
                     $"Expected '{filePath}' to expose parsed signal metadata.");
+                Assert.IsTrue(
+                    document.Messages.Sum(message =>
+                        message.Signals.Sum(signal => signal.ValueDescriptions.Count)) > 0,
+                    $"Expected '{filePath}' to expose typed VAL_ metadata.");
             }
         }
 

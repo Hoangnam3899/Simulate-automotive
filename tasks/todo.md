@@ -347,21 +347,40 @@
 
 **Description:** Với Inject mode, clone payload live, pack signal override, áp E2E rồi phát; ngăn loopback/echo hai chiều.
 
+**Design note bắt buộc trước implementation:** Tham chiếu `SignalItemModel` có cả `PhysicalValue`, `LiveValue`, `Override` và lựa chọn `VAL_` description. Backend mới phải giữ rõ ranh giới: UI chọn giá trị ở boundary, engine chỉ nhận typed override snapshot; không đưa WPF binding vào engine.
+
 **Acceptance criteria:**
-- [ ] Signal không override giữ nguyên dữ liệu live baseline.
-- [ ] Extended ID và payload length được bảo toàn.
-- [ ] Echo filtering có timeout/bounds và không drop frame thật sau cửa sổ echo.
+- [x] Signal không override giữ nguyên dữ liệu live baseline.
+- [x] Extended ID và payload length được bảo toàn.
+- [x] Echo filtering có timeout/bounds và không drop frame thật sau cửa sổ echo.
+- [x] Numeric UI input được hiểu là physical value; validate finite/min-max/raw representability trước khi publish, input invalid không thay đổi override đang chạy.
+- [x] Nếu DBC có `VAL_`, UI chọn theo label nhưng boundary map key raw value sang physical value bằng `raw * factor + offset`; không truyền raw key trực tiếp vào `SignalOverride.PhysicalValue` khi factor/offset khác mặc định.
+- [x] Khi UI đổi override lúc engine đang chạy, publish immutable snapshot nguyên tử; mỗi frame dùng đúng một snapshot và signal không override vẫn giữ nguyên bit live.
+- [x] `VAL_` metadata phải được parse/lưu typed hoặc Task 11 phải ghi rõ numeric-only fallback; không được tạo dropdown từ metadata chưa tồn tại.
 
 **Verification:**
-- [ ] Golden injection tests và echo-loop integration tests.
-- [ ] Concurrency tests khi update override lúc engine đang chạy.
-- [ ] Build/test sạch, UI diff bằng không.
+- [x] Golden injection tests gồm physical numeric, raw `VAL_` → physical mapping, factor/offset, signed/unsigned, signal không override và payload bit preservation.
+- [x] Echo-loop integration tests.
+- [x] Concurrency tests khi update override lúc engine đang chạy.
+- [x] Build/test sạch, UI diff bằng không.
 
 **Dependencies:** Tasks 8-10
 **Files likely touched:** simulation engine/override store và tests
 **Estimated scope:** M
 **Model allocation:** Lead `Sol ultra`; review `Terra xhigh` + `Luna xhigh`
-**Skills khi triển khai:** `test-driven-development`, `diagnosing-bugs`
+**Skills đã áp dụng:** `api-and-interface-design`, `test-driven-development`, `incremental-implementation`, `code-review`; `diagnosing-bugs` dành cho failure/race tái hiện được nếu reviewer phát hiện.
+
+## Work log — 2026-08-12 (Task 11 Sol ultra implementation)
+
+- [x] Đối chiếu reference `SignalItemModel`/`MitmEngine`: backend giữ numeric input là physical value; `VAL_` được parse thành typed `DbcValueDescription` gồm raw/label/physical và `SignalOverride.FromValueDescription(...)` luôn dùng physical đã map, không đưa WPF binding vào engine.
+- [x] Thêm `ISimulationEngine.ReplaceSignalOverrides(...)`: validate toàn replacement trước khi clone-and-swap snapshot; input invalid/duplicate/missing/out-of-range hoặc raw không representable không mutate active snapshot, empty replacement xóa override.
+- [x] Inject clone live payload, chỉ pack signal active, giữ nguyên bit/signal còn lại; áp E2E sau override; bảo toàn standard/extended ID, Classic/FD format, BRS, DLC và payload length. Statistics bổ sung injected/filtered-echo counters.
+- [x] Echo filter hai chiều dùng exact frame + expected source, one-shot consume, monotonic timeout mặc định 10 ms và hard bound 32 entry; options/time provider cho deterministic tests. Echo của payload sau Inject được match theo frame thực sự đã phát.
+- [x] TDD bao phủ 8 DBC thật có typed `VAL_`, raw→physical factor/offset, signed/unsigned, bit preservation, runtime update/clear/rollback, E2E ordering, atomic concurrency, echo hai chiều/timeout/bound/modified payload.
+- [x] Sol ultra self-review hai trục đã sửa 2 finding Required trước gate: `VAL_` malformed không còn publish metadata một phần; enum issue code mới được append để không đổi numeric value của member public cũ. Không còn finding Critical/Required trong self-review.
+- [x] Verification cuối: `dotnet build Simulate.sln --no-restore` 0 warning/0 error; full suite 134/134 PASS; targeted formatter và `git diff --check` PASS; UI/XAML/code-behind/project/solution diff bằng không; secret scan sạch.
+- [x] `Terra xhigh` independent two-axis review PASS: không có finding Critical/Required. Re-run build 0 warning/0 error, full suite 134/134 PASS, `SimulationEngineTests` lặp 10 lần đều 17/17 PASS; formatter/diff/UI scope sạch. FYI: echo exact-frame có false positive không thể phân biệt trong chính cửa sổ 10 ms, nên Vector hardware echo/latency vẫn `NEEDS_VERIFY`; `VAL_` raw hiện là `long`, chưa cover enum unsigned 64-bit vượt `Int64.MaxValue` (không có trong 8 DBC supplied, reference cũng dùng `long`).
+- [ ] Chờ `Luna xhigh` independent review cuối trước khi đánh dấu Task 11 DONE. Chưa commit/push; hardware echo/latency thực vẫn `NEEDS_VERIFY`.
 
 ## Task 12: Scheduler, pause/resume và emergency stop
 

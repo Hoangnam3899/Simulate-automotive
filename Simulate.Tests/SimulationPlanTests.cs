@@ -197,6 +197,25 @@ namespace Simulate.Tests
         }
 
         [TestMethod]
+        public void From_value_description_maps_the_raw_choice_to_a_physical_override()
+        {
+            const string documentText = """
+                BO_ 291 Status: 1 Gateway
+                 SG_ Mode : 0|4@1+ (0.5,-1) [-1|6.5] "" Gateway
+                VAL_ 291 Mode 3 "On";
+                """;
+            DbcSignal signal = DbcParser.Parse(documentText).Document?.Messages[0].Signals[0]
+                ?? throw new AssertFailedException("The DBC fixture must parse successfully.");
+
+            SignalOverride signalOverride = SignalOverride.FromValueDescription(
+                signal,
+                signal.ValueDescriptions[0]);
+
+            Assert.AreEqual("Mode", signalOverride.SignalName);
+            Assert.AreEqual(0.5d, signalOverride.PhysicalValue);
+        }
+
+        [TestMethod]
         public void Create_rejects_an_undefined_gateway_mode()
         {
             Assert.ThrowsException<ArgumentOutOfRangeException>(

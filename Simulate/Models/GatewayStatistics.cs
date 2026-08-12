@@ -9,12 +9,16 @@ namespace Simulate.Models
             long receivedFrames,
             long transmittedFrames,
             long passedFrames,
-            long droppedFrames)
+            long droppedFrames,
+            long injectedFrames,
+            long filteredEchoFrames)
         {
             ReceivedFrames = receivedFrames;
             TransmittedFrames = transmittedFrames;
             PassedFrames = passedFrames;
             DroppedFrames = droppedFrames;
+            InjectedFrames = injectedFrames;
+            FilteredEchoFrames = filteredEchoFrames;
         }
 
         /// <summary>
@@ -36,5 +40,15 @@ namespace Simulate.Models
         /// Gets the number of frames suppressed by an enabled block rule.
         /// </summary>
         public long DroppedFrames { get; }
+
+        /// <summary>
+        /// Gets the number of frames forwarded after a signal override or E2E update.
+        /// </summary>
+        public long InjectedFrames { get; }
+
+        /// <summary>
+        /// Gets the number of matching loopback frames consumed inside the echo window.
+        /// </summary>
+        public long FilteredEchoFrames { get; }
     }
 }

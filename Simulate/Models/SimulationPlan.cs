@@ -75,6 +75,46 @@ namespace Simulate.Models
         }
 
         /// <summary>
+        /// Creates an override from a typed DBC value-description choice.
+        /// </summary>
+        /// <param name="signal">The signal that owns the selected value description.</param>
+        /// <param name="valueDescription">The selected raw/label/physical value tuple.</param>
+        /// <returns>An override containing the mapped physical value, never the raw key.</returns>
+        public static SignalOverride FromValueDescription(
+            DbcSignal signal,
+            DbcValueDescription valueDescription)
+        {
+            ArgumentNullException.ThrowIfNull(signal);
+            ArgumentNullException.ThrowIfNull(valueDescription);
+
+            if (!signal.ValueDescriptions.Contains(valueDescription))
+            {
+                throw new ArgumentException(
+                    "The selected value description must belong to the supplied DBC signal.",
+                    nameof(valueDescription));
+            }
+
+            if (signal.Factor == 0d)
+            {
+                throw new ArgumentException(
+                    "The DBC signal factor cannot be zero when creating an override.",
+                    nameof(signal));
+            }
+
+            if (!double.IsFinite(valueDescription.PhysicalValue)
+                || valueDescription.PhysicalValue < signal.Minimum
+                || valueDescription.PhysicalValue > signal.Maximum)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(valueDescription),
+                    valueDescription.PhysicalValue,
+                    "The mapped physical value must be within the DBC signal range.");
+            }
+
+            return new SignalOverride(signal.Name, valueDescription.PhysicalValue);
+        }
+
+        /// <summary>
         /// Gets the DBC signal name.
         /// </summary>
         public string SignalName { get; }

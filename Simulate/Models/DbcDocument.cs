@@ -25,7 +25,8 @@ namespace Simulate.Models
         InvalidSignalDefinition,
         InvalidSignalLayout,
         SignalWithoutMessage,
-        UnsupportedStatement
+        UnsupportedStatement,
+        InvalidValueDescription
     }
 
     public sealed class DbcDocument
@@ -107,7 +108,8 @@ namespace Simulate.Models
             double minimum,
             double maximum,
             string unit,
-            IEnumerable<string> receivers)
+            IEnumerable<string> receivers,
+            IEnumerable<DbcValueDescription> valueDescriptions)
         {
             Name = name;
             StartBit = startBit;
@@ -121,6 +123,8 @@ namespace Simulate.Models
             Unit = unit;
             ArgumentNullException.ThrowIfNull(receivers);
             Receivers = new ReadOnlyCollection<string>(receivers.ToArray());
+            ArgumentNullException.ThrowIfNull(valueDescriptions);
+            ValueDescriptions = new ReadOnlyCollection<DbcValueDescription>(valueDescriptions.ToArray());
         }
 
         public string Name { get; }
@@ -144,6 +148,39 @@ namespace Simulate.Models
         public string Unit { get; }
 
         public IReadOnlyList<string> Receivers { get; }
+
+        /// <summary>
+        /// Gets the typed choices declared by a DBC <c>VAL_</c> statement.
+        /// </summary>
+        public IReadOnlyList<DbcValueDescription> ValueDescriptions { get; }
+    }
+
+    /// <summary>
+    /// Represents one raw DBC value, its display label, and its mapped physical value.
+    /// </summary>
+    public sealed class DbcValueDescription
+    {
+        internal DbcValueDescription(long rawValue, double physicalValue, string description)
+        {
+            RawValue = rawValue;
+            PhysicalValue = physicalValue;
+            Description = description;
+        }
+
+        /// <summary>
+        /// Gets the integer value encoded in the signal bit field.
+        /// </summary>
+        public long RawValue { get; }
+
+        /// <summary>
+        /// Gets the physical value after applying the signal factor and offset.
+        /// </summary>
+        public double PhysicalValue { get; }
+
+        /// <summary>
+        /// Gets the human-readable label declared by the DBC file.
+        /// </summary>
+        public string Description { get; }
     }
 
     public sealed class DbcParseIssue

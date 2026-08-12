@@ -164,13 +164,13 @@ Nguyên tắc:
 ### Phase 3 — Gateway engine
 
 - [x] Task 10: Gateway hai chiều và mode PassThrough/Block — **Sol ultra**, review **Terra xhigh**.
-- [ ] Task 11: Inject/override, live baseline và echo filtering — **Sol ultra**, review **Terra xhigh** + **Luna xhigh**.
+- [ ] Task 11: Inject/override, live baseline và echo filtering — **Sol ultra implementation PASS**, **Terra xhigh review PASS** (build 0/0, full test 134/134, 10x engine stress pass, UI diff 0); chờ independent review cuối **Luna xhigh**. Signal value contract đã hiện thực: numeric physical value; typed `VAL_` label/key map raw → physical trước khi pack; live baseline chỉ là nguồn giữ bit/hiển thị, không tự thành override.
 - [ ] Task 12: One-shot/Cyclic/Event, pause/resume và emergency stop — **Sol xhigh**, review **Terra xhigh**.
 
 ### Checkpoint D — Simulation engine
 
-- [ ] RX→TX và TX→RX hoạt động qua in-memory session.
-- [ ] Frame không có rule được pass-through; Block không phát; Inject chỉ sửa signal được override.
+- [x] RX→TX và TX→RX hoạt động qua in-memory session.
+- [x] Frame không có rule được pass-through; Block không phát; Inject chỉ sửa signal được override.
 - [ ] Cancellation dừng receive/scheduler hữu hạn thời gian, không phát thêm frame sau stop.
 - [ ] Counter/latency/error state quan sát được qua engine interface.
 

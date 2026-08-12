@@ -20,6 +20,14 @@ namespace Simulate.Services
             @"^SG_\s+(?<name>\S+)(?:\s+(?<multiplexer>M|m\d+M?))?\s*:\s*(?<startBit>\d+)\|(?<bitLength>\d+)@(?<byteOrder>[01])(?<signed>[+-])\s+\((?<factor>[^,]+),(?<offset>[^\)]+)\)\s+\[(?<minimum>[^\|]+)\|(?<maximum>[^\]]+)\]\s+\""(?<unit>[^\""\r\n]*)\""\s*(?<receivers>.*)$",
             RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
+        private static readonly Regex ValueDescriptionExpression = new(
+            @"^VAL_\s+(?<identifier>\d+)\s+(?<signal>\S+)\s+(?<values>.*?)\s*;\s*$",
+            RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+        private static readonly Regex ValueDescriptionPairExpression = new(
+            @"\G\s*(?<raw>[+-]?\d+)\s+""(?<description>(?:\\.|[^""\\])*)""",
+            RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
         public static DbcParseResult Parse(string documentText)
         {
             ArgumentNullException.ThrowIfNull(documentText);
@@ -67,6 +75,12 @@ namespace Simulate.Services
                 if (IsStatementOfType(statement, "SG_"))
                 {
                     ParseSignal(statement, currentMessage, lineNumber, context, issues);
+                    continue;
+                }
+
+                if (IsStatementOfType(statement, "VAL_"))
+                {
+                    ParseValueDescriptions(statement, messages, lineNumber, context, issues);
                     continue;
                 }
 
@@ -237,7 +251,140 @@ namespace Simulate.Services
                 minimum,
                 maximum,
                 match.Groups["unit"].Value,
-                receivers));
+                receivers,
+                valueDescriptions: []));
+        }
+
+        private static void ParseValueDescriptions(
+            string statement,
+            List<MutableDbcMessage> messages,
+            int lineNumber,
+            string context,
+            List<DbcParseIssue> issues)
+        {
+            Match statementMatch = ValueDescriptionExpression.Match(statement);
+            if (!statementMatch.Success
+                || !uint.TryParse(
+                    statementMatch.Groups["identifier"].Value,
+                    NumberStyles.None,
+                    CultureInfo.InvariantCulture,
+                    out uint rawIdentifier)
+                || !TryNormalizeIdentifier(rawIdentifier, out uint identifier, out bool isExtendedIdentifier))
+            {
+                AddWarning(
+                    issues,
+                    DbcParseIssueCode.InvalidValueDescription,
+                    lineNumber,
+                    context,
+                    "The VAL_ statement does not match the supported DBC value-description syntax.");
+                return;
+            }
+
+            MutableDbcMessage? message = messages.FirstOrDefault(candidate =>
+                candidate.Identifier == identifier
+                && candidate.IsExtendedIdentifier == isExtendedIdentifier);
+            DbcSignal? signal = message?.FindSignal(statementMatch.Groups["signal"].Value);
+            if (signal is null)
+            {
+                AddWarning(
+                    issues,
+                    DbcParseIssueCode.InvalidValueDescription,
+                    lineNumber,
+                    context,
+                    "The VAL_ statement does not reference a parsed DBC signal.");
+                return;
+            }
+
+            string valuePairs = statementMatch.Groups["values"].Value;
+            int position = 0;
+            var parsedDescriptions = new List<DbcValueDescription>();
+            while (position < valuePairs.Length)
+            {
+                Match pairMatch = ValueDescriptionPairExpression.Match(valuePairs, position);
+                if (!pairMatch.Success
+                    || pairMatch.Index != position
+                    || !long.TryParse(
+                        pairMatch.Groups["raw"].Value,
+                        NumberStyles.AllowLeadingSign,
+                        CultureInfo.InvariantCulture,
+                        out long rawValue)
+                    || !IsRawValueRepresentable(rawValue, signal)
+                    || !TryMapRawToPhysical(rawValue, signal, out double physicalValue)
+                    || parsedDescriptions.Any(description => description.RawValue == rawValue))
+                {
+                    AddWarning(
+                        issues,
+                        DbcParseIssueCode.InvalidValueDescription,
+                        lineNumber,
+                        context,
+                        "The VAL_ statement contains an invalid or duplicate value-description pair.");
+                    return;
+                }
+
+                parsedDescriptions.Add(new DbcValueDescription(
+                    rawValue,
+                    physicalValue,
+                    UnescapeDescription(pairMatch.Groups["description"].Value)));
+                position = pairMatch.Index + pairMatch.Length;
+            }
+
+            if (parsedDescriptions.Count == 0)
+            {
+                AddWarning(
+                    issues,
+                    DbcParseIssueCode.InvalidValueDescription,
+                    lineNumber,
+                    context,
+                    "The VAL_ statement must declare at least one value-description pair.");
+                return;
+            }
+
+            if (!message!.AddValueDescriptions(signal.Name, parsedDescriptions))
+            {
+                AddWarning(
+                    issues,
+                    DbcParseIssueCode.InvalidValueDescription,
+                    lineNumber,
+                    context,
+                    "The VAL_ statement duplicates a raw value declared for the signal.");
+            }
+        }
+
+        private static bool IsRawValueRepresentable(long rawValue, DbcSignal signal)
+        {
+            if (signal.IsSigned)
+            {
+                if (signal.BitLength == 64)
+                {
+                    return true;
+                }
+
+                long magnitude = 1L << (signal.BitLength - 1);
+                return rawValue >= -magnitude && rawValue <= magnitude - 1;
+            }
+
+            if (rawValue < 0 || signal.BitLength >= 63)
+            {
+                return rawValue >= 0;
+            }
+
+            return rawValue <= (1L << signal.BitLength) - 1;
+        }
+
+        private static bool TryMapRawToPhysical(
+            long rawValue,
+            DbcSignal signal,
+            out double physicalValue)
+        {
+            physicalValue = (rawValue * signal.Factor) + signal.Offset;
+            return double.IsFinite(physicalValue);
+        }
+
+        private static string UnescapeDescription(string description)
+        {
+            return description
+                .Replace("\\\"", "\"", StringComparison.Ordinal)
+                .Replace("\\\\", "\\", StringComparison.Ordinal);
         }
 
         private static bool TryParseSignalNumbers(
@@ -400,6 +547,8 @@ namespace Simulate.Services
         private sealed class MutableDbcMessage
         {
             private readonly List<DbcSignal> _signals = new();
+            private readonly Dictionary<string, List<DbcValueDescription>> _valueDescriptions =
+                new(StringComparer.Ordinal);
 
             public MutableDbcMessage(
                 string name,
@@ -430,6 +579,33 @@ namespace Simulate.Services
                 _signals.Add(signal);
             }
 
+            public DbcSignal? FindSignal(string signalName)
+            {
+                return _signals.FirstOrDefault(signal =>
+                    string.Equals(signal.Name, signalName, StringComparison.Ordinal));
+            }
+
+            public bool AddValueDescriptions(
+                string signalName,
+                IEnumerable<DbcValueDescription> valueDescriptions)
+            {
+                DbcValueDescription[] replacement = valueDescriptions.ToArray();
+                if (!_valueDescriptions.TryGetValue(signalName, out List<DbcValueDescription>? descriptions))
+                {
+                    descriptions = new List<DbcValueDescription>();
+                    _valueDescriptions.Add(signalName, descriptions);
+                }
+
+                if (replacement.Any(valueDescription =>
+                    descriptions.Any(existing => existing.RawValue == valueDescription.RawValue)))
+                {
+                    return false;
+                }
+
+                descriptions.AddRange(replacement);
+                return true;
+            }
+
             public DbcMessage ToDocumentMessage()
             {
                 return new DbcMessage(
@@ -438,7 +614,21 @@ namespace Simulate.Services
                     IsExtendedIdentifier,
                     PayloadLength,
                     Transmitter,
-                    _signals);
+                    _signals.Select(signal => new DbcSignal(
+                        signal.Name,
+                        signal.StartBit,
+                        signal.BitLength,
+                        signal.ByteOrder,
+                        signal.IsSigned,
+                        signal.Factor,
+                        signal.Offset,
+                        signal.Minimum,
+                        signal.Maximum,
+                        signal.Unit,
+                        signal.Receivers,
+                        _valueDescriptions.TryGetValue(signal.Name, out List<DbcValueDescription>? descriptions)
+                            ? descriptions
+                            : [])));
             }
         }
     }
