@@ -314,21 +314,34 @@
 
 **Description:** Chạy receive loop cancellable cho RX→TX và TX→RX; áp rule pass-through/block và thống kê observable.
 
+**Implementation status:** `DONE` — `Sol ultra` implementation và `Terra xhigh` independent review đều PASS.
+
 **Acceptance criteria:**
-- [ ] Frame không có enabled rule được pass-through theo policy đã chốt.
-- [ ] Block không phát frame và tăng dropped counter đúng một lần.
-- [ ] Stop hoàn tất hữu hạn thời gian và không để background task sống sót.
+- [x] Frame không có enabled rule được pass-through theo policy đã chốt.
+- [x] Block không phát frame và tăng dropped counter đúng một lần.
+- [x] Stop hoàn tất hữu hạn thời gian và không để background task sống sót.
 
 **Verification:**
-- [ ] Bidirectional integration tests bằng in-memory session.
-- [ ] Cancellation/race tests và idle-loop test không busy-spin quá mức.
-- [ ] Build/test sạch, UI diff bằng không.
+- [x] Bidirectional integration tests bằng in-memory session.
+- [x] Cancellation/race tests và idle-loop test không busy-spin quá mức.
+- [x] Build/test sạch, UI diff bằng không.
 
 **Dependencies:** Tasks 2, 4, 5, 9
 **Files likely touched:** simulation engine files và tests
 **Estimated scope:** M
 **Model allocation:** Lead `Sol ultra`; review `Terra xhigh`
 **Skills khi triển khai:** `test-driven-development`, `incremental-implementation`
+
+## Work log — 2026-08-12 (Task 10 Sol ultra implementation)
+
+- [x] Thêm public seam `ISimulationEngine`/`SimulationEngine`: engine nhận một `ICanGatewaySession` đã mở và immutable `SimulationPlan`; caller tiếp tục sở hữu session, nên `StopAsync` chỉ cancel/await receive loop và không disconnect hardware ngầm.
+- [x] Receive loop async xử lý chung cả RX→TX và TX→RX, lookup enabled rule theo normalized CAN ID + extended state; frame không có enabled rule, rule disabled và `PassThrough` đều được chuyển nguyên payload.
+- [x] Enabled `Block` không gọi transmit và tăng `DroppedFrames` đúng một lần; immutable `GatewayStatistics` công khai received/transmitted/passed/dropped counters bằng atomic reads.
+- [x] Lifecycle được serialize, hỗ trợ caller cancellation, concurrent/idempotent stop và async dispose; không dùng polling hoặc `Thread.Sleep`. Đối chiếu reference `MitmEngine` nhưng giữ hardware/UI/Vector type ngoài engine.
+- [x] TDD qua 7 focused integration/lifecycle tests: unknown/disabled/enabled pass-through, block + exact counters, hai chiều, idle stop, cancellation/concurrent stop và idle enumeration.
+- [x] Verification: focused 7/7 PASS; full suite 122/122 PASS; `dotnet build Simulate.sln --no-restore` 0 warning/0 error; targeted formatter và `git diff --check` PASS; UI/XAML/code-behind/project/solution diff bằng không.
+- [x] Sol ultra self-review hai trục spec/standards: không có finding Critical/Required. `Inject` vẫn forward nguyên frame ở lát Task 10; override/E2E/echo filtering thuộc Task 11.
+- [x] `Terra xhigh` independent review hai trục PASS: không có finding Critical/Required; build 0 warning/0 error, full suite 122/122 PASS, focused lifecycle suite lặp 10/10 PASS, formatter/diff/UI scope sạch. Task 10 DONE; chưa commit/push nếu chưa có lệnh người dùng. FYI cho Task 13: statistics là các atomic counter độc lập, không hứa cross-counter snapshot transactionally consistent.
 
 ## Task 11: Inject/override, live baseline và echo filtering
 

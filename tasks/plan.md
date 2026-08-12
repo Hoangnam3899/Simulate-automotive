@@ -163,7 +163,7 @@ Nguyên tắc:
 
 ### Phase 3 — Gateway engine
 
-- [ ] Task 10: Gateway hai chiều và mode PassThrough/Block — **Sol ultra**, review **Terra xhigh**.
+- [x] Task 10: Gateway hai chiều và mode PassThrough/Block — **Sol ultra**, review **Terra xhigh**.
 - [ ] Task 11: Inject/override, live baseline và echo filtering — **Sol ultra**, review **Terra xhigh** + **Luna xhigh**.
 - [ ] Task 12: One-shot/Cyclic/Event, pause/resume và emergency stop — **Sol xhigh**, review **Terra xhigh**.
 

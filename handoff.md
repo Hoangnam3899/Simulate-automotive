@@ -35,9 +35,9 @@ Tài liệu này bàn giao trạng thái để model/agent tiếp theo thực hi
 
 ## Trạng thái repository
 
-- Branch `chore/merge-agent-skills` đang track và đồng bộ với `origin/chore/merge-agent-skills` tại `7ad4e72`.
-- Tasks 7-8 đã được commit/push; Task 8 là `7ad4e72 feat: add signal codec and E2E protection`.
-- Worktree chỉ có thay đổi uncommitted của Task 9: `SimulationPlan`/validation, tests và tài liệu coordinator. Không commit/push thêm nếu chưa có lệnh người dùng.
+- Branch `chore/merge-agent-skills` đang track `origin/chore/merge-agent-skills` và ahead 1 commit.
+- Task 9 đã commit local tại `fea0dee feat: add simulation plan validation`; remote hiện vẫn ở `7ad4e72`, nên commit Task 9 chưa được push.
+- Worktree có đúng 4 file untracked của Task 10: `GatewayStatistics.cs`, `ISimulationEngine.cs`, `SimulationEngine.cs` và `SimulationEngineTests.cs`. Không commit/push nếu chưa có lệnh người dùng.
 
 ## Rào chắn không được vi phạm
 
@@ -72,12 +72,14 @@ Vector-specific handles, masks, permissions và `XLDriver` phải nằm trong se
 - V4 RX chỉ map exact `XL_CAN_EV_TAG_RX_OK`; queue overflow, invalid DLC/flags và native status đi qua typed `HardwareOperationException`.
 - `XLcanFdConf` nay nhận `VectorCanFdProtocolMode.Iso` rõ ràng từ orchestration và map ISO thành `options=0`; legacy `NO_ISO` chỉ còn là nhánh opt-in nội bộ, chưa được public contract mở. Hardware checklist vẫn bắt buộc xác nhận mode/bit timing.
 - `ReceiveAsync` báo native/data-loss failure bằng `HardwareOperationException`; caller vẫn lấy được typed `HardwareFailure` và numeric `XL_Status`.
+- Task 10 đặt `SimulationEngine` trên `ICanGatewaySession`: một async receive loop route chung RX→TX/TX→RX, lookup rule theo normalized CAN ID + extended state, pass unknown/disabled/PassThrough và drop enabled Block. Engine không sở hữu hoặc đóng hardware session.
+- `GatewayStatistics` là immutable snapshot của atomic received/transmitted/passed/dropped counters. `StopAsync` cancel rồi await đúng worker task, hỗ trợ concurrent stop và không dùng polling/`Thread.Sleep`; inject/E2E/echo vẫn để Task 11.
 - Checklist hardware Task 4 ở `tasks/vector-classic-can-hardware-checklist.md`; mọi mục chưa cắm thiết bị là `NEEDS_VERIFY`.
 - Checklist hardware Task 5 ở `tasks/vector-can-fd-hardware-checklist.md`; timestamp/latency, ISO/non-ISO mode và soak vẫn `NEEDS_VERIFY`.
 
 ## Next action
 
-**Task 6 — DONE: Terra xhigh implementation/fix; Luna high re-review PASS.**
+**Task 10 — Sol ultra implementation PASS; next action là `Terra xhigh` independent review.**
 
 Implementation hiện có:
 
@@ -113,9 +115,13 @@ Implementation hiện có:
 
 **Task 9 implementation:** `Terra high` đã thêm pure `SimulationPlan`/`SimulationMessageRule` cùng `GatewayMode`, `SimulationSendType`, `SimulationTiming` và `SignalOverride`. Plan luôn bind rule vào DBC document; validate normalized CAN ID + extended state duy nhất, message/signal reference, timing, enum, duplicate override và physical override range. E2E config được giữ typed bằng immutable `E2eProtectionConfiguration`; việc apply payload vẫn thuộc Tasks 8/11.
 
-**Task 9 verification:** focused tests 17/17 PASS; full suite 115/115 PASS; Debug build 0 warning/0 error; targeted formatter, `git diff --check`, UI/XAML/project scope và secret scan PASS. Luna high independent review hai trục spec/standards PASS, không có finding Critical/Required. Task 9 DONE; chưa commit/push.
+**Task 9 verification:** focused tests 17/17 PASS; full suite 115/115 PASS; Debug build 0 warning/0 error; targeted formatter, `git diff --check`, UI/XAML/project scope và secret scan PASS. Luna high independent review hai trục spec/standards PASS, không có finding Critical/Required. Task 9 DONE; commit local `fea0dee`, chưa push.
 
-**Next action:** Task 10 — lead `Sol ultra`, review `Terra xhigh`. UI/XAML vẫn khóa.
+**Task 10 implementation:** `Sol ultra` đã thêm `ISimulationEngine`/`SimulationEngine` và immutable `GatewayStatistics`. Unknown/disabled/PassThrough forward nguyên `CanFrame`; enabled Block không transmit và tăng dropped đúng một lần. Một cancellable async loop xử lý hai chiều; engine stop/dispose chỉ dừng worker, không đóng session do connection layer sở hữu.
+
+**Task 10 review/verification:** `Terra xhigh` independent review hai trục PASS, không có finding Critical/Required. Semantics pass/block và hướng route khớp reference; implementation dùng async cancellation thay cho polling `Thread.Sleep`. Build 0 warning/0 error; focused lifecycle suite lặp 10/10 PASS; full suite 122/122 PASS; targeted formatter, `git diff --check` và UI/XAML/code-behind/project scope PASS. Statistics dùng atomic counter theo từng field; Task 13 không nên giả định snapshot cross-counter là transactionally consistent nếu chưa bổ sung contract riêng. Bốn file Task 10 vẫn untracked, chưa commit/push.
+
+**Next action:** Task 10 DONE. Chuyển `Sol ultra` để implement Task 11: inject/override từ live baseline, E2E và echo filtering; reviewer theo plan là `Terra xhigh` + `Luna xhigh`. Dùng `test-driven-development` trước, `diagnosing-bugs` chỉ khi gặp race/error. UI/XAML vẫn khóa; không commit/push nếu chưa có lệnh người dùng.
 
 `NEEDS_VERIFY`: chưa cắm Vector hardware thật; dùng `tasks/vector-can-fd-hardware-checklist.md`. Không nối frame I/O mới vào UI hiện tại.
 
