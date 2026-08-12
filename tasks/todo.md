@@ -380,7 +380,7 @@
 - [x] Sol ultra self-review hai trục đã sửa 2 finding Required trước gate: `VAL_` malformed không còn publish metadata một phần; enum issue code mới được append để không đổi numeric value của member public cũ. Không còn finding Critical/Required trong self-review.
 - [x] Verification cuối: `dotnet build Simulate.sln --no-restore` 0 warning/0 error; full suite 134/134 PASS; targeted formatter và `git diff --check` PASS; UI/XAML/code-behind/project/solution diff bằng không; secret scan sạch.
 - [x] `Terra xhigh` independent two-axis review PASS: không có finding Critical/Required. Re-run build 0 warning/0 error, full suite 134/134 PASS, `SimulationEngineTests` lặp 10 lần đều 17/17 PASS; formatter/diff/UI scope sạch. FYI: echo exact-frame có false positive không thể phân biệt trong chính cửa sổ 10 ms, nên Vector hardware echo/latency vẫn `NEEDS_VERIFY`; `VAL_` raw hiện là `long`, chưa cover enum unsigned 64-bit vượt `Int64.MaxValue` (không có trong 8 DBC supplied, reference cũng dùng `long`).
-- [ ] Chờ `Luna xhigh` independent review cuối trước khi đánh dấu Task 11 DONE. Chưa commit/push; hardware echo/latency thực vẫn `NEEDS_VERIFY`.
+- [x] `Luna xhigh` independent review cuối PASS: không có finding Critical/Required. Đối chiếu reference và hai trục spec/standards xác nhận raw `VAL_` → physical, atomic snapshot, live baseline, E2E-after-pack, metadata Classic/FD/BRS/DLC và echo one-shot/timeout/bound. Re-run build 0 warning/0 error, full suite 134/134 PASS, `git diff --check` và UI/project scope sạch. Task 11 DONE tại commit `dd60366`; Vector hardware echo/latency thực vẫn `NEEDS_VERIFY`.
 
 ## Task 12: Scheduler, pause/resume và emergency stop
 

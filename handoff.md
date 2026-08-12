@@ -35,9 +35,8 @@ Tài liệu này bàn giao trạng thái để model/agent tiếp theo thực hi
 
 ## Trạng thái repository
 
-- Branch `chore/merge-agent-skills` đang đồng bộ với `origin/chore/merge-agent-skills` tại `a137216 feat: add bidirectional simulation gateway` trước thay đổi Task 11.
-- Worktree hiện chứa implementation/tests/docs của Task 11; file mới duy nhất là `Simulate/Models/SimulationEngineOptions.cs`, các file Task 10/DBC/plan còn lại được mở rộng có chủ đích.
-- Task 11 chưa commit/push. Không commit/push nếu chưa có lệnh người dùng.
+- Branch `chore/merge-agent-skills` đang ở commit local `dd60366 feat: add bidirectional simulation gateway`; chưa push review record sau commit.
+- Task 11 implementation/tests đã commit tại `dd60366`; worktree chỉ còn review record nếu chưa có lệnh commit tiếp.
 
 ## Rào chắn không được vi phạm
 
@@ -80,7 +79,7 @@ Vector-specific handles, masks, permissions và `XLDriver` phải nằm trong se
 
 ## Next action
 
-**Task 11 — Sol ultra implementation PASS; `Terra xhigh` independent review PASS; next action là `Luna xhigh` review cuối.**
+**Task 11 DONE — Sol ultra implementation PASS; `Terra xhigh` và `Luna xhigh` independent review đều PASS; commit `dd60366`.**
 
 Implementation hiện có:
 
@@ -90,7 +89,7 @@ Implementation hiện có:
 4. Echo filter hai chiều match exact outbound frame + expected source, one-shot consume, timeout 10 ms và bound 32 mặc định.
 5. Full suite 134/134 PASS; build 0 warning/0 error; formatter, diff check, secret scan và UI/project scope gate PASS.
 
-**Review status:** `Sol ultra` self-review PASS sau khi sửa 2 finding Required (atomic `VAL_` publication và giữ ordinal public enum). `Terra xhigh` independent two-axis review PASS, không có finding Critical/Required: build 0/0, full suite 134/134 và `SimulationEngineTests` lặp 10 lần đều 17/17 PASS. `Luna xhigh` còn pending.
+**Review status:** `Sol ultra` self-review PASS sau khi sửa 2 finding Required (atomic `VAL_` publication và giữ ordinal public enum). `Terra xhigh` independent two-axis review PASS, không có finding Critical/Required: build 0/0, full suite 134/134 và `SimulationEngineTests` lặp 10 lần đều 17/17 PASS. `Luna xhigh` final review PASS: không có finding Critical/Required; build 0/0, full suite 134/134, diff check và UI/project scope sạch.
 
 **Task 6 implementation/review:**
 
@@ -125,7 +124,7 @@ Implementation hiện có:
 
 **Task 11 gateway behavior:** Inject clone payload live, chỉ sửa signal active, áp E2E sau pack và bảo toàn ID/extended/Classic-FD/BRS/DLC/length. Echo filter so exact outbound frame + expected side, consume một lần, timeout mặc định 10 ms, bound mặc định 32; options dùng `TimeProvider` cho test xác định. Full suite 134/134 PASS, build 0 warning/0 error, formatter/diff/secret/UI scope sạch.
 
-**Next action:** Chuyển `Luna xhigh` review độc lập cuối Task 11 theo hai trục spec/standards. Review cần kiểm tra đặc biệt raw `VAL_` → physical, atomic runtime update, E2E ordering, echo false-positive window/bound và UI diff bằng không. FYI từ Terra: exact-frame echo không thể phân biệt frame thật trùng tuyệt đối trong chính cửa sổ 10 ms; `VAL_` raw hiện dùng `long`, chưa cover enum unsigned 64-bit vượt `Int64.MaxValue` (không xuất hiện trong 8 DBC supplied và reference cũng dùng `long`). Không sửa UI/XAML, không commit/push nếu chưa có lệnh người dùng. Hardware echo/latency thực vẫn `NEEDS_VERIFY`.
+**Next action:** Task 12 — scheduler, pause/resume và emergency stop. Lead `Sol xhigh`, review `Terra xhigh`. Giữ engine/UI boundary hiện có; không sửa UI/XAML, không commit/push nếu chưa có lệnh người dùng. FYI từ Terra: exact-frame echo không thể phân biệt frame thật trùng tuyệt đối trong chính cửa sổ 10 ms; `VAL_` raw hiện dùng `long`, chưa cover enum unsigned 64-bit vượt `Int64.MaxValue` (không xuất hiện trong 8 DBC supplied và reference cũng dùng `long`). Hardware echo/latency thực vẫn `NEEDS_VERIFY`.
 
 `NEEDS_VERIFY`: chưa cắm Vector hardware thật; dùng `tasks/vector-can-fd-hardware-checklist.md`. Không nối frame I/O mới vào UI hiện tại.
 
