@@ -35,8 +35,8 @@ Tài liệu này bàn giao trạng thái để model/agent tiếp theo thực hi
 
 ## Trạng thái repository
 
-- Branch `chore/merge-agent-skills` đang ở commit local `dd60366 feat: add bidirectional simulation gateway`; chưa push review record sau commit.
-- Task 11 implementation/tests đã commit tại `dd60366`; worktree chỉ còn review record nếu chưa có lệnh commit tiếp.
+- Branch `chore/merge-agent-skills` đang ở commit local `a7c2cb4 docs: close task 11 review`; chưa push.
+- Worktree hiện chứa implementation/tests/docs Task 12; chưa commit/push và không có UI/XAML/project/solution diff.
 
 ## Rào chắn không được vi phạm
 
@@ -79,7 +79,7 @@ Vector-specific handles, masks, permissions và `XLDriver` phải nằm trong se
 
 ## Next action
 
-**Task 11 DONE — Sol ultra implementation PASS; `Terra xhigh` và `Luna xhigh` independent review đều PASS; commit `dd60366`.**
+**Task 12 DONE — `Sol xhigh` implementation, `Sol ultra` Required-finding fix và `Terra xhigh` re-review đều PASS; chưa commit/push.**
 
 Implementation hiện có:
 
@@ -124,7 +124,13 @@ Implementation hiện có:
 
 **Task 11 gateway behavior:** Inject clone payload live, chỉ sửa signal active, áp E2E sau pack và bảo toàn ID/extended/Classic-FD/BRS/DLC/length. Echo filter so exact outbound frame + expected side, consume một lần, timeout mặc định 10 ms, bound mặc định 32; options dùng `TimeProvider` cho test xác định. Full suite 134/134 PASS, build 0 warning/0 error, formatter/diff/secret/UI scope sạch.
 
-**Next action:** Task 12 — scheduler, pause/resume và emergency stop. Lead `Sol xhigh`, review `Terra xhigh`. Giữ engine/UI boundary hiện có; không sửa UI/XAML, không commit/push nếu chưa có lệnh người dùng. FYI từ Terra: exact-frame echo không thể phân biệt frame thật trùng tuyệt đối trong chính cửa sổ 10 ms; `VAL_` raw hiện dùng `long`, chưa cover enum unsigned 64-bit vượt `Int64.MaxValue` (không xuất hiện trong 8 DBC supplied và reference cũng dùng `long`). Hardware echo/latency thực vẫn `NEEDS_VERIFY`.
+**Task 12 implementation:** `Sol xhigh` đã thêm scheduler lifecycle tách khỏi gateway: One-shot/Cyclic dùng start delay/cycle/repeat; Event trigger có typed result và debounce 50 ms; pause chỉ khóa scheduled sends, stop-scheduling giữ gateway/session hoạt động. Scheduled TX dùng latest RX frame làm baseline hoặc zero Classic/FD baseline hợp lệ, rồi tái sử dụng override/E2E path. `ScheduledFrames` được thêm vào statistics.
+
+**Task 12 review/fix final:** (1) Scheduled dispatch re-check pause dưới `_lifecycleSync` sau khi lấy `_transmitGate`; một send xếp sau gateway traffic không thể vượt pause boundary, còn hardware operation đã bắt đầu được await ngoài lock. (2) `EmergencyStopAsync` cleanup session trong `finally`, nên scheduler/receive fault vẫn đóng session trong khi typed root exception được giữ nguyên. Hai regression tests đã chứng minh RED trước fix và GREEN sau fix. `Terra xhigh` re-review PASS: không còn finding Critical/Required; lock ordering và fault cleanup ordering đều đúng contract.
+
+**Task 12 verification sau re-review:** focused scheduler tests 14/14 PASS, lặp 20 vòng đều PASS (280/280 lượt); full suite 148/148 PASS; build 0 warning/0 error; targeted formatter, `git diff --check`, secret scan và UI/XAML/project/solution scope PASS.
+
+**Next action:** Task 13 — lead `Terra xhigh`, review `Sol xhigh`: tạo SimulationViewModel/backend projection qua các binding hiện hữu, nhưng không sửa UI/XAML/code-behind hoặc tự nối command UI. Không commit/push nếu chưa có lệnh người dùng. Vector hardware timing/latency/emergency cleanup thực vẫn `NEEDS_VERIFY`.
 
 `NEEDS_VERIFY`: chưa cắm Vector hardware thật; dùng `tasks/vector-can-fd-hardware-checklist.md`. Không nối frame I/O mới vào UI hiện tại.
 

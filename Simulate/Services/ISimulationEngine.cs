@@ -17,6 +17,16 @@ namespace Simulate.Services
         bool IsRunning { get; }
 
         /// <summary>
+        /// Gets a value indicating whether one-shot, cyclic, or event scheduling is active.
+        /// </summary>
+        bool IsScheduling { get; }
+
+        /// <summary>
+        /// Gets a value indicating whether scheduled sends are paused while gateway routing continues.
+        /// </summary>
+        bool IsSchedulingPaused { get; }
+
+        /// <summary>
         /// Gets the latest immutable gateway counter snapshot.
         /// </summary>
         GatewayStatistics Statistics { get; }
@@ -40,9 +50,51 @@ namespace Simulate.Services
         ValueTask StartAsync(CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Cancels the receive loop and waits for its background task to finish.
+        /// Starts one-shot/cyclic work and enables event triggers without changing gateway routing.
+        /// Scheduled frames are emitted toward the configured TX gateway side.
+        /// </summary>
+        /// <param name="cancellationToken">Cancels only the active scheduling run.</param>
+        /// <returns>A value task that completes after scheduling has started.</returns>
+        ValueTask StartSchedulingAsync(CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Pauses scheduled sends without pausing or closing the gateway session.
+        /// </summary>
+        void PauseScheduling();
+
+        /// <summary>
+        /// Resumes scheduled sends; a send that became due while paused proceeds once.
+        /// </summary>
+        void ResumeScheduling();
+
+        /// <summary>
+        /// Cancels scheduled work while leaving gateway routing and the session active.
+        /// </summary>
+        /// <returns>A value task that completes after all scheduled sends have stopped.</returns>
+        ValueTask StopSchedulingAsync();
+
+        /// <summary>
+        /// Requests one send for an enabled event-driven rule.
+        /// </summary>
+        /// <param name="canIdentifier">The normalized identifier of the event rule.</param>
+        /// <param name="isExtendedIdentifier">Whether the event rule uses an extended identifier.</param>
+        /// <param name="cancellationToken">Cancels this trigger while it is waiting for its start delay.</param>
+        /// <returns>A typed transmitted or debounced outcome.</returns>
+        ValueTask<SimulationEventTriggerResult> TriggerEventAsync(
+            uint canIdentifier,
+            bool isExtendedIdentifier,
+            CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// Cancels receive and scheduled work while leaving the caller-owned session open.
         /// </summary>
         /// <returns>A value task that completes after the receive loop has stopped.</returns>
         ValueTask StopAsync();
+
+        /// <summary>
+        /// Cancels receive and scheduling work before requesting cleanup of the caller-supplied session.
+        /// </summary>
+        /// <returns>The typed result returned by session cleanup.</returns>
+        ValueTask<HardwareOperationResult> EmergencyStopAsync();
     }
 }

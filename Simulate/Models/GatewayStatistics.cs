@@ -11,7 +11,8 @@ namespace Simulate.Models
             long passedFrames,
             long droppedFrames,
             long injectedFrames,
-            long filteredEchoFrames)
+            long filteredEchoFrames,
+            long scheduledFrames)
         {
             ReceivedFrames = receivedFrames;
             TransmittedFrames = transmittedFrames;
@@ -19,6 +20,7 @@ namespace Simulate.Models
             DroppedFrames = droppedFrames;
             InjectedFrames = injectedFrames;
             FilteredEchoFrames = filteredEchoFrames;
+            ScheduledFrames = scheduledFrames;
         }
 
         /// <summary>
@@ -50,5 +52,10 @@ namespace Simulate.Models
         /// Gets the number of matching loopback frames consumed inside the echo window.
         /// </summary>
         public long FilteredEchoFrames { get; }
+
+        /// <summary>
+        /// Gets the number of frames emitted by one-shot, cyclic, or event scheduling.
+        /// </summary>
+        public long ScheduledFrames { get; }
     }
 }

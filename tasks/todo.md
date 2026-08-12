@@ -386,21 +386,45 @@
 
 **Description:** Thêm One-shot/Cyclic/Event với cancellation, debounce, start delay, repeat và emergency stop an toàn.
 
+**Implementation status:** `DONE` — `Sol xhigh` implementation/self-review, `Sol ultra` Required-finding fix và `Terra xhigh` re-review đều PASS. Chưa commit/push.
+
 **Acceptance criteria:**
-- [ ] Không dùng blocking sleep trên UI thread.
-- [ ] Pause chỉ dừng schedule theo contract; gateway policy được xác định rõ.
-- [ ] Emergency stop hủy task, dừng phát và cleanup session theo thứ tự an toàn.
+- [x] Không dùng blocking sleep trên UI thread.
+- [x] Pause chỉ dừng schedule theo contract; gateway vẫn route RX↔TX và giữ session mở. Send đến hạn trong lúc pause phát đúng một lần sau resume, không catch-up burst.
+- [x] Emergency stop hủy/await receive, cyclic/one-shot và event trigger đang chạy trước khi cleanup session theo thứ tự an toàn.
 
 **Verification:**
-- [ ] Deterministic timing tests với clock abstraction hoặc tolerance hữu hạn.
-- [ ] Stop/pause/resume race tests.
-- [ ] Build/test sạch, UI diff bằng không.
+- [x] 14 deterministic/tolerance-bounded scheduler tests với `TimeProvider` giả lập, blocking transmit seam và transmit-fault seam.
+- [x] Stop/pause/resume, concurrent Event transmit và Emergency Stop race/fault tests PASS; focused suite lặp 20 lần đều 14/14 PASS.
+- [x] Build 0 warning/0 error, full suite 148/148 PASS, formatter/diff check sạch, UI/XAML/project diff bằng không.
 
 **Dependencies:** Task 11
 **Files likely touched:** scheduler/engine files và tests
 **Estimated scope:** M
 **Model allocation:** Lead `Sol xhigh`; review `Terra xhigh`
 **Skills khi triển khai:** `test-driven-development`, `diagnosing-bugs`
+
+## Work log — 2026-08-12 (Task 12 Sol xhigh implementation)
+
+- [x] Giữ `StartAsync` là lifecycle gateway; thêm scheduler lifecycle riêng `StartSchedulingAsync`/`StopSchedulingAsync`, typed state `IsScheduling`/`IsSchedulingPaused` và không tự nối vào UI.
+- [x] One-shot/Cyclic dùng start delay, cycle interval và repeat count (`0` = unbounded); Event dùng typed trigger result và debounce mặc định 50 ms. Scheduler luôn phát về TX side như reference.
+- [x] Scheduled send dùng latest real RX frame làm live baseline; nếu chưa có frame thì tạo zero baseline hợp lệ theo Classic/FD DLC, giữ extended ID/FD/BRS metadata, rồi dùng chung override + E2E path Task 11.
+- [x] Pause chỉ khóa scheduled sends, gateway vẫn route; Stop Scheduling hủy/await schedule nhưng giữ session mở; Emergency Stop hủy/await toàn bộ receive/schedule/Event trigger rồi mới gọi `session.StopAsync`.
+- [x] TDD đã phát hiện và sửa 2 finding Required nội bộ: mapping DBC payload length sang FD DLC không được cast trực tiếp; Emergency Stop phải drain Event transmit ngoài scheduler worker trước khi cleanup session. Hardware transmission được serialize để bảo vệ E2E counter/session.
+- [x] `GatewayStatistics` bổ sung `ScheduledFrames`; input invalid tại scheduling/event boundary trả exception rõ ràng, event debounce trả typed `Transmitted`/`Debounced`.
+- [x] Verification: scheduler tests 12/12 PASS và lặp 10 vòng đều PASS; full suite 146/146 PASS; build 0 warning/0 error; targeted formatter, `git diff --check`, UI/project scope PASS.
+- [x] `Terra xhigh` independent review hoàn tất: build 0/0, full suite 146/146, focused scheduler 12/12 lặp 10 vòng, formatter/diff/UI scope PASS; phát hiện 2 finding Required bên dưới. Vector hardware scheduler timing/latency và emergency cleanup thực vẫn `NEEDS_VERIFY` ở Task 15.
+
+## Work log — 2026-08-12 (Task 12 Terra xhigh independent review)
+
+- [x] **Required fixed — pause gate race:** scheduled dispatch nay re-check pause dưới cùng lifecycle lock sau khi lấy `_transmitGate`; hardware call được khởi phát trong boundary này rồi mới await ngoài lock. Regression test giữ gateway transmit, pause, release và xác nhận Event chỉ phát sau Resume đã RED trước fix/GREEN sau fix.
+- [x] **Required fixed — emergency cleanup after worker/scheduler fault:** `EmergencyStopAsync()` luôn gọi `session.StopAsync()` trong `finally`, đồng thời giữ nguyên typed `HardwareOperationException` gốc. Regression test `TransmitFailed` đã RED với session còn mở/GREEN với session đóng sau fix.
+- [x] Các phần còn lại đạt: lifecycle scheduler tách gateway, timing/debounce/live-zero baseline/FD DLC, serialized transmit, Event drain, API typed và không có UI/XAML/project/solution diff.
+- [x] Verification độc lập: `dotnet build Simulate.sln --no-restore` PASS (0 warning/0 error); full suite 146/146 PASS; `SimulationSchedulerTests` 12/12 lặp 10 vòng PASS; targeted formatter, `git diff --check`, task-scope secret scan và UI scope PASS.
+- [x] `Sol ultra` đã sửa hai Required finding bằng hai vòng RED→GREEN riêng; self-review không còn finding Critical/Required. Focused scheduler 14/14 lặp 20 vòng PASS, full suite 148/148 PASS, build 0/0 và scope gates sạch.
+- [x] `Terra xhigh` re-review PASS: hai Required finding đã được giải quyết đúng contract. Pause/transmit decision được tuyến tính hóa dưới lifecycle lock; Emergency Stop luôn cleanup sau worker drain, kể cả khi root fault được giữ nguyên. Không có finding Critical/Required.
+- [x] Re-validation độc lập: focused scheduler 14/14 lặp 20 vòng PASS (280/280 lượt); `dotnet build Simulate.sln --no-restore` PASS 0 warning/0 error; full suite 148/148 PASS; formatter/diff/secret/UI/XAML/project scope PASS.
+- [x] Task 12 DONE; chưa commit/push theo rào chắn người dùng. **Next action:** Task 13 — lead `Terra xhigh`, review `Sol xhigh`; vẫn UI-gated.
 
 ## Task 13: SimulationViewModel và projection sang bindings hiện hữu
 

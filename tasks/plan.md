@@ -165,13 +165,13 @@ Nguyên tắc:
 
 - [x] Task 10: Gateway hai chiều và mode PassThrough/Block — **Sol ultra**, review **Terra xhigh**.
 - [x] Task 11: Inject/override, live baseline và echo filtering — **Sol ultra implementation PASS**, **Terra xhigh review PASS**, **Luna xhigh final review PASS** (build 0/0, full test 134/134, 10x engine stress pass, UI diff 0); commit `dd60366`. Signal value contract đã hiện thực: numeric physical value; typed `VAL_` label/key map raw → physical trước khi pack; live baseline chỉ là nguồn giữ bit/hiển thị, không tự thành override. Hardware echo/latency thực vẫn `NEEDS_VERIFY`.
-- [ ] Task 12: One-shot/Cyclic/Event, pause/resume và emergency stop — **Sol xhigh**, review **Terra xhigh**.
+- [x] Task 12: One-shot/Cyclic/Event, pause/resume và emergency stop — **Sol xhigh implementation/self-review PASS**, **Sol ultra Required-finding fix PASS** và **Terra xhigh re-review PASS**. Pause/transmit-gate interleaving không vượt pause boundary; emergency luôn cleanup session dù scheduler fault và vẫn giữ typed root failure. Focused 14/14 lặp 20 vòng (280/280), full 148/148, build 0/0, formatter/diff/secret/UI diff 0. Chưa commit/push.
 
 ### Checkpoint D — Simulation engine
 
 - [x] RX→TX và TX→RX hoạt động qua in-memory session.
 - [x] Frame không có rule được pass-through; Block không phát; Inject chỉ sửa signal được override.
-- [ ] Cancellation dừng receive/scheduler hữu hạn thời gian, không phát thêm frame sau stop.
+- [x] Cancellation dừng receive/scheduler hữu hạn thời gian, không phát thêm frame sau stop; Emergency Stop await in-flight Event transmit trước session cleanup.
 - [ ] Counter/latency/error state quan sát được qua engine interface.
 
 ### Phase 4 — Application integration không đổi UI
