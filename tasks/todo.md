@@ -462,21 +462,44 @@
 
 **Description:** Kiểm chứng end-to-end backend qua in-memory hardware: connect → start gateway → pass/block/inject/schedule → stop/disconnect.
 
+**Implementation status (2026-08-14):** DONE — `Luna xhigh` implementation/fix PASS và `Sol xhigh` independent re-review PASS; chưa commit/push.
+
 **Acceptance criteria:**
-- [ ] Test đầy đủ Classic và FD mode ở contract level.
-- [ ] Soak test không tăng task/handle giả lập và không phát frame sau stop.
-- [ ] Error path trả state ổn định để reconnect.
+- [x] Test đầy đủ Classic và FD mode ở integration contract level.
+- [x] Soak 50 vòng connect/start/schedule/stop/disconnect không để receive worker/scheduler/session còn hoạt động và không phát frame sau **engine stop khi session vẫn mở**.
+- [x] Typed transmit failure dừng engine, giữ ownership session rõ ràng và cho phép **cùng driver instance** mở/reconnect session mới thành công.
 
 **Verification:**
-- [ ] `dotnet test Simulate.sln` pass 100%.
-- [ ] `dotnet build Simulate.sln` 0 warning, 0 error.
-- [ ] UI diff bằng không.
+- [x] Focused `SimulationIntegrationTests`: 4/4 PASS; soak lặp 10/10, tương đương 500 vòng.
+- [x] `dotnet test Simulate.sln --no-build --no-restore`: 158/158 PASS.
+- [x] `dotnet build Simulate.sln --no-restore`: 0 warning, 0 error.
+- [x] Targeted formatter/CRLF và `git diff --check` PASS.
+- [x] UI/XAML/code-behind/project/solution diff bằng không.
 
 **Dependencies:** Task 13
 **Files likely touched:** integration test files, không sửa production UI
 **Estimated scope:** M
 **Model allocation:** Lead `Luna xhigh`; review `Sol xhigh`
 **Skills khi triển khai:** `test-driven-development`, `observability-and-instrumentation`
+
+**Luna xhigh work log (2026-08-14):**
+
+- [x] Slice Classic: discovery/open in-memory session → engine start → PassThrough/Block/Inject → engine stop → session disconnect; counter outcomes được kiểm chứng qua `GatewayStatistics`.
+- [x] Slice CAN FD: discovery/open FD session → scheduler one-shot Inject → kiểm tra FD format/DLC 12/BRS/payload → stop scheduler/gateway/disconnect.
+- [x] Slice soak/reconnect: 50 vòng trong một test và lặp test 10 lần; xác nhận `IsRunning`, `IsScheduling`, `IsOpen` đều false sau cleanup, enqueue sau engine stop được nhận nhưng không TX rồi bị từ chối sau disconnect, typed transmit failure không làm hỏng reconnect cùng driver.
+- [x] Không sửa UI/XAML/code-behind hoặc project/solution configuration.
+- [x] `Sol xhigh` review: formatter/build/test/UI scope PASS nhưng trả 2 Required test gaps; Task 14 chưa DONE.
+- [x] `Luna xhigh` đã sửa hai Required finding bằng test seam; focused/full/build/formatter/scope PASS.
+- [x] `Sol xhigh` re-review PASS: hai Required finding được đóng đúng contract, không có finding Critical/Required mới.
+- [x] Re-validation độc lập: formatter PASS; build 0/0; focused 4/4; full 158/158; `git diff --check` và UI/XAML/code-behind/project/solution scope PASS.
+- [x] Task 14 DONE; chưa commit/push. **Next action:** Task 15 — lead `Sol ultra`, review `Luna high` + `Terra xhigh`.
+
+**Sol xhigh independent review (2026-08-14):**
+
+- [x] Axis Standards PASS: test dùng public driver/session/engine seams, code dễ đọc, không có production/UI/package/project change; formatter, build 0/0, focused 4/4, full 158/158 và scope gate PASS.
+- [x] **Required — post-stop proof fixed by Luna:** giữ session mở sau `engine.StopAsync`, enqueue thành công nhưng không có transmission/counter tăng trong bounded window; sau đó mới disconnect.
+- [x] **Required — reconnect proof fixed by Luna:** fail-once/transient test driver dùng cùng `ICanHardwareDriver` instance cho session lỗi và session khỏe thứ hai.
+- [x] Sol xhigh re-review PASS sau fix: không còn finding Critical/Required.
 
 ## Task 15: Final review và hardware verification
 
