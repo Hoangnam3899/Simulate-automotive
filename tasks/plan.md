@@ -176,7 +176,17 @@ Nguyên tắc:
 
 ### Phase 4 — Application integration không đổi UI
 
-- [ ] Task 13: SimulationViewModel và projection sang binding hiện hữu — **Terra xhigh**, review **Sol xhigh**.
+- [x] Task 13: SimulationViewModel và projection sang binding hiện hữu — implementation/fix **Terra xhigh** PASS; independent re-review **Sol xhigh** PASS. Build 0/0, focused 6/6, full 154/154, formatter/diff/UI scope sạch; chưa commit/push.
+
+**Task 13 contract (2026-08-14):** `SimulationViewModel` nhận `SimulationPlan` và `ISimulationEngine` đã được tạo ở composition boundary; không gọi Vector API, không sở hữu/mở/đóng `ICanGatewaySession`. Nó project DBC/rule typed thành `Messages`, `Signals`, `FaultQueue`, phản chiếu runtime engine state qua method backend explicit, và không tự start/stop. `MainViewModel` chỉ forward đúng các binding path hiện hữu, thay demo data bằng collection typed rỗng hoặc plan projection. Start/Stop/Pause/Emergency command binding là `UI_GATED`: chưa thêm RelayCommand, XAML hay code-behind. Public test seams: `SimulationViewModel` và constructor injected của `MainViewModel`; fake `ISimulationEngine` được dùng để kiểm tra lifecycle/state mà không dùng Vector/hardware.
+
+**Task 13 implementation checkpoint (2026-08-14):** Terra xhigh đã hoàn tất projection typed, composition boundary và test seam. Build 0 warning/0 error; focused 5/5 và full suite 153/153 PASS; `git diff --check` và UI/XAML/code-behind scope PASS. Chưa đánh dấu DONE hay commit/push trước independent review `Sol xhigh`.
+
+**Task 13 Sol xhigh review (2026-08-14):** Spec/ownership/UI scope PASS; Standards trả 2 Required findings về CRLF formatter và WPF continuation context.
+
+**Task 13 Terra xhigh fix (2026-08-14):** PASS — đã chạy targeted formatter để chuẩn hóa 5 file C# Task 13 sang CRLF; `dotnet format --verify-no-changes` PASS. Bỏ mọi `ConfigureAwait(false)` khỏi `SimulationViewModel` để observable state trở về caller synchronization context. Regression test dùng fake engine hoàn thành bất đồng bộ + queueing synchronization context đã RED trước fix/GREEN sau fix. Build 0/0; focused 6/6 và full suite 154/154 PASS; diff/UI scope sạch. Chờ `Sol xhigh` re-review, chưa DONE/commit/push.
+
+**Task 13 Sol xhigh re-review (2026-08-14):** PASS — hai Required finding đã được giải quyết đúng phạm vi. Re-review độc lập xác nhận targeted formatter/CRLF PASS; continuation sau `ValueTask` chưa hoàn tất quay lại caller synchronization context trước khi phát `PropertyChanged`; không còn `ConfigureAwait(false)` trong ViewModel. Build 0 warning/0 error; focused 6/6 và full suite 154/154 PASS; `git diff --check` cùng UI/XAML/code-behind/project/solution scope PASS. Không có finding Critical/Required; Task 13 DONE, chưa commit/push.
 - [ ] Task 14: Integration/soak tests bằng in-memory session — **Luna xhigh**, review **Sol xhigh**.
 - [ ] Task 15: Code review đa trục và hardware verification checklist — **Sol ultra**, review chéo **Luna high** + **Terra xhigh**.
 

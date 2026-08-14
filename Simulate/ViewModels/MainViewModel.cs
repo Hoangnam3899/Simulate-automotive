@@ -1,6 +1,6 @@
+using System;
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
-using Simulate.Services;
 
 namespace Simulate.ViewModels
 {
@@ -10,6 +10,10 @@ namespace Simulate.ViewModels
         public string Name { get; set; } = string.Empty;
         public int Dlc { get; set; }
         public string Cycle { get; set; } = string.Empty;
+        public string GatewayMode { get; set; } = string.Empty;
+        public string SendType { get; set; } = string.Empty;
+        public int SignalCount { get; set; }
+        public bool IsEnabled { get; set; }
     }
 
     public class SignalModel
@@ -23,6 +27,10 @@ namespace Simulate.ViewModels
         public double Min { get; set; }
         public double Max { get; set; }
         public double Value { get; set; }
+        public string MessageId { get; set; } = string.Empty;
+        public string MessageName { get; set; } = string.Empty;
+        public bool IsOverridden { get; set; }
+        public string Cycle { get; set; } = string.Empty;
     }
 
     public class FaultQueueModel
@@ -46,43 +54,26 @@ namespace Simulate.ViewModels
     {
         public ConnectionViewModel Connection { get; }
 
-        public ObservableCollection<MessageModel> Messages { get; set; }
-        public ObservableCollection<SignalModel> Signals { get; set; }
-        public ObservableCollection<FaultQueueModel> FaultQueue { get; set; }
+        public SimulationViewModel Simulation { get; }
+
+        public ObservableCollection<MessageModel> Messages => Simulation.Messages;
+        public ObservableCollection<SignalModel> Signals => Simulation.Signals;
+        public ObservableCollection<FaultQueueModel> FaultQueue => Simulation.FaultQueue;
 
         public MainViewModel()
+            : this(ApplicationComposition.CreateConnectionViewModel(), new SimulationViewModel())
         {
-            ICanHardwareDriver hardwareDriver = new VectorHardwareService();
-            Connection = new ConnectionViewModel(hardwareDriver);
+        }
 
-            Messages = new ObservableCollection<MessageModel>
-            {
-                new MessageModel { Id = "0x100", Name = "EngineData",     Dlc = 8, Cycle = "10 ms"  },
-                new MessageModel { Id = "0x101", Name = "VehicleSpeed",   Dlc = 8, Cycle = "20 ms"  },
-                new MessageModel { Id = "0x102", Name = "BrakeStatus",    Dlc = 8, Cycle = "10 ms"  },
-                new MessageModel { Id = "0x103", Name = "SteeringAngle",  Dlc = 8, Cycle = "20 ms"  },
-                new MessageModel { Id = "0x104", Name = "BatteryStatus",  Dlc = 8, Cycle = "100 ms" },
-                new MessageModel { Id = "0x105", Name = "DoorStatus",     Dlc = 8, Cycle = "50 ms"  },
-                new MessageModel { Id = "0x106", Name = "LightStatus",    Dlc = 8, Cycle = "100 ms" },
-                new MessageModel { Id = "0x107", Name = "HVACStatus",     Dlc = 8, Cycle = "100 ms" },
-            };
-
-            Signals = new ObservableCollection<SignalModel>
-            {
-                new SignalModel { Name = "EngineSpeed", StartBit = 0,  Length = 16, Factor = 0.125, Offset = 0,   Unit = "rpm", Min = 0,   Max = 8000, Value = 1250  },
-                new SignalModel { Name = "EngineTemp",  StartBit = 16, Length = 8,  Factor = 1,     Offset = -40, Unit = "°C",  Min = -40, Max = 215,  Value = 90    },
-                new SignalModel { Name = "ThrottlePos", StartBit = 24, Length = 8,  Factor = 0.4,   Offset = 0,   Unit = "%",   Min = 0,   Max = 100,  Value = 16.0  },
-                new SignalModel { Name = "OilPressure", StartBit = 32, Length = 8,  Factor = 0.1,   Offset = 0,   Unit = "kPa", Min = 0,   Max = 500,  Value = 312.5 },
-                new SignalModel { Name = "FuelLevel",   StartBit = 40, Length = 8,  Factor = 0.4,   Offset = 0,   Unit = "%",   Min = 0,   Max = 100,  Value = 50.0  },
-                new SignalModel { Name = "EngineStatus",StartBit = 48, Length = 8,  Factor = 1,     Offset = 0,   Unit = "-",   Min = 0,   Max = 255,  Value = 1     },
-            };
-
-            FaultQueue = new ObservableCollection<FaultQueueModel>
-            {
-                new FaultQueueModel { Index = 1, MsgId = "0x100", MsgName = "EngineData",  Signal = "EngineSpeed", FaultType = "Stuck at Value", FaultValue = "0x0000 (0 rpm)", StartTime = "0 s", Duration = "10 s", Repeat = "Infinite", Mode = "Override", Status = "Active",    StatusColor = "#10B981", StatusBg = "#064E3B" },
-                new FaultQueueModel { Index = 2, MsgId = "0x102", MsgName = "BrakeStatus", Signal = "BrakeApplied", FaultType = "Bit Flip", FaultValue = "Bit 0", StartTime = "5 s", Duration = "15 s", Repeat = "1", Mode = "Override", Status = "Scheduled", StatusColor = "#38BDF8", StatusBg = "#0C2A4A" },
-                new FaultQueueModel { Index = 3, MsgId = "0x101", MsgName = "VehicleSpeed",Signal = "VehicleSpeed", FaultType = "Offset",   FaultValue = "+20 km/h", StartTime = "0 s", Duration = "20 s", Repeat = "3", Mode = "Override", Status = "Pending",   StatusColor = "#94A3B8", StatusBg = "#1E2C3A" },
-            };
+        /// <summary>
+        /// Initializes a view model with caller-composed connection and simulation dependencies.
+        /// </summary>
+        /// <param name="connection">The connection state exposed to existing bindings.</param>
+        /// <param name="simulation">The simulation projection exposed to existing bindings.</param>
+        public MainViewModel(ConnectionViewModel connection, SimulationViewModel simulation)
+        {
+            Connection = connection ?? throw new ArgumentNullException(nameof(connection));
+            Simulation = simulation ?? throw new ArgumentNullException(nameof(simulation));
         }
     }
 }

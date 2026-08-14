@@ -430,21 +430,33 @@
 
 **Description:** Tạo ViewModel orchestration cho engine, project state vào `Messages`, `Signals`, `FaultQueue` mà không sửa UI hoặc tự kích hoạt thao tác chưa có binding.
 
+**Implementation status (2026-08-14):** DONE — `Terra xhigh` implementation/fix PASS và `Sol xhigh` independent re-review PASS; chưa commit/push.
+
 **Acceptance criteria:**
-- [ ] ViewModel không gọi Vector API trực tiếp.
-- [ ] Existing public binding paths tiếp tục compile và cung cấp dữ liệu typed thay placeholder.
-- [ ] Commands chưa thể nối vào UI được ghi `UI_GATED`, không dùng code-behind workaround.
+- [x] ViewModel không gọi Vector API trực tiếp.
+- [x] Existing public binding paths tiếp tục compile và cung cấp dữ liệu typed thay placeholder.
+- [x] Commands chưa thể nối vào UI được ghi `UI_GATED`, không dùng code-behind workaround.
 
 **Verification:**
-- [ ] ViewModel tests với fake engine/session.
-- [ ] Build/test sạch.
-- [ ] UI/code-behind diff bằng không.
+- [x] ViewModel tests với fake engine/session: focused 6/6 PASS.
+- [x] Build/test sạch: build 0 warning/0 error; full suite 154/154 PASS.
+- [x] UI/code-behind diff bằng không.
 
 **Dependencies:** Tasks 6, 9-12
 **Files likely touched:** `ViewModels/MainViewModel.cs`, new simulation ViewModel/model adapters, tests
 **Estimated scope:** M
 **Model allocation:** Lead `Terra xhigh`; review `Sol xhigh`
 **Skills khi triển khai:** `incremental-implementation`, `test-driven-development`
+
+**Sol xhigh independent review (2026-08-14):**
+
+- [x] Axis Spec PASS: ownership, typed projection, binding forwarding và `UI_GATED` đúng contract; UI/XAML/code-behind/project/solution diff bằng không.
+- [x] **Required fixed — repository format:** targeted formatter đã chuẩn hóa 5 file C# Task 13; `dotnet format --verify-no-changes` PASS với CRLF theo `.editorconfig`.
+- [x] **Required fixed — WPF continuation context:** bỏ mọi `ConfigureAwait(false)` trong `SimulationViewModel`; fake engine asynchronous + queueing synchronization context chứng minh regression RED→GREEN, focused 6/6 PASS.
+- [x] Re-run: build 0/0, full 154/154, `git diff --check`, formatter và UI scope PASS.
+- [x] `Sol xhigh` re-review PASS: hai Required finding được đóng; không có finding Critical/Required mới.
+- [x] Re-validation độc lập: targeted formatter/CRLF PASS; build 0 warning/0 error; focused 6/6; full 154/154; `git diff --check` và UI/XAML/code-behind/project/solution scope PASS.
+- [x] Task 13 DONE; không mở rộng UI, chưa commit/push. **Next action:** Task 14 — lead `Luna xhigh`, review `Sol xhigh`.
 
 ## Task 14: Integration và soak tests
 

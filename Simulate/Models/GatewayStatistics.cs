@@ -5,6 +5,11 @@ namespace Simulate.Models
     /// </summary>
     public sealed class GatewayStatistics
     {
+        /// <summary>
+        /// Gets an immutable counter snapshot with every value set to zero.
+        /// </summary>
+        public static GatewayStatistics Empty { get; } = new(0, 0, 0, 0, 0, 0, 0);
+
         internal GatewayStatistics(
             long receivedFrames,
             long transmittedFrames,
