@@ -59,6 +59,8 @@ namespace Simulate.Services
         private long _injectedFrames;
         private long _filteredEchoFrames;
         private long _scheduledFrames;
+        private long _lastRoutingLatencyTicks = -1;
+        private HardwareFailure? _lastFailure;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="SimulationEngine"/> class.
@@ -129,14 +131,25 @@ namespace Simulate.Services
         }
 
         /// <inheritdoc />
-        public GatewayStatistics Statistics => new(
-            Interlocked.Read(ref _receivedFrames),
-            Interlocked.Read(ref _transmittedFrames),
-            Interlocked.Read(ref _passedFrames),
-            Interlocked.Read(ref _droppedFrames),
-            Interlocked.Read(ref _injectedFrames),
-            Interlocked.Read(ref _filteredEchoFrames),
-            Interlocked.Read(ref _scheduledFrames));
+        public GatewayStatistics Statistics
+        {
+            get
+            {
+                long latencyTicks = Interlocked.Read(ref _lastRoutingLatencyTicks);
+                return new GatewayStatistics(
+                    Interlocked.Read(ref _receivedFrames),
+                    Interlocked.Read(ref _transmittedFrames),
+                    Interlocked.Read(ref _passedFrames),
+                    Interlocked.Read(ref _droppedFrames),
+                    Interlocked.Read(ref _injectedFrames),
+                    Interlocked.Read(ref _filteredEchoFrames),
+                    Interlocked.Read(ref _scheduledFrames),
+                    latencyTicks < 0 ? null : TimeSpan.FromTicks(latencyTicks));
+            }
+        }
+
+        /// <inheritdoc />
+        public HardwareFailure? LastFailure => Volatile.Read(ref _lastFailure);
 
         /// <inheritdoc />
         public void ReplaceSignalOverrides(
@@ -208,6 +221,7 @@ namespace Simulate.Services
                         "The simulation engine requires an open CAN gateway session.");
                 }
 
+                Volatile.Write(ref _lastFailure, null);
                 ResetStatistics();
                 _e2eCounters.Clear();
                 lock (_echoSync)
@@ -454,6 +468,10 @@ namespace Simulate.Services
             finally
             {
                 sessionStopResult = await _session.StopAsync().ConfigureAwait(false);
+                if (!sessionStopResult.IsSuccess)
+                {
+                    CaptureFailure(sessionStopResult.Failure!);
+                }
             }
 
             return sessionStopResult;
@@ -473,75 +491,92 @@ namespace Simulate.Services
 
         private async Task RunReceiveLoopAsync(CancellationToken cancellationToken)
         {
-            await foreach (RoutedCanFrame routedFrame in
-                _session.ReceiveAsync(cancellationToken).ConfigureAwait(false))
+            try
             {
-                Interlocked.Increment(ref _receivedFrames);
-
-                if (TryConsumeEcho(routedFrame))
+                await foreach (RoutedCanFrame routedFrame in
+                    _session.ReceiveAsync(cancellationToken).ConfigureAwait(false))
                 {
-                    Interlocked.Increment(ref _filteredEchoFrames);
-                    continue;
-                }
+                    Interlocked.Increment(ref _receivedFrames);
 
-                if (routedFrame.Source == CanGatewaySide.Rx)
-                {
-                    lock (_baselineSync)
+                    if (TryConsumeEcho(routedFrame))
                     {
-                        _lastRxFrames[
-                            (routedFrame.Frame.Identifier,
-                                routedFrame.Frame.IsExtendedIdentifier)] = routedFrame.Frame;
-                    }
-                }
-
-                if (_enabledRules.TryGetValue(
-                        (routedFrame.Frame.Identifier, routedFrame.Frame.IsExtendedIdentifier),
-                        out SimulationMessageRule? rule)
-                    && rule.GatewayMode == GatewayMode.Block)
-                {
-                    Interlocked.Increment(ref _droppedFrames);
-                    continue;
-                }
-
-                CanGatewaySide destination = routedFrame.Source switch
-                {
-                    CanGatewaySide.Rx => CanGatewaySide.Tx,
-                    CanGatewaySide.Tx => CanGatewaySide.Rx,
-                    _ => throw new InvalidOperationException("The CAN gateway side is not defined.")
-                };
-                await _transmitGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-                try
-                {
-                    bool wasModified = false;
-                    CanFrame outboundFrame = rule?.GatewayMode == GatewayMode.Inject
-                        ? CreateInjectedFrame(routedFrame.Frame, rule, out wasModified)
-                        : routedFrame.Frame;
-                    HardwareOperationResult result = await _session
-                        .TransmitAsync(destination, outboundFrame, cancellationToken)
-                        .ConfigureAwait(false);
-
-                    if (!result.IsSuccess)
-                    {
-                        throw new HardwareOperationException(result.Failure!);
+                        Interlocked.Increment(ref _filteredEchoFrames);
+                        continue;
                     }
 
-                    RegisterPendingEcho(destination, outboundFrame);
-
-                    if (wasModified)
+                    if (routedFrame.Source == CanGatewaySide.Rx)
                     {
-                        Interlocked.Increment(ref _injectedFrames);
-                    }
-                    else
-                    {
-                        Interlocked.Increment(ref _passedFrames);
+                        lock (_baselineSync)
+                        {
+                            _lastRxFrames[
+                                (routedFrame.Frame.Identifier,
+                                    routedFrame.Frame.IsExtendedIdentifier)] = routedFrame.Frame;
+                        }
                     }
 
-                    Interlocked.Increment(ref _transmittedFrames);
+                    if (_enabledRules.TryGetValue(
+                            (routedFrame.Frame.Identifier, routedFrame.Frame.IsExtendedIdentifier),
+                            out SimulationMessageRule? rule)
+                        && rule.GatewayMode == GatewayMode.Block)
+                    {
+                        Interlocked.Increment(ref _droppedFrames);
+                        continue;
+                    }
+
+                    CanGatewaySide destination = routedFrame.Source switch
+                    {
+                        CanGatewaySide.Rx => CanGatewaySide.Tx,
+                        CanGatewaySide.Tx => CanGatewaySide.Rx,
+                        _ => throw new InvalidOperationException("The CAN gateway side is not defined.")
+                    };
+                    long routingStarted = _timeProvider.GetTimestamp();
+                    await _transmitGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                    try
+                    {
+                        bool wasModified = false;
+                        CanFrame outboundFrame = rule?.GatewayMode == GatewayMode.Inject
+                            ? CreateInjectedFrame(routedFrame.Frame, rule, out wasModified)
+                            : routedFrame.Frame;
+                        HardwareOperationResult result = await _session
+                            .TransmitAsync(destination, outboundFrame, cancellationToken)
+                            .ConfigureAwait(false);
+
+                        if (!result.IsSuccess)
+                        {
+                            CaptureFailure(result.Failure!);
+                            throw new HardwareOperationException(result.Failure!);
+                        }
+
+                        TimeSpan routingLatency = _timeProvider.GetElapsedTime(
+                            routingStarted,
+                            _timeProvider.GetTimestamp());
+                        Interlocked.Exchange(
+                            ref _lastRoutingLatencyTicks,
+                            routingLatency.Ticks);
+
+                        RegisterPendingEcho(destination, outboundFrame);
+
+                        if (wasModified)
+                        {
+                            Interlocked.Increment(ref _injectedFrames);
+                        }
+                        else
+                        {
+                            Interlocked.Increment(ref _passedFrames);
+                        }
+
+                        Interlocked.Increment(ref _transmittedFrames);
+                    }
+                    finally
+                    {
+                        _transmitGate.Release();
+                    }
                 }
-                finally
-                {
-                    _transmitGate.Release();
-                }
+            }
+            catch (HardwareOperationException exception)
+            {
+                CaptureFailure(exception.Failure);
+                throw;
             }
         }
 
@@ -655,6 +690,7 @@ namespace Simulate.Services
                         await transmission.ConfigureAwait(false);
                     if (!result.IsSuccess)
                     {
+                        CaptureFailure(result.Failure!);
                         throw new HardwareOperationException(result.Failure!);
                     }
 
@@ -923,6 +959,12 @@ namespace Simulate.Services
             Interlocked.Exchange(ref _injectedFrames, 0);
             Interlocked.Exchange(ref _filteredEchoFrames, 0);
             Interlocked.Exchange(ref _scheduledFrames, 0);
+            Interlocked.Exchange(ref _lastRoutingLatencyTicks, -1);
+        }
+
+        private void CaptureFailure(HardwareFailure failure)
+        {
+            _ = Interlocked.CompareExchange(ref _lastFailure, failure, null);
         }
 
         private sealed class PendingEcho

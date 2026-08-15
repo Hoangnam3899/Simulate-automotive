@@ -10,6 +10,21 @@ namespace Simulate.Tests
     public sealed class SimulationViewModelTests
     {
         [TestMethod]
+        public void Default_instance_exposes_empty_runtime_state()
+        {
+            var viewModel = new SimulationViewModel();
+
+            viewModel.RefreshRuntimeState();
+
+            Assert.IsFalse(viewModel.IsConfigured);
+            Assert.IsFalse(viewModel.IsRunning);
+            Assert.IsFalse(viewModel.IsScheduling);
+            Assert.IsFalse(viewModel.IsSchedulingPaused);
+            Assert.AreSame(GatewayStatistics.Empty, viewModel.Statistics);
+            Assert.IsNull(viewModel.LastFailure);
+        }
+
+        [TestMethod]
         public void Create_projects_dbc_messages_signals_and_configured_overrides()
         {
             const string documentText = """
@@ -68,11 +83,13 @@ namespace Simulate.Tests
         public void Refresh_runtime_state_reads_the_engine_without_starting_it()
         {
             DbcDocument document = ParseSingleMessageDocument();
+            HardwareFailure failure = CreateFailure();
             var engine = new FakeSimulationEngine
             {
                 IsRunning = true,
                 IsScheduling = true,
-                IsSchedulingPaused = true
+                IsSchedulingPaused = true,
+                LastFailure = failure
             };
             var viewModel = new SimulationViewModel(new SimulationPlan(document, []), engine);
 
@@ -82,6 +99,7 @@ namespace Simulate.Tests
             Assert.IsTrue(viewModel.IsScheduling);
             Assert.IsTrue(viewModel.IsSchedulingPaused);
             Assert.AreSame(engine.Statistics, viewModel.Statistics);
+            Assert.AreSame(failure, viewModel.LastFailure);
             Assert.AreEqual(0, engine.StartCallCount);
             Assert.AreEqual(0, engine.StartSchedulingCallCount);
         }
@@ -170,6 +188,50 @@ namespace Simulate.Tests
         }
 
         [TestMethod]
+        public async Task Stop_async_refreshes_failure_state_and_rethrows_the_original_exception()
+        {
+            DbcDocument document = ParseSingleMessageDocument();
+            HardwareFailure failure = CreateFailure();
+            var expectedException = new HardwareOperationException(failure);
+            var engine = new FakeSimulationEngine
+            {
+                IsRunning = true,
+                StopFailure = expectedException
+            };
+            var viewModel = new SimulationViewModel(new SimulationPlan(document, []), engine);
+
+            HardwareOperationException exception = await Assert.ThrowsExceptionAsync<HardwareOperationException>(
+                async () => await viewModel.StopAsync());
+
+            Assert.AreSame(expectedException, exception);
+            Assert.IsFalse(viewModel.IsRunning);
+            Assert.AreSame(failure, viewModel.LastFailure);
+        }
+
+        [TestMethod]
+        public async Task Stop_scheduling_async_refreshes_failure_state_and_rethrows_the_original_exception()
+        {
+            DbcDocument document = ParseSingleMessageDocument();
+            HardwareFailure failure = CreateFailure();
+            var expectedException = new HardwareOperationException(failure);
+            var engine = new FakeSimulationEngine
+            {
+                IsScheduling = true,
+                IsSchedulingPaused = true,
+                StopSchedulingFailure = expectedException
+            };
+            var viewModel = new SimulationViewModel(new SimulationPlan(document, []), engine);
+
+            HardwareOperationException exception = await Assert.ThrowsExceptionAsync<HardwareOperationException>(
+                async () => await viewModel.StopSchedulingAsync());
+
+            Assert.AreSame(expectedException, exception);
+            Assert.IsFalse(viewModel.IsScheduling);
+            Assert.IsFalse(viewModel.IsSchedulingPaused);
+            Assert.AreSame(failure, viewModel.LastFailure);
+        }
+
+        [TestMethod]
         public void Main_view_model_forwards_existing_collection_binding_paths()
         {
             DbcDocument document = ParseSingleMessageDocument();
@@ -197,6 +259,14 @@ namespace Simulate.Tests
                 ?? throw new AssertFailedException("The DBC fixture must parse successfully.");
         }
 
+        private static HardwareFailure CreateFailure()
+        {
+            return new HardwareFailure(
+                HardwareOperation.Transmit,
+                HardwareErrorCode.TransmitFailed,
+                "The simulated CAN operation failed.");
+        }
+
         private sealed class FakeSimulationEngine : ISimulationEngine
         {
             public bool IsRunning { get; set; }
@@ -206,6 +276,12 @@ namespace Simulate.Tests
             public bool IsSchedulingPaused { get; set; }
 
             public GatewayStatistics Statistics { get; } = GatewayStatistics.Empty;
+
+            public HardwareFailure? LastFailure { get; set; }
+
+            public HardwareOperationException? StopFailure { get; set; }
+
+            public HardwareOperationException? StopSchedulingFailure { get; set; }
 
             public int StartCallCount { get; private set; }
 
@@ -259,6 +335,12 @@ namespace Simulate.Tests
                 StopSchedulingCallCount++;
                 IsScheduling = false;
                 IsSchedulingPaused = false;
+                if (StopSchedulingFailure is not null)
+                {
+                    LastFailure = StopSchedulingFailure.Failure;
+                    return ValueTask.FromException(StopSchedulingFailure);
+                }
+
                 return ValueTask.CompletedTask;
             }
 
@@ -274,6 +356,12 @@ namespace Simulate.Tests
             {
                 StopCallCount++;
                 IsRunning = false;
+                if (StopFailure is not null)
+                {
+                    LastFailure = StopFailure.Failure;
+                    return ValueTask.FromException(StopFailure);
+                }
+
                 return ValueTask.CompletedTask;
             }
 
@@ -304,6 +392,8 @@ namespace Simulate.Tests
             public bool IsSchedulingPaused { get; private set; }
 
             public GatewayStatistics Statistics { get; } = GatewayStatistics.Empty;
+
+            public HardwareFailure? LastFailure { get; set; }
 
             public TaskCompletionSource StopRequested { get; } = new(
                 TaskCreationOptions.RunContinuationsAsynchronously);

@@ -29,6 +29,9 @@ namespace Simulate.ViewModels
         [ObservableProperty]
         private GatewayStatistics _statistics = GatewayStatistics.Empty;
 
+        [ObservableProperty]
+        private HardwareFailure? _lastFailure;
+
         /// <summary>
         /// Initializes an unconfigured projection for the UI before a DBC document and engine are composed.
         /// </summary>
@@ -81,6 +84,7 @@ namespace Simulate.ViewModels
                 IsScheduling = false;
                 IsSchedulingPaused = false;
                 Statistics = GatewayStatistics.Empty;
+                LastFailure = null;
                 return;
             }
 
@@ -88,6 +92,7 @@ namespace Simulate.ViewModels
             IsScheduling = _engine.IsScheduling;
             IsSchedulingPaused = _engine.IsSchedulingPaused;
             Statistics = _engine.Statistics;
+            LastFailure = _engine.LastFailure;
         }
 
         /// <summary>
@@ -136,8 +141,14 @@ namespace Simulate.ViewModels
         /// <returns>A value task that completes after scheduled work has stopped.</returns>
         public async ValueTask StopSchedulingAsync()
         {
-            await GetRequiredEngine().StopSchedulingAsync();
-            RefreshRuntimeState();
+            try
+            {
+                await GetRequiredEngine().StopSchedulingAsync();
+            }
+            finally
+            {
+                RefreshRuntimeState();
+            }
         }
 
         /// <summary>
@@ -171,8 +182,14 @@ namespace Simulate.ViewModels
         /// <returns>A value task that completes after engine work has stopped.</returns>
         public async ValueTask StopAsync()
         {
-            await GetRequiredEngine().StopAsync();
-            RefreshRuntimeState();
+            try
+            {
+                await GetRequiredEngine().StopAsync();
+            }
+            finally
+            {
+                RefreshRuntimeState();
+            }
         }
 
         /// <summary>

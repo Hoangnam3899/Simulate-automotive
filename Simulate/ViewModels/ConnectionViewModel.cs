@@ -176,12 +176,12 @@ namespace Simulate.ViewModels
                 }
                 catch (ArgumentException exception)
                 {
-                    LastFailure = CreateUnexpectedFailure(HardwareOperation.OpenSession, exception);
+                    LastFailure = CreateInvalidConfigurationFailure(exception);
                     return;
                 }
                 catch (OverflowException exception)
                 {
-                    LastFailure = CreateUnexpectedFailure(HardwareOperation.OpenSession, exception);
+                    LastFailure = CreateInvalidConfigurationFailure(exception);
                     return;
                 }
 
@@ -195,7 +195,12 @@ namespace Simulate.ViewModels
 
                 if (cancellationToken.IsCancellationRequested)
                 {
-                    await StopAndDisposeAfterCancelledOpenAsync(result.Value!);
+                    HardwareFailure? cleanupFailure = await StopAndDisposeAfterCancelledOpenAsync(result.Value!);
+                    if (cleanupFailure is not null)
+                    {
+                        LastFailure = cleanupFailure;
+                    }
+
                     cancellationToken.ThrowIfCancellationRequested();
                 }
 
@@ -298,10 +303,42 @@ namespace Simulate.ViewModels
                 $"Connection operation failed during {operation}: {exception.Message}");
         }
 
-        private static async Task StopAndDisposeAfterCancelledOpenAsync(ICanGatewaySession session)
+        private static HardwareFailure CreateInvalidConfigurationFailure(Exception exception)
         {
-            await StopSessionOffDispatcherAsync(session);
-            await DisposeSessionOffDispatcherAsync(session);
+            return new HardwareFailure(
+                HardwareOperation.OpenSession,
+                HardwareErrorCode.InvalidConfiguration,
+                $"CAN gateway configuration is invalid: {exception.Message}");
+        }
+
+        private static async Task<HardwareFailure?> StopAndDisposeAfterCancelledOpenAsync(
+            ICanGatewaySession session)
+        {
+            HardwareFailure? firstFailure = null;
+
+            try
+            {
+                HardwareOperationResult stopResult = await StopSessionOffDispatcherAsync(session);
+                if (!stopResult.IsSuccess)
+                {
+                    firstFailure = stopResult.Failure;
+                }
+            }
+            catch (Exception exception)
+            {
+                firstFailure = CreateUnexpectedFailure(HardwareOperation.Stop, exception);
+            }
+
+            try
+            {
+                await DisposeSessionOffDispatcherAsync(session);
+            }
+            catch (Exception exception)
+            {
+                firstFailure ??= CreateUnexpectedFailure(HardwareOperation.Dispose, exception);
+            }
+
+            return firstFailure;
         }
 
         private static Task<HardwareOperationResult> StopSessionOffDispatcherAsync(

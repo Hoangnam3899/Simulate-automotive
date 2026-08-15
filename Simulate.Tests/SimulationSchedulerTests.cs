@@ -43,6 +43,7 @@ namespace Simulate.Tests
                     transmitted.Frame.Data.ToArray());
                 Assert.AreEqual(1L, engine.Statistics.ScheduledFrames);
                 Assert.AreEqual(1L, engine.Statistics.TransmittedFrames);
+                Assert.IsNull(engine.Statistics.LastRoutingLatency);
             }
             finally
             {
@@ -405,6 +406,32 @@ namespace Simulate.Tests
         }
 
         [TestMethod]
+        public async Task Emergency_stop_captures_cleanup_failure_when_run_has_no_prior_failure()
+        {
+            const string documentText = """
+                BO_ 291 Status: 1 Gateway
+                 SG_ Mode : 0|4@1+ (1,0) [0|15] "" Gateway
+                """;
+            DbcDocument document = DbcParser.Parse(documentText).Document
+                ?? throw new AssertFailedException("The DBC fixture must parse successfully.");
+            await using MockCanGatewaySession innerSession = await OpenSessionAsync();
+            var session = new CleanupFailingGatewaySession(innerSession);
+            await using var engine = new SimulationEngine(
+                session,
+                new SimulationPlan(document, messageRules: []));
+
+            await engine.StartAsync();
+            HardwareOperationResult result = await engine.EmergencyStopAsync();
+
+            Assert.IsFalse(result.IsSuccess);
+            Assert.IsNotNull(result.Failure);
+            Assert.AreEqual(HardwareOperation.Stop, result.Failure.Operation);
+            Assert.AreEqual(HardwareErrorCode.StopFailed, result.Failure.Code);
+            Assert.AreSame(result.Failure, engine.LastFailure);
+            Assert.IsFalse(session.IsOpen);
+        }
+
+        [TestMethod]
         public async Task Emergency_stop_closes_the_session_after_a_scheduler_transmit_fault()
         {
             const string documentText = """
@@ -422,14 +449,20 @@ namespace Simulate.Tests
                 new SimulationTiming(TimeSpan.Zero, cycleInterval: null, repeatCount: 1),
                 signalOverrides: [new SignalOverride("Mode", 7d)],
                 e2eProtection: new E2eProtectionConfiguration(isEnabled: false));
-            await using MockCanGatewaySession session = await OpenSessionAsync(
+            await using MockCanGatewaySession innerSession = await OpenSessionAsync(
                 CanBusMode.Classic,
                 new MockHardwareFaultPlan(MockHardwareFaultPoint.Transmit));
+            var session = new CleanupFailingGatewaySession(innerSession);
             var engine = new SimulationEngine(session, new SimulationPlan(document, [rule]));
 
             await engine.StartAsync();
             await engine.StartSchedulingAsync();
             await WaitUntilAsync(() => !engine.IsScheduling);
+
+            HardwareFailure? rootFailure = engine.LastFailure;
+            Assert.IsNotNull(rootFailure);
+            Assert.AreEqual(HardwareOperation.Transmit, rootFailure.Operation);
+            Assert.AreEqual(HardwareErrorCode.TransmitFailed, rootFailure.Code);
 
             HardwareOperationException failure =
                 await Assert.ThrowsExceptionAsync<HardwareOperationException>(
@@ -437,6 +470,8 @@ namespace Simulate.Tests
 
             Assert.AreEqual(HardwareOperation.Transmit, failure.Failure.Operation);
             Assert.AreEqual(HardwareErrorCode.TransmitFailed, failure.Failure.Code);
+            Assert.AreSame(rootFailure, failure.Failure);
+            Assert.AreSame(rootFailure, engine.LastFailure);
             Assert.IsFalse(session.IsOpen, "Emergency cleanup must close a faulted session.");
             Assert.IsFalse(engine.IsRunning);
         }
@@ -1009,6 +1044,55 @@ namespace Simulate.Tests
             public void ReleaseTransmit()
             {
                 _releaseTransmit.TrySetResult();
+            }
+        }
+
+        private sealed class CleanupFailingGatewaySession : ICanGatewaySession
+        {
+            private readonly MockCanGatewaySession _innerSession;
+
+            public CleanupFailingGatewaySession(MockCanGatewaySession innerSession)
+            {
+                _innerSession = innerSession;
+            }
+
+            public CanGatewayOptions Options => _innerSession.Options;
+
+            public bool IsOpen => _innerSession.IsOpen;
+
+            public IAsyncEnumerable<RoutedCanFrame> ReceiveAsync(
+                CancellationToken cancellationToken = default)
+            {
+                return _innerSession.ReceiveAsync(cancellationToken);
+            }
+
+            public ValueTask<HardwareOperationResult> TransmitAsync(
+                CanGatewaySide destination,
+                CanFrame frame,
+                CancellationToken cancellationToken = default)
+            {
+                return _innerSession.TransmitAsync(destination, frame, cancellationToken);
+            }
+
+            public ValueTask<HardwareOperationResult> FlushAsync(
+                CancellationToken cancellationToken = default)
+            {
+                return _innerSession.FlushAsync(cancellationToken);
+            }
+
+            public async ValueTask<HardwareOperationResult> StopAsync()
+            {
+                _ = await _innerSession.StopAsync();
+                return HardwareOperationResult.Failed(
+                    new HardwareFailure(
+                        HardwareOperation.Stop,
+                        HardwareErrorCode.StopFailed,
+                        "Injected emergency cleanup failure."));
+            }
+
+            public ValueTask DisposeAsync()
+            {
+                return _innerSession.DisposeAsync();
             }
         }
     }

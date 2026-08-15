@@ -32,6 +32,11 @@ namespace Simulate.Services
         GatewayStatistics Statistics { get; }
 
         /// <summary>
+        /// Gets the first typed hardware failure captured during the current or most recent run.
+        /// </summary>
+        HardwareFailure? LastFailure { get; }
+
+        /// <summary>
         /// Atomically replaces every active signal override for one configured inject rule.
         /// </summary>
         /// <param name="canIdentifier">The normalized CAN identifier from the DBC document.</param>

@@ -1,5 +1,9 @@
 # Vector CAN FD Hardware Verification Checklist
 
+> Task 15 status (2026-08-14): software/fake-SDK evidence `PASS`; no real Vector bench was run,
+> so the physical result remains `NEEDS_VERIFY`. Graceful application-close cleanup is a known
+> `FAIL (UI_GATED)`. See [`task15-review-and-hardware-status.md`](task15-review-and-hardware-status.md).
+
 ## Phạm vi
 
 Checklist này xác minh Task 5 trên Vector hardware thật qua `ICanGatewaySession`.

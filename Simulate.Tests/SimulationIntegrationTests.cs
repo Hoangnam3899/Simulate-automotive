@@ -214,6 +214,11 @@ namespace Simulate.Tests
             await WaitUntilAsync(() =>
                 failedEngine.Statistics.ReceivedFrames == 1 && !failedEngine.IsRunning);
 
+            HardwareFailure? rootFailure = failedEngine.LastFailure;
+            Assert.IsNotNull(rootFailure);
+            Assert.AreEqual(HardwareOperation.Transmit, rootFailure.Operation);
+            Assert.AreEqual(HardwareErrorCode.TransmitFailed, rootFailure.Code);
+
             HardwareOperationException? transmitFailure = null;
             try
             {
@@ -227,11 +232,18 @@ namespace Simulate.Tests
             Assert.IsNotNull(transmitFailure);
             Assert.AreEqual(HardwareOperation.Transmit, transmitFailure!.Failure.Operation);
             Assert.AreEqual(HardwareErrorCode.TransmitFailed, transmitFailure.Failure.Code);
+            Assert.AreSame(rootFailure, transmitFailure.Failure);
+            Assert.AreSame(rootFailure, failedEngine.LastFailure);
             Assert.AreEqual(0L, failedEngine.Statistics.TransmittedFrames);
+            Assert.IsNull(failedEngine.Statistics.LastRoutingLatency);
             Assert.IsTrue(failedSession.IsOpen);
 
-            await failedEngine.DisposeAsync();
             Assert.IsTrue((await failedSession.StopAsync()).IsSuccess);
+            await Assert.ThrowsExceptionAsync<InvalidOperationException>(
+                () => failedEngine.StartAsync().AsTask());
+            Assert.AreSame(rootFailure, failedEngine.LastFailure);
+
+            await failedEngine.DisposeAsync();
             await failedSession.DisposeAsync();
             Assert.IsFalse(failedSession.IsOpen);
 

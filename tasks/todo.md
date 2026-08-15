@@ -4,7 +4,7 @@
 >
 > UI LOCK: Không sửa `App.xaml`, `MainWindow.xaml`, `MainWindow.xaml.cs` hoặc file UI/XAML nào nếu chưa có yêu cầu và cho phép rõ ràng từ người dùng.
 >
-> Coordinator status (2026-08-12): Task 9 đã DONE — implementation `Terra high` và independent review `Luna high` đều PASS; focused tests 17/17 và full suite 115/115, build 0 warning/0 error. Tasks 7-8 đã commit/push; Task 9 chưa commit/push theo rào chắn người dùng. UI diff bằng không, hardware thật còn `NEEDS_VERIFY`. Task completion reminder đã được bật. Bàn giao chi tiết: [`handoff.md`](../handoff.md).
+> Coordinator status (2026-08-15): Task 14 đã DONE và được commit tại `3c67b3d` nhưng chưa push. Task 15 slices 15.1–15.3 đã DONE: full suite 170/170, build 0/0, cancellation stress 110/110 và scope gates PASS. Next `Terra high` triển khai slice 15.4, review `Luna xhigh`; Task 15 chưa DONE, UI không đổi và hardware thật vẫn `NEEDS_VERIFY`. Chi tiết: [`task15-review-and-hardware-status.md`](task15-review-and-hardware-status.md) và [`handoff.md`](../handoff.md).
 
 ## Coordinator execution order
 
@@ -505,21 +505,194 @@
 
 **Description:** Review spec/standards, chạy full verification và kiểm tra hardware thật theo checklist có rollback/cleanup.
 
+**Implementation status (2026-08-15):** REMEDIATION IN PROGRESS — lead/cross-review, `Sol ultra` design và slice 15.1 implementation/review đã hoàn tất. Task 15 chưa DONE vì slices 15.2–15.4 chưa triển khai/re-review và S2 vẫn chờ user UI gate.
+
 **Acceptance criteria:**
 - [ ] Review correctness, readability, architecture, security và performance không còn blocker.
-- [ ] Hardware checklist phân biệt rõ PASS/FAIL/NEEDS_VERIFY.
-- [ ] PLAN/todo và work log phản ánh đúng trạng thái thực, không đánh dấu hoàn thành theo suy đoán.
+- [x] Hardware checklist phân biệt rõ PASS/FAIL/NEEDS_VERIFY tại [`task15-review-and-hardware-status.md`](task15-review-and-hardware-status.md) và hai bench checklist.
+- [x] PLAN/todo và work log phản ánh đúng trạng thái thực, không đánh dấu hoàn thành theo suy đoán.
 
 **Verification:**
-- [ ] Full build/test sạch.
-- [ ] UI diff bằng không.
-- [ ] Không có secret/binary log mới và không có commit/push ngoài yêu cầu.
+- [x] Full build/test sạch: build 0 warning/0 error; full suite 158/158 PASS.
+- [x] UI diff bằng không.
+- [x] Không có secret/binary log mới và không có commit/push trong Task 15 lead review.
 
 **Dependencies:** Task 14
 **Files likely touched:** tài liệu/checklist; production code chỉ khi review phát hiện lỗi được phê duyệt trong phạm vi
 **Estimated scope:** S
 **Model allocation:** Lead `Sol ultra`; spec review `Luna high`; standards review `Terra xhigh`
 **Skills khi triển khai:** `code-review`, `security-and-hardening`, `documentation-and-adrs`
+
+### Sol ultra lead work log — 2026-08-14
+
+- [x] Axis Spec/Standards, native trust boundary, supplied DBC set và reference shutdown behavior đã được review; báo cáo chi tiết nằm ở [`task15-review-and-hardware-status.md`](task15-review-and-hardware-status.md).
+- [x] Build 0/0; full 158/158; engine/scheduler/integration 350/350 qua 10 vòng; Task 14 targeted formatter PASS.
+- [x] NuGet vulnerability audit, tracked-text secret scan, binary/log scan, `git diff --check` trước tài liệu và UI/XAML/code-behind scope đều PASS.
+- [x] Không sửa production code, UI/XAML/code-behind, package/project/solution; không commit/push.
+- [x] **Required S1:** engine contract và ViewModel projection đã PASS qua Terra xhigh implementation cùng Luna xhigh review ở slices 15.1–15.2.
+- [ ] **Required S2 — `UI_GATED`:** graceful window-close cleanup chưa có; reference có closing hook để tránh leak port.
+- [x] **Required Q1/Q2:** Terra xhigh implementation đã sửa typed invalid-configuration mapping và giữ first cleanup failure khi cancel-after-open; Sol xhigh review PASS.
+- [ ] **Required Q3:** DBC duplicate message identity/signal name phải lỗi tại parse boundary thay vì fail/ambiguous downstream.
+- [x] Cross-review **Luna high** đã kiểm tra Axis Spec và xác nhận S1/S2; không sửa production/UI.
+- [x] Cross-review **Terra xhigh** đã kiểm tra Axis Standards/security, xác nhận Q1/Q2/Q3 Required; Q4/Q5 Optional.
+- [x] **Sol ultra** đã thiết kế remediation S1 và sequence implementation Q1–Q3; shutdown close hook vẫn `UI_GATED`.
+- [x] **Sol xhigh** đã triển khai slice 15.1 bằng RED→GREEN, không sửa UI/ViewModel behavior.
+- [x] **Terra xhigh** review độc lập slice 15.1 PASS; không có finding Critical/Required.
+- [x] Slice 15.2 đã hoàn tất bằng RED→GREEN và Luna xhigh review PASS.
+- [x] **Sol xhigh** review độc lập slice 15.3 PASS; không có finding Critical/Required.
+- [ ] Next action: **Terra high** triển khai slice 15.4 bằng RED→GREEN, sau đó chuyển **Luna xhigh** review.
+
+### Terra xhigh Axis Standards/security work log — 2026-08-14
+
+- [x] Review độc lập Axis Standards theo correctness, readability, architecture, security và performance; kết luận chi tiết tại [`task15-review-and-hardware-status.md`](task15-review-and-hardware-status.md).
+- [x] Q1: `CanGatewayOptions` validation (same/overlapping channel, zero bitrate, CAN FD overflow) hiện bị map sai thành `Unexpected`; Required phải giữ `InvalidConfiguration` và thêm regression tests.
+- [x] Q2: cancel-after-open gọi cleanup nhưng bỏ qua typed `StopAsync` failure; Required phải dispose best-effort đồng thời giữ first typed cleanup failure và có test deterministic.
+- [x] Q3: DBC duplicate message/signal không bị chặn ở parser boundary; Required phải trả parse issue có line/context, trước các lookup `ToDictionary`/`Single` downstream.
+- [x] Q4/Q5 giữ Optional: giới hạn resource/regex phải được thiết kế trước DBC file-input UI phase; repo formatter baseline không được bulk-normalize vì đụng file UI khóa.
+- [x] Verification độc lập: `dotnet build Simulate.sln --no-restore` PASS 0 warning/0 error; `dotnet test Simulate.sln --no-build --no-restore` PASS 158/158; NuGet vulnerability audit và tracked-source secret-pattern scan PASS.
+- [x] Không sửa production/UI/XAML/code-behind/package/project/solution, không commit/push.
+- [x] Remediation contract/sequence đã chuyển cho **Sol ultra** và được chốt trong design record.
+
+### Sol ultra remediation design work log — 2026-08-14
+
+- [x] Chọn API additive: `ISimulationEngine.LastFailure` và `GatewayStatistics.LastRoutingLatency`; không tạo runtime snapshot type trùng lặp.
+- [x] `LastFailure` giữ first typed root failure của mỗi run, vẫn observable sau worker stop và chỉ reset khi một run mới bắt đầu hợp lệ.
+- [x] `LastRoutingLatency` là `TimeSpan?`, dùng monotonic `TimeProvider`, chỉ đo successful software gateway route; physical bus/analyzer latency vẫn `NEEDS_VERIFY`.
+- [x] ViewModel sẽ project typed failure/statistics và refresh trong `finally` trên faulting stop paths; không thêm XAML, command binding hay code-behind.
+- [x] Chia remediation thành 15.1–15.5 với dependency, lead/reviewer và gate rõ ràng; chi tiết tại [`task15-review-and-hardware-status.md`](task15-review-and-hardware-status.md).
+- [x] Baseline `dotnet build Simulate.sln --no-restore`: PASS 0 warning/0 error. Không sửa production/UI/package/project, không commit/push.
+
+### Slice 15.1 — S1 engine telemetry contract
+
+**Implementation status (2026-08-15):** DONE — `Sol xhigh` implementation PASS; independent `Terra xhigh` review PASS.
+
+**Description:** Thêm durable typed root-failure state và software gateway-routing latency vào public engine seam mà không thay đổi exception/lifecycle ownership hiện hữu.
+
+**Acceptance criteria:**
+- [x] `LastFailure` giữ failure đầu tiên của run, observable trước/sau `StopAsync`; emergency cleanup không ghi đè root cause.
+- [x] `GatewayStatistics.LastRoutingLatency` là immutable `TimeSpan?`, reset về `null` khi start run mới và chỉ cập nhật sau successful routed transmit.
+- [x] Latency dùng monotonic `TimeProvider`; blocked/echo/scheduled frame không cập nhật và không bị mô tả như physical-bus latency.
+
+**Verification:**
+- [x] RED→GREEN tests cho durable transmit/receive failure, root precedence, deterministic latency và reset.
+- [x] Focused engine/scheduler/integration 39/39; full build 0/0; full suite 162/162; stress 390/390; targeted formatter/diff/secret/UI/project scope PASS.
+
+**Dependencies:** Sol ultra remediation design
+**Files likely touched:** `GatewayStatistics.cs`, `ISimulationEngine.cs`, `SimulationEngine.cs`, engine/integration tests và compile-only fake seam updates
+**Estimated scope:** M
+**Model allocation:** Lead `Sol xhigh`; review `Terra xhigh`
+**Skills:** `test-driven-development`, `incremental-implementation`, `api-and-interface-design`
+
+### Sol xhigh slice 15.1 implementation work log — 2026-08-15
+
+- [x] Thêm additive `ISimulationEngine.LastFailure` và `GatewayStatistics.LastRoutingLatency`; không tạo snapshot type mới.
+- [x] First typed root được capture từ receive stream, gateway/scheduler transmit và emergency cleanup; `Interlocked.CompareExchange` giữ failure đầu tiên khi cleanup thứ cấp cũng lỗi.
+- [x] Valid `StartAsync` reset failure/latency sau lifecycle/session validation; invalid restart không xóa failure cũ.
+- [x] Routing latency dùng engine monotonic `TimeProvider`, bắt đầu trước shared transmit gate và kết thúc sau successful session acceptance; block/echo/scheduler/transmit failure không cập nhật.
+- [x] TDD RED được quan sát cho missing API, scheduler capture, cleanup-only capture, native receive capture và latency API; tất cả chuyển GREEN.
+- [x] Verification: focused 39/39; build 0 warning/0 error; full 162/162; high-risk stress 10 vòng = 390/390; targeted formatter, `git diff --check`, secret scan và UI/XAML/code-behind/ViewModel/project/solution scope PASS.
+- [x] Chỉ cập nhật compile-only fake `ISimulationEngine` trong `SimulationViewModelTests`; không sửa `SimulationViewModel` behavior, UI, package/project/solution, commit hoặc push.
+- [x] `Terra xhigh` review gate PASS: không finding Critical/Required; contract/concurrency/test coverage và independent verification đều đạt.
+
+### Terra xhigh slice 15.1 review work log — 2026-08-15
+
+- [x] Axis Spec PASS: first-root failure, valid/invalid restart, latency interval/reset và block/echo/scheduler/failure exclusion đúng frozen contract.
+- [x] Axis Standards PASS: atomic `Volatile`/`Interlocked` operations phù hợp; session ownership và exception behavior không đổi; API additive không phá seam cũ.
+- [x] Native transmit contract trả `HardwareOperationResult`; receive stream direct `HardwareOperationException` được capture. Tests dùng public seam và `ManualTimeProvider`, không phụ thuộc wall-clock.
+- [x] Independent verification: build 0/0; focused 39/39; full 162/162; stress 10 vòng = 390/390; targeted formatter/diff/secret/UI/XAML/code-behind/ViewModel/project/solution scope PASS.
+- [x] Không finding Critical/Required, không sửa file, không commit/push. Slice 15.1 DONE.
+
+### Slice 15.2 — S1 ViewModel projection
+
+**Implementation status (2026-08-15):** DONE — `Terra high` implementation PASS; independent `Luna xhigh` review PASS.
+
+**Implementation evidence:** observable engine failure projection; unconfigured safe defaults; `finally` refresh on both stop fault paths; focused ViewModel tests 9/9, build 0/0, full suite 165/165, targeted formatter/diff/UI scope PASS. No commit or push.
+
+**Description:** Project durable failure và latency-bearing statistics qua `SimulationViewModel` mà không bind hoặc thay đổi UI.
+
+**Acceptance criteria:**
+- [x] `SimulationViewModel.LastFailure` phản chiếu engine; unconfigured state trả `null` và `GatewayStatistics.Empty`.
+- [x] `StopAsync`/`StopSchedulingAsync` refresh state trong `finally`, giữ caller synchronization context và exception gốc.
+- [x] Binding paths hiện hữu và UI/XAML/code-behind không đổi.
+
+**Verification:**
+- [x] RED→GREEN projection/fault-path/synchronization-context tests; targeted + full build/test và UI scope PASS.
+
+**Dependencies:** Slice 15.1
+**Files likely touched:** `SimulationViewModel.cs`, `SimulationViewModelTests.cs`
+**Estimated scope:** S
+**Model allocation:** Lead `Terra high`; review `Luna xhigh`
+**Skills:** `test-driven-development`, `incremental-implementation`
+
+### Luna xhigh slice 15.2 independent review work log — 2026-08-15
+
+- [x] Axis Spec PASS: `LastFailure` projection, unconfigured defaults, latency-bearing statistics projection, `finally` refresh, original exception identity, and no-UI scope match the frozen contract.
+- [x] Axis Standards PASS: public seam remains thin, no new ownership or async-context violation, fault tests are outcome-based, and no security/performance finding applies.
+- [x] Independent verification: ViewModel 9/9; full suite 165/165; targeted formatter, `git diff --check`, and UI/XAML/project/solution scope PASS.
+- [x] No Critical/Required finding. Slice 15.2 is DONE; no production file was changed during review, and no commit/push was performed.
+
+### Slice 15.3 — Q1/Q2 connection boundary
+
+**Implementation status (2026-08-15):** DONE — `Terra xhigh` implementation PASS; independent `Sol xhigh` review PASS.
+
+**Description:** Giữ typed invalid-configuration error và typed cleanup failure khi cancellation thắng sau session open.
+
+**Acceptance criteria:**
+- [x] Zero bitrate, same channel, overlapping mask và CAN FD bitrate overflow trả `InvalidConfiguration`; driver open không bị gọi.
+- [x] Cancel-after-open luôn stop + dispose best-effort, giữ failure đầu tiên (`StopFailed` ưu tiên hơn dispose exception) và không set connected state.
+- [x] Normal disconnect behavior, command availability và UI binding không đổi.
+
+**Verification:**
+- [x] RED→GREEN deterministic tests cho bốn invalid-config cases và cancel-after-open cleanup failure; targeted + full gates PASS.
+
+**Dependencies:** Sol ultra remediation design
+**Files likely touched:** `ConnectionViewModel.cs`, `ConnectionViewModelTests.cs`
+**Estimated scope:** S
+**Model allocation:** Lead `Terra xhigh`; review `Sol xhigh`
+**Skills:** `test-driven-development`, `debugging-and-error-recovery`
+
+### Terra xhigh slice 15.3 implementation work log — 2026-08-15
+
+- [x] Q1 root cause: option-construction `ArgumentException`/`OverflowException` bị map nhầm thành `Unexpected`. Chúng nay trở thành typed `InvalidConfiguration`; cả bốn invalid inputs bị từ chối trước `OpenGatewaySessionAsync`.
+- [x] Q2 root cause: cancel-after-open bỏ qua `StopAsync` result, rồi dispose exception thay thế root cause. Cleanup nay luôn stop rồi dispose best-effort, trả first failure và ưu tiên typed `StopFailed` hơn dispose exception; cancellation không set connected state.
+- [x] RED→GREEN public-seam tests: zero bitrate, matching channel, overlapping masks, CAN FD bitrate overflow, và cancel-after-open với `StopFailed` + dispose exception. Existing normal disconnect/command tests tiếp tục PASS.
+- [x] Verification: focused ConnectionViewModel 11/11; stress 110/110 qua 10 runs; build 0 warning/0 error; full suite 170/170; targeted formatter, `git diff --check`, secret và UI/XAML/project/solution scope PASS. Không commit/push.
+
+### Sol xhigh slice 15.3 independent review work log — 2026-08-15
+
+- [x] Axis Spec PASS: bốn invalid options giữ `InvalidConfiguration` và chặn driver-open; cancel-after-open luôn stop + dispose, ưu tiên typed `StopFailed`, không publish connected session.
+- [x] Axis Standards PASS: cleanup first-failure logic rõ ràng, ViewModel/session ownership không đổi, public-seam tests deterministic, không có security/performance regression.
+- [x] Independent verification tuần tự: build 0/0; focused 11/11; full 170/170; stress 110/110; targeted formatter, diff/secret/UI/project scope PASS.
+- [x] Một gate chạy song song từng gây transient `CS5001` do formatter/build/test tranh generated WPF `obj`; source/App/XAML không đổi và build tuần tự lập tức PASS. Các gate .NET tiếp theo phải chạy tuần tự.
+- [x] No Critical/Required finding. Slice 15.3 DONE; review không sửa production code, không commit/push.
+
+### Slice 15.4 — Q3 duplicate DBC boundary
+
+**Description:** Từ chối duplicate normalized message identity và duplicate signal name ngay tại parser trust boundary.
+
+**Acceptance criteria:**
+- [ ] Thêm typed parse issue code cho duplicate message/signal với exact duplicate line/context; document trả `null` khi có lỗi.
+- [ ] Message key là `(normalized identifier, isExtended)`; signal name so sánh `Ordinal` trong từng message.
+- [ ] Không còn đường duplicate đi tới `FirstOrDefault`/`ToDictionary`/`Single`; tám DBC supplied vẫn parse PASS.
+
+**Verification:**
+- [ ] RED→GREEN parser tests cho hai duplicate cases; focused DBC corpus + full build/test/security/scope gates PASS.
+
+**Dependencies:** Sol ultra remediation design
+**Files likely touched:** `DbcDocument.cs`, `DbcParser.cs`, `DbcParserTests.cs`
+**Estimated scope:** M
+**Model allocation:** Lead `Terra high`; review `Luna xhigh`
+**Skills:** `test-driven-development`, `security-and-hardening`
+
+### Slice 15.5 — final re-review and closure gate
+
+**Acceptance criteria:**
+- [ ] S1/Q1/Q2/Q3 không còn Critical/Required finding; S2 có explicit user decision và không bị sửa ngầm.
+- [ ] Build/full tests/high-risk stress/formatter/supply-chain/secret/UI scope đều PASS.
+- [ ] Hardware matrix tiếp tục phân biệt software `PASS`, static `FAIL` và physical `NEEDS_VERIFY`.
+
+**Dependencies:** Slices 15.1–15.4
+**Model allocation:** Lead `Sol ultra`; cross-review `Luna high` + `Terra xhigh`
 
 ## UI-gated backlog — không triển khai khi chưa được phép
 

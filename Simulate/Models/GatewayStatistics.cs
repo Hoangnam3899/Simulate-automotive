@@ -1,14 +1,16 @@
+using System;
+
 namespace Simulate.Models
 {
     /// <summary>
-    /// Represents an immutable snapshot of gateway frame counters.
+    /// Represents an immutable snapshot of gateway counters and routing telemetry.
     /// </summary>
     public sealed class GatewayStatistics
     {
         /// <summary>
         /// Gets an immutable counter snapshot with every value set to zero.
         /// </summary>
-        public static GatewayStatistics Empty { get; } = new(0, 0, 0, 0, 0, 0, 0);
+        public static GatewayStatistics Empty { get; } = new(0, 0, 0, 0, 0, 0, 0, null);
 
         internal GatewayStatistics(
             long receivedFrames,
@@ -17,7 +19,8 @@ namespace Simulate.Models
             long droppedFrames,
             long injectedFrames,
             long filteredEchoFrames,
-            long scheduledFrames)
+            long scheduledFrames,
+            TimeSpan? lastRoutingLatency)
         {
             ReceivedFrames = receivedFrames;
             TransmittedFrames = transmittedFrames;
@@ -26,6 +29,7 @@ namespace Simulate.Models
             InjectedFrames = injectedFrames;
             FilteredEchoFrames = filteredEchoFrames;
             ScheduledFrames = scheduledFrames;
+            LastRoutingLatency = lastRoutingLatency;
         }
 
         /// <summary>
@@ -62,5 +66,10 @@ namespace Simulate.Models
         /// Gets the number of frames emitted by one-shot, cyclic, or event scheduling.
         /// </summary>
         public long ScheduledFrames { get; }
+
+        /// <summary>
+        /// Gets the latest successful software gateway-routing latency in this run.
+        /// </summary>
+        public TimeSpan? LastRoutingLatency { get; }
     }
 }

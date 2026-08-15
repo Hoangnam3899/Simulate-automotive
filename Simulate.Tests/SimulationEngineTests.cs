@@ -744,6 +744,110 @@ namespace Simulate.Tests
             Assert.IsFalse(engine.IsRunning);
         }
 
+        [TestMethod]
+        public async Task Receive_stream_failure_is_retained_after_the_worker_stops()
+        {
+            await using MockCanGatewaySession innerSession = await OpenSessionAsync();
+            var failure = new HardwareFailure(
+                HardwareOperation.Receive,
+                HardwareErrorCode.ReceiveFailed,
+                "Injected receive stream failure.");
+            await using var session = new ReceiveFailingGatewaySession(innerSession, failure);
+            await using var engine = new SimulationEngine(session, CreatePlan());
+
+            await engine.StartAsync();
+            HardwareOperationException exception =
+                await Assert.ThrowsExceptionAsync<HardwareOperationException>(
+                    () => engine.StopAsync().AsTask());
+
+            Assert.AreSame(failure, exception.Failure);
+            Assert.AreSame(failure, engine.LastFailure);
+            Assert.IsFalse(engine.IsRunning);
+
+            await engine.StartAsync();
+
+            Assert.IsNull(engine.LastFailure);
+            await engine.StopAsync();
+        }
+
+        [TestMethod]
+        public async Task Successful_gateway_route_records_latency_and_valid_restart_resets_it()
+        {
+            await using MockCanGatewaySession innerSession = await OpenSessionAsync();
+            var timeProvider = new ManualTimeProvider();
+            TimeSpan expectedLatency = TimeSpan.FromMilliseconds(17);
+            var session = new AdvancingTransmitGatewaySession(
+                innerSession,
+                timeProvider,
+                expectedLatency);
+            await using var engine = new SimulationEngine(
+                session,
+                CreatePlan(),
+                SimulationEngineOptions.Default,
+                timeProvider);
+
+            Assert.IsNull(engine.Statistics.LastRoutingLatency);
+
+            await engine.StartAsync();
+            Assert.IsTrue((await innerSession.EnqueueReceivedAsync(
+                CanGatewaySide.Rx,
+                CanFrame.CreateClassic(0x456, false, new byte[] { 0xAA }))).IsSuccess);
+            _ = await ReadNextAsync(innerSession.ReceiveTransmittedAsync());
+
+            Assert.AreEqual(expectedLatency, engine.Statistics.LastRoutingLatency);
+
+            await engine.StopAsync();
+            await engine.StartAsync();
+
+            Assert.IsNull(engine.Statistics.LastRoutingLatency);
+            await engine.StopAsync();
+        }
+
+        [TestMethod]
+        public async Task Blocked_and_echo_consumed_frames_do_not_replace_routing_latency()
+        {
+            await using MockCanGatewaySession innerSession = await OpenSessionAsync();
+            var timeProvider = new ManualTimeProvider();
+            TimeSpan expectedLatency = TimeSpan.FromMilliseconds(17);
+            var session = new AdvancingTransmitGatewaySession(
+                innerSession,
+                timeProvider,
+                expectedLatency);
+            await using var engine = new SimulationEngine(
+                session,
+                CreatePlan(isEnabled: true, GatewayMode.Block),
+                SimulationEngineOptions.Default,
+                timeProvider);
+            CanFrame routedFrame = CanFrame.CreateClassic(
+                0x456,
+                isExtendedIdentifier: false,
+                new byte[] { 0xAA });
+
+            await engine.StartAsync();
+            Assert.IsTrue((await innerSession.EnqueueReceivedAsync(
+                CanGatewaySide.Rx,
+                routedFrame)).IsSuccess);
+            RoutedCanFrame transmitted =
+                await ReadNextAsync(innerSession.ReceiveTransmittedAsync());
+            Assert.AreEqual(expectedLatency, engine.Statistics.LastRoutingLatency);
+
+            timeProvider.Advance(TimeSpan.FromMilliseconds(5));
+            Assert.IsTrue((await innerSession.EnqueueReceivedAsync(
+                CanGatewaySide.Rx,
+                CanFrame.CreateClassic(0x123, false, new byte[] { 0xBB }))).IsSuccess);
+            await WaitUntilAsync(() => engine.Statistics.DroppedFrames == 1);
+
+            Assert.AreEqual(expectedLatency, engine.Statistics.LastRoutingLatency);
+
+            Assert.IsTrue((await innerSession.EnqueueReceivedAsync(
+                CanGatewaySide.Tx,
+                transmitted.Frame)).IsSuccess);
+            await WaitUntilAsync(() => engine.Statistics.FilteredEchoFrames == 1);
+
+            Assert.AreEqual(expectedLatency, engine.Statistics.LastRoutingLatency);
+            await engine.StopAsync();
+        }
+
         private static SimulationPlan CreatePlan()
         {
             const string documentText = """
@@ -821,6 +925,15 @@ namespace Simulate.Tests
                 "The asynchronous sequence completed before yielding an item.");
         }
 
+        private static async Task WaitUntilAsync(Func<bool> condition)
+        {
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(1));
+            while (!condition())
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(10), timeout.Token);
+            }
+        }
+
         private sealed class CountingReceiveGatewaySession : ICanGatewaySession
         {
             private readonly MockCanGatewaySession _innerSession;
@@ -860,6 +973,118 @@ namespace Simulate.Tests
                 CanFrame frame,
                 CancellationToken cancellationToken = default)
             {
+                return _innerSession.TransmitAsync(destination, frame, cancellationToken);
+            }
+
+            public ValueTask<HardwareOperationResult> FlushAsync(
+                CancellationToken cancellationToken = default)
+            {
+                return _innerSession.FlushAsync(cancellationToken);
+            }
+
+            public ValueTask<HardwareOperationResult> StopAsync()
+            {
+                return _innerSession.StopAsync();
+            }
+
+            public ValueTask DisposeAsync()
+            {
+                return _innerSession.DisposeAsync();
+            }
+        }
+
+        private sealed class ReceiveFailingGatewaySession : ICanGatewaySession
+        {
+            private readonly MockCanGatewaySession _innerSession;
+            private readonly HardwareFailure _failure;
+            private int _hasFailed;
+
+            public ReceiveFailingGatewaySession(
+                MockCanGatewaySession innerSession,
+                HardwareFailure failure)
+            {
+                _innerSession = innerSession;
+                _failure = failure;
+            }
+
+            public CanGatewayOptions Options => _innerSession.Options;
+
+            public bool IsOpen => _innerSession.IsOpen;
+
+            public async IAsyncEnumerable<RoutedCanFrame> ReceiveAsync(
+                [EnumeratorCancellation] CancellationToken cancellationToken = default)
+            {
+                if (Interlocked.Exchange(ref _hasFailed, 1) == 0)
+                {
+                    await Task.Yield();
+                    yield return await Task.FromException<RoutedCanFrame>(
+                        new HardwareOperationException(_failure));
+                }
+
+                await foreach (RoutedCanFrame frame in
+                    _innerSession.ReceiveAsync(cancellationToken))
+                {
+                    yield return frame;
+                }
+            }
+
+            public ValueTask<HardwareOperationResult> TransmitAsync(
+                CanGatewaySide destination,
+                CanFrame frame,
+                CancellationToken cancellationToken = default)
+            {
+                return _innerSession.TransmitAsync(destination, frame, cancellationToken);
+            }
+
+            public ValueTask<HardwareOperationResult> FlushAsync(
+                CancellationToken cancellationToken = default)
+            {
+                return _innerSession.FlushAsync(cancellationToken);
+            }
+
+            public ValueTask<HardwareOperationResult> StopAsync()
+            {
+                return _innerSession.StopAsync();
+            }
+
+            public ValueTask DisposeAsync()
+            {
+                return _innerSession.DisposeAsync();
+            }
+        }
+
+        private sealed class AdvancingTransmitGatewaySession : ICanGatewaySession
+        {
+            private readonly MockCanGatewaySession _innerSession;
+            private readonly ManualTimeProvider _timeProvider;
+            private readonly TimeSpan _transmitDuration;
+
+            public AdvancingTransmitGatewaySession(
+                MockCanGatewaySession innerSession,
+                ManualTimeProvider timeProvider,
+                TimeSpan transmitDuration)
+            {
+                _innerSession = innerSession;
+                _timeProvider = timeProvider;
+                _transmitDuration = transmitDuration;
+            }
+
+            public CanGatewayOptions Options => _innerSession.Options;
+
+            public bool IsOpen => _innerSession.IsOpen;
+
+            public IAsyncEnumerable<RoutedCanFrame> ReceiveAsync(
+                CancellationToken cancellationToken = default)
+            {
+                return _innerSession.ReceiveAsync(cancellationToken);
+            }
+
+            public ValueTask<HardwareOperationResult> TransmitAsync(
+                CanGatewaySide destination,
+                CanFrame frame,
+                CancellationToken cancellationToken = default)
+            {
+                _timeProvider.Advance(_transmitDuration);
                 return _innerSession.TransmitAsync(destination, frame, cancellationToken);
             }
 
