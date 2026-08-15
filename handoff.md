@@ -1,4 +1,4 @@
-# Handoff — Task 15 slice 15.3 reviewed; next Terra high slice 15.4
+# Handoff — Task 15 backend/review closure complete; awaiting user delivery direction
 
 ## Source of truth
 
@@ -8,9 +8,9 @@
 
 ## Current repository state
 
-- Branch: `chore/merge-agent-skills`; it is ahead of origin by commit `3c67b3d` (Task 14), which is not pushed.
-- Task 14 and Task 15 slices 15.1–15.3 are DONE. Task 15 still requires slices 15.4–15.5 and is not DONE.
-- Production/test changes for slices 15.1–15.3 are uncommitted. Preserve the pre-existing Task 15 documentation changes in the dirty worktree.
+- Branch: `chore/merge-agent-skills` is synchronized with `origin` at `e822c73` (`fix: complete task 15 runtime remediation`).
+- Task 14 and all Task 15 slices 15.1–15.5 are DONE for the backend/review scope. Sol ultra lead, Luna high Axis Spec, and Terra xhigh Axis Standards/security are PASS with no Critical/Required finding.
+- Current uncommitted changes are the slice 15.4 parser/model/test implementation and the completed Task 15 closure documentation. Preserve them until the user explicitly requests commit/push.
 - UI/XAML/code-behind and project/solution configuration remain untouched.
 - Do not commit or push without a new user instruction.
 
@@ -51,21 +51,29 @@
 - Run .NET gates sequentially: a parallel formatter/build/test attempt transiently caused WPF generated-entry-point `CS5001`; App/project/UI were unchanged and immediate sequential build passed 0/0.
 - UI/XAML/code-behind and project/solution scope: PASS. The broad secret-name pattern only found `CancellationToken` parameter names, not credential assignments.
 
-## Remaining Task 15 work
+## Slice 15.4 implementation
+
+- Q3 is now rejected at the parser trust boundary: duplicate normalized `(identifier, isExtendedIdentifier)` BO_ identities return `DuplicateMessageIdentifier`; duplicate signal names within a message return `DuplicateSignalName` using ordinal equality.
+- Both errors retain the exact duplicate line and context and invalidate the document. `VAL_` and signal lookup now use identity/name indexes rather than first-match search.
+- Public-seam RED→GREEN tests cover each duplicate case plus the valid standard/extended same-ID pair. The supplied corpus of eight DBC files remains valid.
+- Verification: DBC parser 13/13; build 0/0; full suite 173/173; targeted formatter/diff, NuGet vulnerability audit, secret scan, and UI/project scope all PASS.
+
+Luna xhigh independent Spec/Standards/security review: PASS, no Critical/Required finding. The review did not modify production code or UI.
+
+## Open gates outside completed Task 15 backend/review scope
 
 - S2 (`UI_GATED`): application close has no explicit session cleanup; the reference project has a closing hook for this exact port-leak risk.
-- Q3: duplicate DBC message identities/signal names are not rejected at the parse boundary.
+- Q3 implementation and Luna xhigh independent review are complete.
+- Slice 15.5 lead gate: PASS — build 0/0; full 173/173; high-risk stress 720/720; formatter, NuGet audit, diff/secret/UI scope PASS. Luna high Axis Spec and Terra xhigh Axis Standards/security cross-reviews both PASS with no Critical/Required finding.
+- Hardware status remains accurately separated as `PASS`/`FAIL`/`NEEDS_VERIFY`; no physical claim was promoted from fake/in-memory evidence.
 
 ## Next action
 
-- Switch to **Terra high** for slice 15.4 Q3 duplicate DBC-boundary validation, then **Luna xhigh** for independent review. Preserve the no-UI rule and begin with parser public-seam RED tests.
-- Keep the shutdown hook paused until the user explicitly permits the exact UI/code-behind change.
-- Keep real Vector items `NEEDS_VERIFY`; no physical bench evidence exists in this run.
+- Await a user instruction to commit/push the verified changes, or an explicit, limited UI/code-behind approval for S2/UI integration.
+- Keep the shutdown hook paused until that UI approval exists, and keep real Vector items `NEEDS_VERIFY` until bench evidence is captured.
 
 ## Suggested skills
 
-1. `test-driven-development` for duplicate message/signal parser-boundary tests.
-2. `security-and-hardening` because DBC text is untrusted external input.
-3. `incremental-implementation` for the parser/model vertical slices.
-4. `code-review` for the following Luna xhigh review.
-4. `git-workflow-and-versioning` only after the user requests a commit or push.
+1. `git-workflow-and-versioning` only after the user requests a commit or push.
+2. `security-and-hardening` and `test-driven-development` before an approved DBC file-input/UI phase.
+3. `code-review` before any further production or UI integration change.

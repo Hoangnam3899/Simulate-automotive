@@ -110,6 +110,66 @@ namespace Simulate.Tests
         }
 
         [TestMethod]
+        public void Parse_rejects_a_duplicate_normalized_message_identity_at_its_declaration_line()
+        {
+            const string documentText = """
+                BO_ 2147483939 FirstExtendedMessage: 8 Gateway
+                BO_ 2147483939 DuplicateExtendedMessage: 8 Gateway
+                """;
+            const string duplicateLine = "BO_ 2147483939 DuplicateExtendedMessage: 8 Gateway";
+
+            DbcParseResult result = DbcParser.Parse(documentText);
+
+            Assert.IsFalse(result.IsSuccess);
+            Assert.IsNull(result.Document);
+            Assert.AreEqual(1, result.Issues.Count);
+            Assert.AreEqual(DbcParseIssueSeverity.Error, result.Issues[0].Severity);
+            Assert.AreEqual(DbcParseIssueCode.DuplicateMessageIdentifier, result.Issues[0].Code);
+            Assert.AreEqual(2, result.Issues[0].LineNumber);
+            Assert.AreEqual(duplicateLine, result.Issues[0].Context);
+        }
+
+        [TestMethod]
+        public void Parse_distinguishes_standard_and_extended_messages_with_the_same_normalized_identifier()
+        {
+            const string documentText = """
+                BO_ 291 StandardMessage: 8 Gateway
+                BO_ 2147483939 ExtendedMessage: 8 Gateway
+                """;
+
+            DbcParseResult result = DbcParser.Parse(documentText);
+
+            Assert.IsTrue(result.IsSuccess);
+            DbcDocument document = result.Document ?? throw new AssertFailedException("A valid DBC document must be returned.");
+            Assert.AreEqual(2, document.Messages.Count);
+            Assert.AreEqual((uint)291, document.Messages[0].Identifier);
+            Assert.IsFalse(document.Messages[0].IsExtendedIdentifier);
+            Assert.AreEqual((uint)291, document.Messages[1].Identifier);
+            Assert.IsTrue(document.Messages[1].IsExtendedIdentifier);
+        }
+
+        [TestMethod]
+        public void Parse_rejects_a_duplicate_signal_name_at_its_declaration_line()
+        {
+            const string documentText = """
+                BO_ 291 Status: 8 Gateway
+                 SG_ Mode : 0|8@1+ (1,0) [0|255] "" Gateway
+                 SG_ Mode : 8|8@1+ (1,0) [0|255] "" Gateway
+                """;
+            const string duplicateLine = " SG_ Mode : 8|8@1+ (1,0) [0|255] \"\" Gateway";
+
+            DbcParseResult result = DbcParser.Parse(documentText);
+
+            Assert.IsFalse(result.IsSuccess);
+            Assert.IsNull(result.Document);
+            Assert.AreEqual(1, result.Issues.Count);
+            Assert.AreEqual(DbcParseIssueSeverity.Error, result.Issues[0].Severity);
+            Assert.AreEqual(DbcParseIssueCode.DuplicateSignalName, result.Issues[0].Code);
+            Assert.AreEqual(3, result.Issues[0].LineNumber);
+            Assert.AreEqual(duplicateLine, result.Issues[0].Context);
+        }
+
+        [TestMethod]
         public void Parse_rejects_a_little_endian_signal_that_extends_beyond_its_payload()
         {
             const string documentText = """

@@ -22,8 +22,10 @@ namespace Simulate.Models
         InvalidMessageDefinition,
         InvalidMessageIdentifier,
         InvalidPayloadLength,
+        DuplicateMessageIdentifier,
         InvalidSignalDefinition,
         InvalidSignalLayout,
+        DuplicateSignalName,
         SignalWithoutMessage,
         UnsupportedStatement,
         InvalidValueDescription

@@ -34,6 +34,7 @@ namespace Simulate.Services
 
             var nodes = new List<DbcNode>();
             var messages = new List<MutableDbcMessage>();
+            var messagesByIdentity = new Dictionary<(uint Identifier, bool IsExtendedIdentifier), MutableDbcMessage>();
             var issues = new List<DbcParseIssue>();
             var reportedUnsupportedStatements = new HashSet<string>(StringComparer.Ordinal);
             MutableDbcMessage? currentMessage = null;
@@ -66,7 +67,21 @@ namespace Simulate.Services
                     currentMessage = ParseMessage(statement, lineNumber, context, issues);
                     if (currentMessage is not null)
                     {
-                        messages.Add(currentMessage);
+                        (uint identifier, bool isExtendedIdentifier) =
+                            (currentMessage.Identifier, currentMessage.IsExtendedIdentifier);
+                        if (!messagesByIdentity.TryAdd((identifier, isExtendedIdentifier), currentMessage))
+                        {
+                            AddError(
+                                issues,
+                                DbcParseIssueCode.DuplicateMessageIdentifier,
+                                lineNumber,
+                                context,
+                                "The BO_ statement duplicates a normalized CAN identifier and extended-identifier state.");
+                        }
+                        else
+                        {
+                            messages.Add(currentMessage);
+                        }
                     }
 
                     continue;
@@ -80,7 +95,7 @@ namespace Simulate.Services
 
                 if (IsStatementOfType(statement, "VAL_"))
                 {
-                    ParseValueDescriptions(statement, messages, lineNumber, context, issues);
+                    ParseValueDescriptions(statement, messagesByIdentity, lineNumber, context, issues);
                     continue;
                 }
 
@@ -240,7 +255,7 @@ namespace Simulate.Services
             string[] receivers = match.Groups["receivers"].Value
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-            currentMessage.AddSignal(new DbcSignal(
+            var signal = new DbcSignal(
                 match.Groups["name"].Value,
                 startBit,
                 bitLength,
@@ -252,12 +267,21 @@ namespace Simulate.Services
                 maximum,
                 match.Groups["unit"].Value,
                 receivers,
-                valueDescriptions: []));
+                valueDescriptions: []);
+            if (!currentMessage.TryAddSignal(signal))
+            {
+                AddError(
+                    issues,
+                    DbcParseIssueCode.DuplicateSignalName,
+                    lineNumber,
+                    context,
+                    "The SG_ statement duplicates a signal name within its containing DBC message.");
+            }
         }
 
         private static void ParseValueDescriptions(
             string statement,
-            List<MutableDbcMessage> messages,
+            IReadOnlyDictionary<(uint Identifier, bool IsExtendedIdentifier), MutableDbcMessage> messagesByIdentity,
             int lineNumber,
             string context,
             List<DbcParseIssue> issues)
@@ -280,9 +304,7 @@ namespace Simulate.Services
                 return;
             }
 
-            MutableDbcMessage? message = messages.FirstOrDefault(candidate =>
-                candidate.Identifier == identifier
-                && candidate.IsExtendedIdentifier == isExtendedIdentifier);
+            messagesByIdentity.TryGetValue((identifier, isExtendedIdentifier), out MutableDbcMessage? message);
             DbcSignal? signal = message?.FindSignal(statementMatch.Groups["signal"].Value);
             if (signal is null)
             {
@@ -547,6 +569,7 @@ namespace Simulate.Services
         private sealed class MutableDbcMessage
         {
             private readonly List<DbcSignal> _signals = new();
+            private readonly Dictionary<string, DbcSignal> _signalsByName = new(StringComparer.Ordinal);
             private readonly Dictionary<string, List<DbcValueDescription>> _valueDescriptions =
                 new(StringComparer.Ordinal);
 
@@ -574,15 +597,20 @@ namespace Simulate.Services
 
             public string Transmitter { get; }
 
-            public void AddSignal(DbcSignal signal)
+            public bool TryAddSignal(DbcSignal signal)
             {
+                if (!_signalsByName.TryAdd(signal.Name, signal))
+                {
+                    return false;
+                }
+
                 _signals.Add(signal);
+                return true;
             }
 
             public DbcSignal? FindSignal(string signalName)
             {
-                return _signals.FirstOrDefault(signal =>
-                    string.Equals(signal.Name, signalName, StringComparison.Ordinal));
+                return _signalsByName.GetValueOrDefault(signalName);
             }
 
             public bool AddValueDescriptions(

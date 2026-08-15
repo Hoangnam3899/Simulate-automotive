@@ -505,10 +505,10 @@
 
 **Description:** Review spec/standards, chạy full verification và kiểm tra hardware thật theo checklist có rollback/cleanup.
 
-**Implementation status (2026-08-15):** REMEDIATION IN PROGRESS — lead/cross-review, `Sol ultra` design và slice 15.1 implementation/review đã hoàn tất. Task 15 chưa DONE vì slices 15.2–15.4 chưa triển khai/re-review và S2 vẫn chờ user UI gate.
+**Implementation status (2026-08-15):** DONE — backend/review closure đã hoàn tất qua `Sol ultra` lead, `Luna high` Axis Spec và `Terra xhigh` Axis Standards/security. S2 graceful-close vẫn `UI_GATED`; hardware Vector thật vẫn `NEEDS_VERIFY` và không bị suy diễn là PASS.
 
 **Acceptance criteria:**
-- [ ] Review correctness, readability, architecture, security và performance không còn blocker.
+- [x] Review correctness, readability, architecture, security và performance không còn blocker trong backend/review scope đã được phép.
 - [x] Hardware checklist phân biệt rõ PASS/FAIL/NEEDS_VERIFY tại [`task15-review-and-hardware-status.md`](task15-review-and-hardware-status.md) và hai bench checklist.
 - [x] PLAN/todo và work log phản ánh đúng trạng thái thực, không đánh dấu hoàn thành theo suy đoán.
 
@@ -532,7 +532,7 @@
 - [x] **Required S1:** engine contract và ViewModel projection đã PASS qua Terra xhigh implementation cùng Luna xhigh review ở slices 15.1–15.2.
 - [ ] **Required S2 — `UI_GATED`:** graceful window-close cleanup chưa có; reference có closing hook để tránh leak port.
 - [x] **Required Q1/Q2:** Terra xhigh implementation đã sửa typed invalid-configuration mapping và giữ first cleanup failure khi cancel-after-open; Sol xhigh review PASS.
-- [ ] **Required Q3:** DBC duplicate message identity/signal name phải lỗi tại parse boundary thay vì fail/ambiguous downstream.
+- [x] **Required Q3:** DBC duplicate message identity/signal name nay lỗi tại parse boundary; Luna xhigh review độc lập PASS.
 - [x] Cross-review **Luna high** đã kiểm tra Axis Spec và xác nhận S1/S2; không sửa production/UI.
 - [x] Cross-review **Terra xhigh** đã kiểm tra Axis Standards/security, xác nhận Q1/Q2/Q3 Required; Q4/Q5 Optional.
 - [x] **Sol ultra** đã thiết kế remediation S1 và sequence implementation Q1–Q3; shutdown close hook vẫn `UI_GATED`.
@@ -540,7 +540,7 @@
 - [x] **Terra xhigh** review độc lập slice 15.1 PASS; không có finding Critical/Required.
 - [x] Slice 15.2 đã hoàn tất bằng RED→GREEN và Luna xhigh review PASS.
 - [x] **Sol xhigh** review độc lập slice 15.3 PASS; không có finding Critical/Required.
-- [ ] Next action: **Terra high** triển khai slice 15.4 bằng RED→GREEN, sau đó chuyển **Luna xhigh** review.
+- [x] Sol ultra slice 15.5 closure gate cùng Luna high và Terra xhigh cross-review đã hoàn tất; Task 15 backend/review scope DONE, chưa commit/push.
 
 ### Terra xhigh Axis Standards/security work log — 2026-08-14
 
@@ -668,15 +668,17 @@
 
 ### Slice 15.4 — Q3 duplicate DBC boundary
 
+**Implementation status (2026-08-15):** DONE — `Terra high` implementation PASS; independent `Luna xhigh` review PASS.
+
 **Description:** Từ chối duplicate normalized message identity và duplicate signal name ngay tại parser trust boundary.
 
 **Acceptance criteria:**
-- [ ] Thêm typed parse issue code cho duplicate message/signal với exact duplicate line/context; document trả `null` khi có lỗi.
-- [ ] Message key là `(normalized identifier, isExtended)`; signal name so sánh `Ordinal` trong từng message.
-- [ ] Không còn đường duplicate đi tới `FirstOrDefault`/`ToDictionary`/`Single`; tám DBC supplied vẫn parse PASS.
+- [x] Thêm typed parse issue code cho duplicate message/signal với exact duplicate line/context; document trả `null` khi có lỗi.
+- [x] Message key là `(normalized identifier, isExtended)`; signal name so sánh `Ordinal` trong từng message.
+- [x] Không còn đường duplicate đi tới `FirstOrDefault`/`ToDictionary`/`Single`; tám DBC supplied vẫn parse PASS.
 
 **Verification:**
-- [ ] RED→GREEN parser tests cho hai duplicate cases; focused DBC corpus + full build/test/security/scope gates PASS.
+- [x] RED→GREEN parser tests cho hai duplicate cases; focused DBC corpus + full build/test/security/scope gates PASS.
 
 **Dependencies:** Sol ultra remediation design
 **Files likely touched:** `DbcDocument.cs`, `DbcParser.cs`, `DbcParserTests.cs`
@@ -684,15 +686,56 @@
 **Model allocation:** Lead `Terra high`; review `Luna xhigh`
 **Skills:** `test-driven-development`, `security-and-hardening`
 
+### Terra high slice 15.4 implementation work log — 2026-08-15
+
+- [x] RED: thêm public-seam tests cho duplicate normalized extended message identity và duplicate `SG_` name; contract yêu cầu error typed, exact line/context và `Document == null`.
+- [x] GREEN: thêm `DuplicateMessageIdentifier`/`DuplicateSignalName`; parser index message theo `(uint Identifier, bool IsExtendedIdentifier)` và signal theo dictionary `StringComparer.Ordinal`.
+- [x] Loại `FirstOrDefault` khỏi lookup `VAL_` và `FindSignal` tại parser boundary; standard/extended cùng normalized ID vẫn là hai message hợp lệ.
+- [x] Verification tuần tự: DbcParser 13/13 (bao gồm corpus 8 DBC); build 0 warning/0 error; full suite 173/173; targeted formatter, `git diff --check`, NuGet vulnerability audit, secret scan và UI/XAML/project/solution scope PASS.
+- [x] Không sửa UI/XAML/code-behind/package/project/solution, không commit/push.
+
+### Luna xhigh slice 15.4 independent review work log — 2026-08-15
+
+- [x] Axis Spec PASS: duplicate normalized message identity và duplicate signal name bị chặn tại parser trust boundary; standard/extended cùng normalized ID vẫn hợp lệ; lỗi giữ exact line/context và làm `Document == null`.
+- [x] Axis Standards/security PASS: tuple key và `StringComparer.Ordinal` đúng contract; duplicate không đi vào document collection; lookup `VAL_`/signal dùng index; không có Critical/Required security, correctness hoặc performance finding.
+- [x] Independent verification: DBC parser 13/13; build 0/0; full suite 173/173; targeted formatter, `git diff --check`, NuGet vulnerability audit, secret và UI/project scope PASS.
+- [x] Không sửa production code/UI trong review. Slice 15.4 DONE; Task 15 còn slice 15.5 và S2 `UI_GATED`.
+
 ### Slice 15.5 — final re-review and closure gate
 
+**Lead status (2026-08-15):** DONE — `Sol ultra` lead PASS; `Luna high` Axis Spec PASS; `Terra xhigh` Axis Standards/security PASS. Task 15 backend/review scope hoàn tất; S2 vẫn `UI_GATED`.
+
 **Acceptance criteria:**
-- [ ] S1/Q1/Q2/Q3 không còn Critical/Required finding; S2 có explicit user decision và không bị sửa ngầm.
-- [ ] Build/full tests/high-risk stress/formatter/supply-chain/secret/UI scope đều PASS.
-- [ ] Hardware matrix tiếp tục phân biệt software `PASS`, static `FAIL` và physical `NEEDS_VERIFY`.
+- [x] S1/Q1/Q2/Q3 không còn Critical/Required finding; S2 có explicit user decision và không bị sửa ngầm.
+- [x] Build/full tests/high-risk stress/formatter/supply-chain/secret/UI scope đều PASS.
+- [x] Hardware matrix tiếp tục phân biệt software `PASS`, static `FAIL` và physical `NEEDS_VERIFY`.
 
 **Dependencies:** Slices 15.1–15.4
 **Model allocation:** Lead `Sol ultra`; cross-review `Luna high` + `Terra xhigh`
+
+### Sol ultra slice 15.5 lead closure work log — 2026-08-15
+
+- [x] Re-review S1/Q1/Q2/Q3 theo Spec/Standards: không còn finding Critical/Required sau các implementation và independent review của slices 15.1–15.4.
+- [x] S2 có explicit user decision từ UI lock: không sửa XAML/code-behind khi chưa có yêu cầu và approval riêng. Graceful window-close cleanup giữ `FAIL (UI_GATED)`, không bị triển khai ngầm và không bị gọi là software PASS.
+- [x] Hardware matrix giữ software/fake evidence `PASS`, known static shutdown gap `FAIL (UI_GATED)` và toàn bộ physical bench claims `NEEDS_VERIFY`.
+- [x] Verification tuần tự: build 0 warning/0 error; full suite 173/173; high-risk Task 15 stress 720/720 qua 10 vòng; targeted formatter PASS; NuGet vulnerability audit PASS; `git diff --check`, tracked-project secret assignment scan và UI/XAML/code-behind/project/solution scope kể từ Task 14 PASS.
+- [x] Broad secret pattern chỉ bắt ví dụ minh họa trong `.agents/skills`; scan project sau khi loại đúng nguồn hướng dẫn PASS. Không có credential dự án bị phát hiện.
+- [x] Không sửa production code/UI trong lead closure, không commit/push.
+
+### Luna high slice 15.5 Axis Spec cross-review work log — 2026-08-15
+
+- [x] Axis Spec PASS: S1 durable failure/latency, Q1 typed configuration, Q2 first cleanup failure, Q3 duplicate DBC boundary đều khớp acceptance và có test evidence; không có Critical/Required gap.
+- [x] S2 PASS về traceability: user decision giữ UI lock được ghi rõ; graceful close không bị gọi là hoàn tất runtime và vẫn là `FAIL (UI_GATED)`.
+- [x] Hardware matrix PASS về phân loại: software/fake `PASS`, static shutdown gap `FAIL`, physical Vector/bench `NEEDS_VERIFY`; không suy diễn physical evidence từ fake tests.
+- [x] Independent focused cross-review suite: 72/72; không sửa production code/UI, không commit/push. Terra xhigh Axis Standards/security cross-review sau đó PASS.
+
+### Terra xhigh slice 15.5 Axis Standards/security cross-review work log — 2026-08-15
+
+- [x] Axis Standards PASS: parser giữ normalized message identity bằng tuple `(identifier, isExtendedIdentifier)` và signal name bằng `StringComparer.Ordinal`; duplicate bị dừng ở trust boundary, không rơi vào document/lookup downstream mơ hồ.
+- [x] Security PASS: DBC text được coi là input ngoài; duplicate identity/name, configuration failure và cancel cleanup đều có typed, deterministic boundary behavior. Q4 document-size/regex bound vẫn Optional vì chưa có DBC file-input UI; phải được thiết kế trước phase UI đó.
+- [x] Independent verification tuần tự: build 0 warning/0 error; full suite 173/173; targeted formatter; NuGet vulnerability audit; `git diff --check`; tracked-project secret scan; UI/XAML/code-behind/project/solution scope đều PASS.
+- [x] Không có finding Critical/Required. Task 15 và Checkpoint E backend/review scope DONE; S2 graceful close giữ `FAIL (UI_GATED)` và physical Vector bench giữ `NEEDS_VERIFY`.
+- [ ] Next action cần chỉ thị người dùng: commit/push thay đổi đã kiểm tra, hoặc approval UI/code-behind riêng nếu muốn xử lý S2/UI integration.
 
 ## UI-gated backlog — không triển khai khi chưa được phép
 

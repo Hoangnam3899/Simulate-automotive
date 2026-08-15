@@ -197,7 +197,7 @@ Nguyên tắc:
 
 **Task 14 Sol xhigh re-review (2026-08-14):** PASS — hai Required findings được giải quyết đúng contract. Post-stop proof quan sát session vẫn mở, input được session nhận nhưng không có TX/counter tăng sau engine stop; reconnect dùng chính fail-once driver instance để mở session khỏe thứ hai. Không có finding Critical/Required mới. Formatter PASS; build 0/0; focused 4/4; full 158/158; `git diff --check` và UI/XAML/code-behind/project/solution scope PASS. Task 14 DONE, chưa commit/push.
 
-- [ ] Task 15: Code review đa trục và hardware verification checklist — lead/cross-review, remediation design và **slices 15.1–15.3 DONE**. Next **Terra high** triển khai slice 15.4, review **Luna xhigh**; slice 15.5 vẫn pending tại [`tasks/task15-review-and-hardware-status.md`](task15-review-and-hardware-status.md).
+- [x] Task 15: Code review đa trục và hardware verification checklist — **backend/review closure DONE**: slices 15.1–15.5, Sol ultra lead, Luna high Axis Spec và Terra xhigh Axis Standards/security đều PASS. S2 graceful-close vẫn `UI_GATED`; Vector bench thật vẫn `NEEDS_VERIFY`, được theo dõi tại [`tasks/task15-review-and-hardware-status.md`](task15-review-and-hardware-status.md).
 
 **Task 15 Sol ultra lead review (2026-08-14):** build 0/0, full 158/158, high-risk stress 350/350, targeted formatter, dependency/secret/log/UI scope gates PASS. Không sửa production/UI và không commit/push. Review phát hiện Required gaps về durable error/latency observability, graceful application-close cleanup (`UI_GATED`), typed connection validation/cancel cleanup failure và duplicate DBC identity validation. Hardware thật chưa chạy; consolidated status phân biệt `PASS`/`FAIL`/`NEEDS_VERIFY` trong tài liệu Task 15. Task chưa DONE.
 
@@ -216,19 +216,20 @@ Nguyên tắc:
 1. [x] Slice 15.1 — S1 engine telemetry contract: **Sol xhigh implementation PASS**, **Terra xhigh review PASS**.
 2. [x] Slice 15.2 — S1 ViewModel projection/failure refresh: **Terra high implementation PASS**, **Luna xhigh review PASS**; phụ thuộc 15.1.
 3. [x] Slice 15.3 — Q1/Q2 connection validation/cancel cleanup: **Terra xhigh implementation PASS**, **Sol xhigh review PASS**; độc lập sau design freeze.
-4. [ ] Slice 15.4 — Q3 duplicate DBC boundary: **Terra high**, review **Luna xhigh**; độc lập sau design freeze.
-5. [ ] Slice 15.5 — full re-review/closure gate: **Sol ultra**, review chéo **Luna high + Terra xhigh**; phụ thuộc 15.1–15.4.
+4. [x] Slice 15.4 — Q3 duplicate DBC boundary: **Terra high implementation PASS**, **Luna xhigh review PASS**; độc lập sau design freeze.
+5. [x] Slice 15.5 — full re-review/closure gate: **Sol ultra lead PASS**, **Luna high Axis Spec PASS**, **Terra xhigh Axis Standards/security PASS**; phụ thuộc 15.1–15.4.
 
 S2 graceful application-close cleanup tiếp tục `UI_GATED`; không nằm trong các backend slice và chỉ được triển khai sau user approval riêng cho `MainWindow.xaml.cs`/UI lifecycle.
 
 ### Checkpoint E — Backend complete
 
 - [x] `dotnet build Simulate.sln` đạt 0 warning, 0 error tại Task 15 lead gate.
-- [x] `dotnet test Simulate.sln` đạt 158/158 tại Task 15 lead gate.
+- [x] `dotnet test Simulate.sln` đạt 173/173 tại closure gate Task 15.
 - [x] Slice 15.1 implementation gate: build 0/0; full 162/162; high-risk stress 390/390; targeted formatter/diff/secret/UI/project scope PASS.
 - [x] `git diff -- Simulate/App.xaml Simulate/MainWindow.xaml Simulate/MainWindow.xaml.cs` không có output.
 - [x] Không còn dữ liệu placeholder làm nguồn sự thật của simulation backend; default simulation projection là typed empty state/plan data.
 - [x] Hardware checklist ghi rõ software evidence `PASS`, known static gap `FAIL` và physical bench `NEEDS_VERIFY`.
+- [x] Task 15 closure: không có finding Critical/Required trong lead và hai cross-review; S2 giữ `UI_GATED`, không bị đánh dấu sai là PASS.
 - [ ] Sẵn sàng xin phép riêng cho UI integration nếu người dùng muốn kích hoạt toàn bộ thao tác từ giao diện.
 
 ## 8. Những phần UI bị hoãn có chủ đích

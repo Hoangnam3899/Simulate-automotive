@@ -1,10 +1,10 @@
 # Task 15 — Lead Review and Hardware Status
 
-> Status: **SLICES 15.1–15.3 DONE — SLICE 15.4 NEXT — TASK 15 NOT DONE**
+> Status: **TASK 15 / CHECKPOINT E BACKEND-REVIEW COMPLETE — S2 UI_GATED / PHYSICAL HARDWARE NEEDS_VERIFY REMAIN**
 >
 > Date: 2026-08-15
 >
-> Next gate: slice 15.4 Q3 duplicate DBC boundary by **Terra high**, then review by **Luna xhigh**.
+> Next permitted work: await user instruction for commit/push, or explicit UI/code-behind approval for S2/UI integration.
 
 ## Scope and evidence boundary
 
@@ -455,10 +455,53 @@ Detailed bench procedures:
 - [`vector-classic-can-hardware-checklist.md`](vector-classic-can-hardware-checklist.md)
 - [`vector-can-fd-hardware-checklist.md`](vector-can-fd-hardware-checklist.md)
 
-## Next review sequence
+## Sol ultra slice 15.5 lead closure — 2026-08-15
 
-1. Reviews, the **Sol ultra** design, and slices 15.1–15.3 are complete without changing UI.
-2. Switch to **Terra high** for slice 15.4, followed by independent **Luna xhigh** review.
-3. Continue slice 15.5 only after slice 15.4 passes its RED→GREEN and review gates.
-   The shutdown hook remains paused until the user explicitly permits the exact UI/code-behind change.
-4. Re-run build/full tests/stress/scope gates. Only then may Task 15 and Checkpoint E be marked DONE.
+Result: **LEAD PASS — BOTH CROSS-REVIEWS SUBSEQUENTLY PASS**. S1/Q1/Q2/Q3 no longer have a Critical or Required
+finding after slices 15.1–15.4 and their independent reviews. S2 has an explicit user decision:
+the UI/code-behind lock remains in force, so graceful window-close cleanup stays accurately recorded
+as `FAIL (UI_GATED)` and was not implemented implicitly.
+
+| Slice 15.5 lead gate | Result |
+|---|---|
+| Build | PASS — 0 warnings, 0 errors |
+| Full suite | PASS — 173/173 |
+| High-risk Task 15 stress | PASS — 72 tests × 10 runs = 720/720 |
+| Targeted formatter | PASS — all S1/Q1/Q2/Q3 production/test files |
+| NuGet vulnerability audit | PASS — no vulnerable direct/transitive packages |
+| Diff / tracked-project secret scan | PASS |
+| UI/XAML/code-behind/project/solution scope since Task 14 | PASS |
+| Hardware status separation | PASS — software `PASS`, static S2 `FAIL`, physical `NEEDS_VERIFY` |
+| Production/UI changes during closure | None |
+| Commit/push | None |
+
+The broad secret pattern matched only example assignments in `.agents/skills`; the project scan that
+excluded this instruction corpus found no credential assignment. No real Vector bench was available,
+so none of the physical `NEEDS_VERIFY` rows were promoted to `PASS`.
+
+## Terra xhigh slice 15.5 Axis Standards/security cross-review — 2026-08-15
+
+Result: **PASS — no Critical or Required finding.** This review checked the completed S1/Q1/Q2/Q3
+diff against correctness, readability, architecture, security, and performance, with DBC text treated
+as untrusted parser input.
+
+- Correctness/architecture: the parser uses the frozen `(normalized identifier, isExtendedIdentifier)`
+  identity and ordinal signal-name boundary. Duplicate declarations do not enter the returned document;
+  indexed `VAL_` and signal lookup remove the former first-match ambiguity.
+- Security/performance: typed duplicate diagnostics preserve exact source line/context and the supplied
+  corpus remains valid. No secret, dependency, unbounded new loop, or configuration/UI concern was
+  introduced. The document-size/regex resource bound remains Optional until a separately approved DBC
+  file-input phase creates that interactive ingress.
+- Independent sequential verification: build 0 warnings/0 errors; full suite 173/173; targeted
+  formatter; NuGet vulnerability audit; `git diff --check`; tracked-project secret scan; and
+  UI/XAML/code-behind/project/solution scope all PASS.
+- No production/UI file was changed in this review. No commit or push was performed.
+
+## Closure and next permitted work
+
+1. Slices 15.1–15.4, the **Sol ultra** lead gate, and both independent cross-reviews are PASS.
+2. Task 15 and Checkpoint E backend/review scope are complete without changing UI.
+3. S2 remains `FAIL (UI_GATED)` until the user explicitly permits the exact window-close
+   UI/code-behind lifecycle change; it is not a software PASS.
+4. Every physical Vector/bench row remains `NEEDS_VERIFY`. The next action requires a user instruction
+   to commit/push the verified changes or a separate, narrowly scoped UI approval.
