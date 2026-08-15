@@ -83,9 +83,58 @@ namespace Simulate.Tests
             Assert.AreEqual("Virtual CAN Bus 1", result.Value[0].Name);
             Assert.AreEqual(1, result.Value[0].Channels.Count);
             Assert.AreEqual(1, result.Value[0].Channels[0].ChannelIndex);
-            Assert.AreEqual(2UL, result.Value[0].Channels[0].ChannelMask);
-            Assert.AreEqual(250_000u, result.Value[0].Channels[0].DefaultBaudrate);
+            Assert.AreEqual("VIRTUAL Channel 2", result.Value[0].Channels[0].Name);
             Assert.IsFalse(api.IsDriverOpen);
+        }
+
+        [TestMethod]
+        public async Task Discovery_formats_channel_name_with_hardware_type_and_channel_number()
+        {
+            var api = new FakeVectorXlApi
+            {
+                Channels = new VectorChannelDescriptor[]
+                {
+                    new()
+                    {
+                        HardwareTypeCode = 57,
+                        HardwareTypeName = "VN1640A",
+                        HardwareIndex = 0,
+                        HardwareChannel = 0,
+                        ChannelIndex = 0,
+                        ChannelMask = 1,
+                        IsPresent = true,
+                        IsVirtual = false,
+                        HasActiveCanCapability = true,
+                        TransceiverName = "CANpiggy 1057Gcap",
+                        CurrentCanBitrate = 500_000
+                    },
+                    new()
+                    {
+                        HardwareTypeCode = 57,
+                        HardwareTypeName = "VN1640A",
+                        HardwareIndex = 0,
+                        HardwareChannel = 1,
+                        ChannelIndex = 1,
+                        ChannelMask = 2,
+                        IsPresent = true,
+                        IsVirtual = false,
+                        HasActiveCanCapability = true,
+                        TransceiverName = "CANpiggy 1057Gcap",
+                        CurrentCanBitrate = 500_000
+                    }
+                }
+            };
+            var service = new VectorHardwareService(() => api);
+
+            HardwareOperationResult<IReadOnlyList<HardwareInterface>> result =
+                await service.DiscoverInterfacesAsync();
+
+            Assert.IsTrue(result.IsSuccess);
+            Assert.AreEqual(1, result.Value!.Count);
+            Assert.AreEqual("VN1640A 1", result.Value[0].Name);
+            Assert.AreEqual(2, result.Value[0].Channels.Count);
+            Assert.AreEqual("VN1640A Channel 1", result.Value[0].Channels[0].Name);
+            Assert.AreEqual("VN1640A Channel 2", result.Value[0].Channels[1].Name);
         }
 
         [TestMethod]
@@ -371,6 +420,76 @@ namespace Simulate.Tests
             Assert.AreEqual(500_000u, api.LastCanFdNominalBitrate);
             Assert.AreEqual(2_000_000u, api.LastCanFdDataBitrate);
             Assert.AreEqual(VectorCanFdProtocolMode.Iso, api.LastCanFdProtocolMode);
+        }
+
+        [TestMethod]
+        public async Task CAN_FD_session_configures_independent_bitrates_when_rx_and_tx_differ()
+        {
+            var api = new FakeVectorXlApi();
+            var service = new VectorHardwareService(() => api);
+            var rxChannel = new HardwareChannel { Name = "RX", ChannelIndex = 0, ChannelMask = 1 };
+            var txChannel = new HardwareChannel { Name = "TX", ChannelIndex = 1, ChannelMask = 2 };
+            var options = CanGatewayOptions.CreateFlexibleDataRate(
+                rxChannel,
+                txChannel,
+                rxNominalBitrate: 250_000,
+                txNominalBitrate: 500_000,
+                rxDataBitrate: 1_000_000,
+                txDataBitrate: 2_000_000);
+
+            HardwareOperationResult<ICanGatewaySession> openResult =
+                await service.OpenGatewaySessionAsync(options);
+
+            Assert.IsTrue(openResult.IsSuccess);
+            await using ICanGatewaySession session = openResult.Value!;
+            Assert.AreEqual(2, api.CanFdBitrateCalls.Count);
+            Assert.AreEqual((1UL, 250_000u, 1_000_000u), api.CanFdBitrateCalls[0]);
+            Assert.AreEqual((2UL, 500_000u, 2_000_000u), api.CanFdBitrateCalls[1]);
+        }
+
+        [TestMethod]
+        public async Task Classic_session_configures_independent_bitrates_when_rx_and_tx_differ()
+        {
+            var api = new FakeVectorXlApi();
+            var service = new VectorHardwareService(() => api);
+            var rxChannel = new HardwareChannel { Name = "RX", ChannelIndex = 0, ChannelMask = 1 };
+            var txChannel = new HardwareChannel { Name = "TX", ChannelIndex = 1, ChannelMask = 2 };
+            var options = CanGatewayOptions.CreateClassic(
+                rxChannel,
+                txChannel,
+                rxNominalBitrate: 250_000,
+                txNominalBitrate: 500_000);
+
+            HardwareOperationResult<ICanGatewaySession> openResult =
+                await service.OpenGatewaySessionAsync(options);
+
+            Assert.IsTrue(openResult.IsSuccess);
+            await using ICanGatewaySession session = openResult.Value!;
+            Assert.AreEqual(2, api.ClassicBitrateCalls.Count);
+            Assert.AreEqual((1UL, 250_000u), api.ClassicBitrateCalls[0]);
+            Assert.AreEqual((2UL, 500_000u), api.ClassicBitrateCalls[1]);
+        }
+
+        [TestMethod]
+        public async Task CAN_FD_session_allows_equal_500k_nominal_and_500k_data_bitrate()
+        {
+            var api = new FakeVectorXlApi();
+            var service = new VectorHardwareService(() => api);
+            var rxChannel = new HardwareChannel { Name = "RX", ChannelIndex = 0, ChannelMask = 1 };
+            var txChannel = new HardwareChannel { Name = "TX", ChannelIndex = 1, ChannelMask = 2 };
+            var options = CanGatewayOptions.CreateFlexibleDataRate(
+                rxChannel,
+                txChannel,
+                nominalBitrate: 500_000,
+                dataBitrate: 500_000);
+
+            HardwareOperationResult<ICanGatewaySession> openResult =
+                await service.OpenGatewaySessionAsync(options);
+
+            Assert.IsTrue(openResult.IsSuccess);
+            await using ICanGatewaySession session = openResult.Value!;
+            Assert.AreEqual(500_000u, api.LastCanFdNominalBitrate);
+            Assert.AreEqual(500_000u, api.LastCanFdDataBitrate);
         }
 
         [TestMethod]
@@ -1253,11 +1372,16 @@ namespace Simulate.Tests
                     GrantedPermissionMask ?? accessMask);
             }
 
+            public List<(ulong AccessMask, uint Bitrate)> ClassicBitrateCalls { get; } = new();
+
+            public List<(ulong AccessMask, uint NominalBitrate, uint DataBitrate)> CanFdBitrateCalls { get; } = new();
+
             public VectorNativeStatus SetClassicCanBitrate(
                 int portHandle,
                 ulong accessMask,
                 uint bitrate)
             {
+                ClassicBitrateCalls.Add((accessMask, bitrate));
                 return ConfigurationStatus;
             }
 
@@ -1271,6 +1395,7 @@ namespace Simulate.Tests
                 LastCanFdNominalBitrate = nominalBitrate;
                 LastCanFdDataBitrate = dataBitrate;
                 LastCanFdProtocolMode = protocolMode;
+                CanFdBitrateCalls.Add((accessMask, nominalBitrate, dataBitrate));
                 return ConfigurationStatus;
             }
 

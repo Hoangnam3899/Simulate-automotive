@@ -1,3 +1,6 @@
+using System;
+using System.ComponentModel;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using Simulate.ViewModels;
@@ -6,10 +9,46 @@ namespace Simulate
 {
     public partial class MainWindow : Window
     {
+        private bool _isShutdownStarted;
+        private bool _isShutdownComplete;
+
         public MainWindow()
         {
             InitializeComponent();
             DataContext = new MainViewModel();
+            Closing += MainWindow_Closing;
+        }
+
+        private async void MainWindow_Closing(object? sender, CancelEventArgs e)
+        {
+            if (_isShutdownComplete || DataContext is not MainViewModel viewModel)
+            {
+                return;
+            }
+
+            e.Cancel = true;
+            if (_isShutdownStarted)
+            {
+                return;
+            }
+
+            _isShutdownStarted = true;
+            await Task.Yield();
+
+            try
+            {
+                await viewModel.ShutdownAsync();
+            }
+            catch (Exception)
+            {
+                // Runtime failures remain observable on the view models; the window must still finish closing.
+            }
+            finally
+            {
+                _isShutdownComplete = true;
+                Closing -= MainWindow_Closing;
+                Close();
+            }
         }
 
         private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)

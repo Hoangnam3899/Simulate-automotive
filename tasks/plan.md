@@ -232,18 +232,158 @@ S2 graceful application-close cleanup tiếp tục `UI_GATED`; không nằm tron
 - [x] Task 15 closure: không có finding Critical/Required trong lead và hai cross-review; S2 giữ `UI_GATED`, không bị đánh dấu sai là PASS.
 - [ ] Sẵn sàng xin phép riêng cho UI integration nếu người dùng muốn kích hoạt toàn bộ thao tác từ giao diện.
 
-## 8. Những phần UI bị hoãn có chủ đích
+## 8. Phase 5 — Binding backend vào 10 khu vực UI, user-gated tuần tự
 
-UI hiện tại chỉ có command binding cho Connect/Disconnect/Refresh; các control simulation phần lớn chưa có command hoặc binding thao tác. Vì vậy các hành vi sau chỉ được chuẩn bị ở backend/ViewModel và **không nối vào XAML** trong PLAN này:
+### 8.1. Phạm vi được phép và rào chắn tuyệt đối
 
-- Load DBC từ nút UI;
-- Start/Stop/Emergency Stop simulation;
-- Add/Remove/Clear fault queue;
-- chỉnh signal override trực tiếp từ grid;
-- pause/clear live monitor;
-- hiển thị error/status/counter mới cần thêm binding.
+Phase này chỉ liên kết backend/ViewModel đã có hoặc seam tối thiểu còn thiếu vào **control hiện hữu**.
+Yêu cầu lập kế hoạch này không tự động cho phép sửa source UI. Trước mỗi khu vực, người dùng phải cho
+phép rõ ràng đúng khu vực đó.
 
-Khi cần các thao tác này, phải tạo một approval gate riêng, liệt kê chính xác binding/control dự kiến sửa và chờ người dùng cho phép.
+`Binding-only` được hiểu là:
+
+- chỉ thêm/sửa `Binding`, `Command`, `ItemsSource`, `SelectedItem`, `IsChecked`, `IsEnabled` hoặc
+  state projection trên control đã tồn tại, sau khi có approval của khu vực;
+- có thể thêm ViewModel command/property, composition/lifecycle seam và test cần thiết để binding hoạt động;
+- không thêm, xóa, đổi loại hoặc đổi thứ tự control; không sửa layout, kích thước, màu, font, style,
+  resource, label, icon hoặc nội dung thiết kế;
+- không biến placeholder thành dữ liệu giả mới; giá trị chưa có evidence phải hiển thị từ typed state
+  hoặc trạng thái không khả dụng, không được hardcode;
+- `MainWindow.xaml.cs` chỉ được chạm cho graceful shutdown của UI-01 sau approval exact; không đưa
+  business/hardware logic vào code-behind;
+- không thêm package, không sửa `.csproj`/`.sln`, không commit/push nếu chưa có lệnh riêng.
+
+### 8.2. State machine bắt buộc cho từng khu vực
+
+```text
+LOCKED
+  └─ user cho phép đúng khu vực ─► IMPLEMENTING
+       └─ build/test/review PASS ─► WAITING_USER_DEBUG
+            ├─ user báo lỗi ──────► DEBUG_RETURN ─► WAITING_USER_DEBUG
+            └─ user nói PASS/cho qua ─► USER_ACCEPTED ─► mở khóa khu vực kế tiếp
+```
+
+- Agent/reviewer không được tự đổi `WAITING_USER_DEBUG` thành `USER_ACCEPTED`.
+- Không triển khai song song hai khu vực. Việc chia model là chia lead/reviewer/debug specialist trong
+  cùng một gate, không phải quyền bỏ qua thứ tự 1→10.
+- Nếu user tìm thấy lỗi, coordinator giữ nguyên task hiện tại, phân loại lỗi và đề xuất model phù hợp
+  trước khi sửa; không được chuyển sang khu vực kế tiếp.
+
+Mỗi lần chuyển trạng thái hoặc mở khu vực mới, coordinator phải cập nhật đồng thời `tasks/plan.md`,
+`tasks/todo.md`, `handoff.md` và báo rõ cho user 5 điểm: (1) UI nào đang mở, (2) UI đó làm những gì,
+(3) files/seam được phép chạm, (4) lead/reviewer model nào, (5) tiêu chí manual debug để user xác nhận.
+Không dùng câu chung chung như “tiếp tục UI”; phải ghi tên panel và hành vi cụ thể.
+
+### 8.3. Dependency và phân bổ model
+
+| UI | Khu vực | Backend/seam chính | Lead | Independent review | Trạng thái |
+|---|---|---|---|---|---|
+| 1 | Connection / Setup | `ConnectionViewModel`, baudrate contract, session ownership, graceful close | **Terra xhigh → Sol ultra** | **Terra xhigh** | `DEBUG_RETURN — baudrate architecture/state defect reported by user` |
+| 2 | DBC Management | safe file input, `DbcParser`, document/composition state | **Terra xhigh** | **Sol xhigh** | `LOCKED_BY_UI-01` |
+| 3 | TX Message List | DBC projection và editable simulation draft | **Terra xhigh** | **Luna xhigh** | `LOCKED_BY_UI-02` |
+| 4 | Live Signal Monitor | bounded live-frame/signal telemetry, Dispatcher projection | **Sol ultra** | **Terra xhigh** | `LOCKED_BY_UI-03` |
+| 5 | Fault Configuration | selected signal + typed timing/fault draft validation | **Terra xhigh** | **Luna high** | `LOCKED_BY_UI-04` |
+| 6 | Signal Value Configuration | physical value/`VAL_` selection và override replacement | **Terra xhigh** | **Sol xhigh** | `LOCKED_BY_UI-05` |
+| 7 | Execution Control | engine/session start-stop-pause lifecycle | **Sol ultra** | **Terra xhigh** | `LOCKED_BY_UI-06` |
+| 8 | Log / Output | bounded observable application log, filter/clear/export | **Terra high** | **Luna high** | `LOCKED_BY_UI-07` |
+| 9 | Bus Monitor / Health | typed runtime/native health telemetry + bounded history | **Sol ultra** | **Terra xhigh** | `LOCKED_BY_UI-08` |
+| 10 | Status Overview | aggregate connection/DBC/engine/health + footer projection | **Terra xhigh** | **Luna high** | `LOCKED_BY_UI-09` |
+
+Sau UI-10, **Sol ultra** thực hiện final lifecycle/race review; người dùng vẫn là final runtime gate.
+
+**UI-01 DEBUG_RETURN — baudrate contract (2026-08-15):** User reported three related defects: TX/RX baudrate
+controls bind to one `Connection.Baudrate`; selecting TX implicitly overwrites the user's baudrate from
+`HardwareChannel.DefaultBaudrate`; and CAN FD data bitrate is forced to `nominal * 4`. This is one cross-layer
+contract issue, not a UI redesign request. First route to **Terra xhigh** to freeze independent `BaudrateTx`,
+`BaudrateRx` and explicit CAN FD data-bitrate state/selection without changing visual controls. Then route to
+**Sol ultra** for Vector/native `CanGatewayOptions` and `VectorHardwareService` per-channel bitrate configuration.
+Do not return to `WAITING_USER_DEBUG` or open UI-02 until both slices are reviewed, built/tested, and user retests.
+
+**UI-01 DEBUG_RETURN — CAN/CAN FD flexibility extension (2026-08-15):** User additionally reported that the
+current backend is only an On/Off CAN FD switch. The four recorded gaps are: (1) data bitrate remains derived from
+nominal bitrate; (2) Vector FD bit timing uses fixed SJW/TSEG values instead of a selectable/calculated timing
+profile; (3) one global FD flag prevents heterogeneous Classic-CAN ↔ CAN-FD gateway sides; and (4) protocol mode
+is fixed to ISO, with no Bosch Non-ISO option. This expands the same baudrate/configuration contract and does not
+authorize a UI redesign. **Terra xhigh** must first define typed per-side CAN/FD mode, nominal/data bitrate, timing
+profile and ISO/Non-ISO protocol state. **Sol ultra** then maps that contract to `VectorXlApi`/Vector XL timing and
+native configuration. A new Data Bitrate ComboBox or per-channel mode controls are `UI_SHAPE_GATED` and require
+explicit user approval; do not add them under the existing binding-only approval.
+
+**Terra xhigh assessment and slice 1 (2026-08-15):** The shared TX/RX binding, current-bitrate overwrite,
+combined-mask configuration, global FD mode and `nominal * 4` calculation are confirmed by the source. The
+Non-ISO diagnosis is partly refined: `VectorXlApi` already maps `VectorCanFdProtocolMode.NonIso` to Vector's
+`XL_CANFD_CONFOPT_NO_ISO`, but `VectorHardwareService` always supplies `Iso`, so the application contract does
+not expose the capability. The fixed `SJW/TSEG` values are a real flexibility defect; however a universal 80 MHz
+or 80% timing lookup is not justified for every Vector/Virtual channel without confirmed controller clock/device
+documentation. Slice 1 fixes the proven user-state defect: selecting TX retains the user-selected bitrate while
+still adding the channel's observed bitrate to the selectable list. TDD regression test was RED (500000 became
+250000) then GREEN. Build 0/0, Connection tests 19/19, full 183/183, targeted formatter and diff check PASS.
+No XAML or UI-shape change, commit, or push.
+
+**UI-01 bitrate flexibility & binding fix (2026-08-15):** Đã hoàn tất sửa toàn diện theo yêu cầu người dùng:
+1. `Baudrate TX` và `Baudrate RX` tách binding riêng tới `Connection.BaudrateTx` và `Connection.BaudrateRx` trên XAML hiện hữu.
+2. Dải Nominal Bitrates chuẩn độc lập: 125k, 250k, 500k, 1M (default 500k).
+3. Dải Data Bitrates chuẩn: 500k, 1M, 2M, 4M, 5M, 8M (default 2M).
+4. CAN FD hỗ trợ Nominal 500k / Data 500k hợp lệ; loại bỏ phép nhân cứng `Baudrate * 4`.
+5. Chọn kênh không tự động ghi đè giá trị baudrate do người dùng đã chọn.
+6. `VectorHardwareService` áp dụng cấu hình độc lập trên `TxChannel.ChannelMask` và `RxChannel.ChannelMask` khi bitrate hai bên khác nhau.
+7. Verification: `dotnet build Simulate.sln` PASS 0 warning/0 error; `dotnet test Simulate.sln` PASS 189/189 tests.
+
+**UI-01 review checkpoint (2026-08-15):** binding-only implementation và independent review
+đều PASS; trạng thái hiện tại là `WAITING_USER_DEBUG`. Sáu control cấu hình hiện hữu chỉ thêm `IsEnabled` binding;
+không đổi visual tree/layout/style/content. `ConnectionViewModel` giữ single-owner session, handoff borrowed
+session cho composition, khóa double action và shutdown idempotent; `MainViewModel` dừng simulation trước
+connection cleanup; `MainWindow.xaml.cs` chỉ có closing delegation tối thiểu. Build 0/0, full 189/189,
+lifecycle stress 10/10 vòng, formatter/diff/secret/config scope PASS. User cần manual debug
+Refresh → chọn TX/RX → Connect → Disconnect, close khi connected/đang open, mở lại và reconnect; UI-02 vẫn khóa
+cho đến khi user nói UI-01 PASS.
+
+### 8.4. Kết quả bắt buộc theo từng khu vực
+
+| UI | Binding outcome | Manual debug gate của người dùng |
+|---|---|---|
+| 1 | Refresh/select/connect/disconnect/status dùng state thật; pending operation và session cleanup hữu hạn | Cắm/chọn interface, connect/disconnect, đóng app khi đang connect, mở lại và reconnect |
+| 2 | Load/unload DBC, filename/valid state/counts thật; external file có size/regex bounds | Chọn DBC hợp lệ/sai/trùng, unload/reload và kiểm tra message/node/signal count |
+| 3 | Grid dùng đúng message fields; Add/Delete/Delete All/Move dùng selected row và draft state | Kiểm tra thứ tự, enable, mode/send type/cycle/signal count; xác nhận behavior cell-action bị gate nếu cần đổi control |
+| 4 | Raw/physical/unit/status/timestamp cập nhật bounded; search/filter/pause/clear hoạt động | Chạy traffic, pause/resume/clear, lọc theo message và kiểm tra UI không freeze |
+| 5 | Selected signal và fault/timing fields tạo queue item typed, validation không làm crash | Nhập valid/invalid timing/value, Add to Queue, kiểm tra item và thông báo lỗi |
+| 6 | Value edit/`VAL_` map thành physical override; min/max/step và filter đúng | Đổi numeric/label value, bật/tắt override, kiểm tra payload qua Mock/hardware phù hợp |
+| 7 | Start/Stop/Pause/Resume/Clear Queue và status dùng engine thật, command state chống double action | Chạy injection, pause/resume/stop, lặp nhanh và kiểm tra cleanup; `Emergency` không được tuyên bố có UI nếu chưa có control |
+| 8 | Log thật, bounded, lọc level, clear và export an toàn | Tạo connect/load/run/error events, lọc/clear/export rồi đối chiếu file |
+| 9 | Health counters/history dùng evidence thật; metric không có nguồn phải hiện unavailable, không fake | Chạy traffic/fault/soak, đối chiếu received/dropped/error/latency và kiểm tra graph bounded |
+| 10 | Status overview/footer tổng hợp đúng 1–9, không còn chuỗi demo làm runtime truth | Chạy full flow connect→DBC→configure→inject→stop→disconnect và kiểm tra mọi trạng thái |
+
+### 8.5. Routing model khi user báo lỗi
+
+| Loại lỗi debug | Model đề xuất |
+|---|---|
+| Native Vector, connect/disconnect, close app, race, leak, scheduler/emergency | **Sol ultra** |
+| Binding path, command/CanExecute, validation, ViewModel/composition, DBC projection | **Terra xhigh** |
+| Reproduce test, fixture/corpus, kiểm tra field mapping và regression cơ học | **Luna xhigh** |
+| Parser/file input resource bound, regex/performance hoặc codec/override edge | **Sol xhigh** phối hợp **Terra xhigh** |
+
+### 8.6. Quy trình user báo lỗi và coordinator phân agent
+
+User không cần tự phân biệt lỗi thuộc model nào. User chỉ cần gửi mô tả lỗi cho coordinator; coordinator
+sẽ đọc symptom, log/screenshot và bước tái hiện để phân loại, cập nhật khu vực hiện tại thành `DEBUG_RETURN`,
+sau đó trả lại đúng model cần chuyển sang. Coordinator phải nói rõ model trước khi user chuyển; không tự mở
+khu vực tiếp theo trong lúc lỗi chưa được đóng.
+
+Thông tin user nên gửi (có gì gửi nấy): panel đang test, thao tác vừa làm, expected, actual, thông báo lỗi/log,
+và lỗi có tái hiện lại được không. Nếu thiếu dữ liệu để phân loại, coordinator hỏi bổ sung trước, không đoán
+model và không sửa code.
+
+| Dấu hiệu user quan sát được | Phân loại coordinator | Model user chuyển sang |
+|---|---|---|
+| Vector không mở/đóng, connect/disconnect sai, app đóng treo, double-open, race, leak | Native/lifecycle/concurrency | **Sol ultra** |
+| Nút/ComboBox không enable đúng, binding không cập nhật, Connected state sai, command không chạy | Binding/CanExecute/ViewModel state | **Terra xhigh** |
+| Không tái hiện ổn định, sai mapping field, cần thêm fixture/regression test | Reproduction/test fixture | **Luna xhigh** |
+| DBC/file input, giới hạn tài nguyên, regex/performance hoặc codec/override edge | Parser/resource/domain edge | **Sol xhigh**, phối hợp **Terra xhigh** |
+
+Sau khi user chuyển model và model sửa xong, coordinator sẽ yêu cầu review/build/test lại rồi trả UI-01 về
+`WAITING_USER_DEBUG`. Chỉ câu `UI-01 PASS` của user mới được đổi thành `USER_ACCEPTED` và mở UI-02.
+
+Coordinator phải nêu model cần chuyển cùng lý do sau mỗi lỗi; model sửa và model review nên khác nhau.
 
 ## 9. Verification bắt buộc cho mỗi task
 

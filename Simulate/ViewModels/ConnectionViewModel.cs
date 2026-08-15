@@ -13,9 +13,13 @@ namespace Simulate.ViewModels
     public partial class ConnectionViewModel : ObservableObject
     {
         private readonly ICanHardwareDriver _hardwareDriver;
+        private readonly object _lifecycleSync = new();
         private CancellationTokenSource? _operationCancellation;
+        private TaskCompletionSource<object?>? _operationCompletion;
         private ICanGatewaySession? _gatewaySession;
-        private int _isOperationActive;
+        private Task? _shutdownTask;
+        private bool _isOperationActive;
+        private bool _isShuttingDown;
 
         [ObservableProperty]
         private ObservableCollection<HardwareInterface> _availableInterfaces = new();
@@ -36,10 +40,22 @@ namespace Simulate.ViewModels
         private bool _isCanFdEnabled = true;
 
         [ObservableProperty]
-        private ObservableCollection<uint> _availableBaudrates = new() { 250000, 500000, 1000000 };
+        private ObservableCollection<uint> _availableBaudrates = new() { 125000, 250000, 500000, 1000000 };
 
         [ObservableProperty]
-        private uint _baudrate = 500000;
+        private uint _baudrateTx = 500000;
+
+        [ObservableProperty]
+        private uint _baudrateRx = 500000;
+
+        [ObservableProperty]
+        private ObservableCollection<uint> _availableDataBaudrates = new() { 500000, 1000000, 2000000, 4000000, 5000000, 8000000 };
+
+        [ObservableProperty]
+        private uint _dataBaudrateTx = 2000000;
+
+        [ObservableProperty]
+        private uint _dataBaudrateRx = 2000000;
 
         [ObservableProperty]
         private bool _isConnected;
@@ -50,10 +66,50 @@ namespace Simulate.ViewModels
         [ObservableProperty]
         private HardwareFailure? _lastFailure;
 
+        public uint Baudrate
+        {
+            get => BaudrateTx;
+            set
+            {
+                BaudrateTx = value;
+                BaudrateRx = value;
+            }
+        }
+
+        public uint DataBaudrate
+        {
+            get => DataBaudrateTx;
+            set
+            {
+                DataBaudrateTx = value;
+                DataBaudrateRx = value;
+            }
+        }
+
         public ConnectionViewModel(ICanHardwareDriver hardwareDriver)
         {
             _hardwareDriver = hardwareDriver ?? throw new ArgumentNullException(nameof(hardwareDriver));
         }
+
+        /// <summary>
+        /// Gets the currently open gateway session as a borrowed reference for application composition.
+        /// The connection view model remains the sole owner responsible for stopping and disposing it.
+        /// </summary>
+        public ICanGatewaySession? ActiveGatewaySession
+        {
+            get
+            {
+                lock (_lifecycleSync)
+                {
+                    return _gatewaySession;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Gets a value indicating whether the disconnected connection settings can be edited safely.
+        /// </summary>
+        public bool CanEditConnectionSettings => !IsBusy && !IsConnected && !IsShuttingDown;
 
         partial void OnSelectedInterfaceChanged(HardwareInterface? value)
         {
@@ -88,8 +144,6 @@ namespace Simulate.ViewModels
                 {
                     AvailableBaudrates.Add(value.DefaultBaudrate);
                 }
-
-                Baudrate = value.DefaultBaudrate;
             }
 
             NotifyCommandAvailability();
@@ -97,6 +151,14 @@ namespace Simulate.ViewModels
 
         partial void OnSelectedRxChanged(HardwareChannel? value)
         {
+            if (value is not null && value.DefaultBaudrate > 0)
+            {
+                if (!AvailableBaudrates.Contains(value.DefaultBaudrate))
+                {
+                    AvailableBaudrates.Add(value.DefaultBaudrate);
+                }
+            }
+
             NotifyCommandAvailability();
         }
 
@@ -105,18 +167,35 @@ namespace Simulate.ViewModels
             NotifyCommandAvailability();
         }
 
-        partial void OnBaudrateChanged(uint value)
+        partial void OnBaudrateTxChanged(uint value)
+        {
+            NotifyCommandAvailability();
+        }
+
+        partial void OnBaudrateRxChanged(uint value)
+        {
+            NotifyCommandAvailability();
+        }
+
+        partial void OnDataBaudrateTxChanged(uint value)
+        {
+            NotifyCommandAvailability();
+        }
+
+        partial void OnDataBaudrateRxChanged(uint value)
         {
             NotifyCommandAvailability();
         }
 
         partial void OnIsConnectedChanged(bool value)
         {
+            OnPropertyChanged(nameof(CanEditConnectionSettings));
             NotifyCommandAvailability();
         }
 
         partial void OnIsBusyChanged(bool value)
         {
+            OnPropertyChanged(nameof(CanEditConnectionSettings));
             NotifyCommandAvailability();
         }
 
@@ -146,7 +225,7 @@ namespace Simulate.ViewModels
 
         private bool CanRefreshInterfaces()
         {
-            return !IsBusy;
+            return !IsBusy && !IsConnected && !IsShuttingDown;
         }
 
         [RelayCommand(CanExecute = nameof(CanConnect))]
@@ -170,9 +249,15 @@ namespace Simulate.ViewModels
                         ? CanGatewayOptions.CreateFlexibleDataRate(
                             SelectedRx,
                             SelectedTx,
-                            Baudrate,
-                            checked(Baudrate * 4))
-                        : CanGatewayOptions.CreateClassic(SelectedRx, SelectedTx, Baudrate);
+                            BaudrateRx,
+                            BaudrateTx,
+                            DataBaudrateRx,
+                            DataBaudrateTx)
+                        : CanGatewayOptions.CreateClassic(
+                            SelectedRx,
+                            SelectedTx,
+                            BaudrateRx,
+                            BaudrateTx);
                 }
                 catch (ArgumentException exception)
                 {
@@ -193,62 +278,47 @@ namespace Simulate.ViewModels
                     return;
                 }
 
-                if (cancellationToken.IsCancellationRequested)
+                bool sessionPublished;
+                lock (_lifecycleSync)
                 {
-                    HardwareFailure? cleanupFailure = await StopAndDisposeAfterCancelledOpenAsync(result.Value!);
+                    sessionPublished = !_isShuttingDown && !cancellationToken.IsCancellationRequested;
+                    if (sessionPublished)
+                    {
+                        _gatewaySession = result.Value;
+                    }
+                }
+
+                if (!sessionPublished)
+                {
+                    HardwareFailure? cleanupFailure = await StopAndDisposeSessionAsync(result.Value!);
                     if (cleanupFailure is not null)
                     {
                         LastFailure = cleanupFailure;
                     }
 
-                    cancellationToken.ThrowIfCancellationRequested();
+                    return;
                 }
 
-                _gatewaySession = result.Value;
+                OnPropertyChanged(nameof(ActiveGatewaySession));
                 IsConnected = true;
             });
         }
 
         private bool CanConnect()
         {
-            return !IsBusy && !IsConnected && SelectedTx is not null && SelectedRx is not null;
+            return !IsBusy && !IsConnected && !IsShuttingDown &&
+                SelectedTx is not null && SelectedRx is not null;
         }
 
         [RelayCommand(CanExecute = nameof(CanDisconnect))]
         private Task DisconnectAsync()
         {
-            return RunExclusiveAsync(HardwareOperation.Stop, async cancellationToken =>
-            {
-                ICanGatewaySession? session = _gatewaySession;
-                _gatewaySession = null;
-                IsConnected = false;
-
-                if (session is null)
-                {
-                    return;
-                }
-
-                HardwareOperationResult stopResult = await StopSessionOffDispatcherAsync(session);
-                try
-                {
-                    await DisposeSessionOffDispatcherAsync(session);
-                }
-                catch (Exception exception)
-                {
-                    LastFailure = CreateUnexpectedFailure(HardwareOperation.Dispose, exception);
-                    return;
-                }
-
-                if (!stopResult.IsSuccess)
-                {
-                    LastFailure = stopResult.Failure;
-                }
-            });
+            return RunExclusiveAsync(HardwareOperation.Stop, _ => DisconnectActiveSessionAsync());
         }
 
         private bool CanDisconnect()
         {
-            return !IsBusy && IsConnected;
+            return !IsBusy && IsConnected && !IsShuttingDown;
         }
 
         /// <summary>
@@ -256,20 +326,66 @@ namespace Simulate.ViewModels
         /// </summary>
         public void CancelPendingOperation()
         {
-            _operationCancellation?.Cancel();
+            CancellationTokenSource? cancellation;
+            lock (_lifecycleSync)
+            {
+                cancellation = _operationCancellation;
+            }
+
+            try
+            {
+                cancellation?.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // The active operation completed between capture and cancellation.
+            }
+        }
+
+        /// <summary>
+        /// Cancels any active discovery or connection operation, then stops and disposes the owned session once.
+        /// Repeated calls return the same shutdown task and cannot reopen the connection.
+        /// </summary>
+        public Task ShutdownAsync()
+        {
+            TaskCompletionSource<object?> completion;
+            lock (_lifecycleSync)
+            {
+                if (_shutdownTask is not null)
+                {
+                    return _shutdownTask;
+                }
+
+                _isShuttingDown = true;
+                completion = new TaskCompletionSource<object?>(
+                    TaskCreationOptions.RunContinuationsAsynchronously);
+                _shutdownTask = completion.Task;
+            }
+
+            _ = CompleteShutdownAsync(completion);
+            return completion.Task;
         }
 
         private async Task RunExclusiveAsync(
             HardwareOperation operation,
             Func<CancellationToken, Task> operationBody)
         {
-            if (Interlocked.CompareExchange(ref _isOperationActive, 1, 0) != 0)
+            using var cancellation = new CancellationTokenSource();
+            var completion = new TaskCompletionSource<object?>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+
+            lock (_lifecycleSync)
             {
-                return;
+                if (_isOperationActive || _isShuttingDown)
+                {
+                    return;
+                }
+
+                _isOperationActive = true;
+                _operationCancellation = cancellation;
+                _operationCompletion = completion;
             }
 
-            using var cancellation = new CancellationTokenSource();
-            _operationCancellation = cancellation;
             IsBusy = true;
             LastFailure = null;
 
@@ -287,9 +403,81 @@ namespace Simulate.ViewModels
             }
             finally
             {
-                _operationCancellation = null;
                 IsBusy = false;
-                Volatile.Write(ref _isOperationActive, 0);
+                lock (_lifecycleSync)
+                {
+                    _operationCancellation = null;
+                    _operationCompletion = null;
+                    _isOperationActive = false;
+                }
+
+                completion.TrySetResult(null);
+            }
+        }
+
+        private async Task ShutdownCoreAsync()
+        {
+            OnPropertyChanged(nameof(CanEditConnectionSettings));
+            NotifyCommandAvailability();
+
+            Task activeOperation;
+            CancellationTokenSource? cancellation;
+            lock (_lifecycleSync)
+            {
+                activeOperation = _operationCompletion?.Task ?? Task.CompletedTask;
+                cancellation = _operationCancellation;
+            }
+
+            try
+            {
+                cancellation?.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // The operation completed after its task was captured.
+            }
+
+            await activeOperation;
+            await DisconnectActiveSessionAsync();
+        }
+
+        private async Task CompleteShutdownAsync(TaskCompletionSource<object?> completion)
+        {
+            try
+            {
+                await ShutdownCoreAsync();
+                completion.TrySetResult(null);
+            }
+            catch (Exception exception)
+            {
+                completion.TrySetException(exception);
+            }
+        }
+
+        private async Task DisconnectActiveSessionAsync()
+        {
+            ICanGatewaySession? session;
+            lock (_lifecycleSync)
+            {
+                session = _gatewaySession;
+                _gatewaySession = null;
+            }
+
+            if (session is not null)
+            {
+                OnPropertyChanged(nameof(ActiveGatewaySession));
+            }
+
+            IsConnected = false;
+            if (session is null)
+            {
+                return;
+            }
+
+            HardwareFailure? cleanupFailure = await StopAndDisposeSessionAsync(session);
+            if (cleanupFailure is not null)
+            {
+                LastFailure = cleanupFailure;
             }
         }
 
@@ -311,7 +499,7 @@ namespace Simulate.ViewModels
                 $"CAN gateway configuration is invalid: {exception.Message}");
         }
 
-        private static async Task<HardwareFailure?> StopAndDisposeAfterCancelledOpenAsync(
+        private static async Task<HardwareFailure?> StopAndDisposeSessionAsync(
             ICanGatewaySession session)
         {
             HardwareFailure? firstFailure = null;
@@ -357,6 +545,17 @@ namespace Simulate.ViewModels
             RefreshInterfacesCommand.NotifyCanExecuteChanged();
             ConnectCommand.NotifyCanExecuteChanged();
             DisconnectCommand.NotifyCanExecuteChanged();
+        }
+
+        private bool IsShuttingDown
+        {
+            get
+            {
+                lock (_lifecycleSync)
+                {
+                    return _isShuttingDown;
+                }
+            }
         }
     }
 }

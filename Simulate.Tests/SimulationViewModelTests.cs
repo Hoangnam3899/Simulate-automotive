@@ -249,6 +249,60 @@ namespace Simulate.Tests
             Assert.AreEqual("VehicleSpeed", main.Signals[0].Name);
         }
 
+        [TestMethod]
+        public async Task Main_view_model_stops_simulation_before_releasing_the_connection_session()
+        {
+            var connection = new ConnectionViewModel(new MockHardwareService());
+            await connection.RefreshInterfacesCommand.ExecuteAsync(null);
+            await connection.ConnectCommand.ExecuteAsync(null);
+            ICanGatewaySession session = connection.ActiveGatewaySession
+                ?? throw new AssertFailedException("The connection fixture must expose an open session.");
+            var engine = new FakeSimulationEngine
+            {
+                IsRunning = true,
+                SessionIsOpen = () => session.IsOpen
+            };
+            var simulation = new SimulationViewModel(
+                new SimulationPlan(ParseSingleMessageDocument(), []),
+                engine);
+            var main = new MainViewModel(connection, simulation);
+
+            await main.ShutdownAsync();
+            await main.ShutdownAsync();
+
+            Assert.AreEqual(1, engine.StopCallCount);
+            Assert.IsTrue(engine.SessionWasOpenWhenStopped);
+            Assert.IsFalse(session.IsOpen);
+            Assert.IsNull(connection.ActiveGatewaySession);
+        }
+
+        [TestMethod]
+        public async Task Main_view_model_releases_the_connection_when_simulation_stop_fails()
+        {
+            var connection = new ConnectionViewModel(new MockHardwareService());
+            await connection.RefreshInterfacesCommand.ExecuteAsync(null);
+            await connection.ConnectCommand.ExecuteAsync(null);
+            ICanGatewaySession session = connection.ActiveGatewaySession
+                ?? throw new AssertFailedException("The connection fixture must expose an open session.");
+            HardwareFailure failure = CreateFailure();
+            var expectedException = new HardwareOperationException(failure);
+            var engine = new FakeSimulationEngine
+            {
+                IsRunning = true,
+                StopFailure = expectedException
+            };
+            var main = new MainViewModel(
+                connection,
+                new SimulationViewModel(new SimulationPlan(ParseSingleMessageDocument(), []), engine));
+
+            HardwareOperationException exception = await Assert.ThrowsExceptionAsync<HardwareOperationException>(
+                main.ShutdownAsync);
+
+            Assert.AreSame(expectedException, exception);
+            Assert.IsFalse(session.IsOpen);
+            Assert.IsNull(connection.ActiveGatewaySession);
+        }
+
         private static DbcDocument ParseSingleMessageDocument()
         {
             const string documentText = """
@@ -282,6 +336,10 @@ namespace Simulate.Tests
             public HardwareOperationException? StopFailure { get; set; }
 
             public HardwareOperationException? StopSchedulingFailure { get; set; }
+
+            public Func<bool>? SessionIsOpen { get; set; }
+
+            public bool SessionWasOpenWhenStopped { get; private set; }
 
             public int StartCallCount { get; private set; }
 
@@ -355,6 +413,7 @@ namespace Simulate.Tests
             public ValueTask StopAsync()
             {
                 StopCallCount++;
+                SessionWasOpenWhenStopped = SessionIsOpen?.Invoke() ?? false;
                 IsRunning = false;
                 if (StopFailure is not null)
                 {

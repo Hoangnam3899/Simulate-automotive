@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Simulate.ViewModels
@@ -52,6 +53,9 @@ namespace Simulate.ViewModels
 
     public partial class MainViewModel : ObservableObject
     {
+        private readonly object _shutdownSync = new();
+        private Task? _shutdownTask;
+
         public ConnectionViewModel Connection { get; }
 
         public SimulationViewModel Simulation { get; }
@@ -74,6 +78,57 @@ namespace Simulate.ViewModels
         {
             Connection = connection ?? throw new ArgumentNullException(nameof(connection));
             Simulation = simulation ?? throw new ArgumentNullException(nameof(simulation));
+        }
+
+        /// <summary>
+        /// Stops configured simulation work before releasing the connection-owned gateway session.
+        /// Repeated calls share one shutdown operation.
+        /// </summary>
+        public Task ShutdownAsync()
+        {
+            TaskCompletionSource<object?> completion;
+            lock (_shutdownSync)
+            {
+                if (_shutdownTask is not null)
+                {
+                    return _shutdownTask;
+                }
+
+                completion = new TaskCompletionSource<object?>(
+                    TaskCreationOptions.RunContinuationsAsynchronously);
+                _shutdownTask = completion.Task;
+            }
+
+            _ = CompleteShutdownAsync(completion);
+            return completion.Task;
+        }
+
+        private async Task ShutdownCoreAsync()
+        {
+            try
+            {
+                if (Simulation.IsConfigured)
+                {
+                    await Simulation.StopAsync();
+                }
+            }
+            finally
+            {
+                await Connection.ShutdownAsync();
+            }
+        }
+
+        private async Task CompleteShutdownAsync(TaskCompletionSource<object?> completion)
+        {
+            try
+            {
+                await ShutdownCoreAsync();
+                completion.TrySetResult(null);
+            }
+            catch (Exception exception)
+            {
+                completion.TrySetException(exception);
+            }
         }
     }
 }

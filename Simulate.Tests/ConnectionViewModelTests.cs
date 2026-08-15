@@ -58,6 +58,28 @@ namespace Simulate.Tests
         }
 
         [TestMethod]
+        public async Task Connect_exposes_the_borrowed_session_until_owner_disconnects()
+        {
+            CanGatewayOptions options = CreateClassicOptions();
+            var session = new BlockingCleanupSession(options, waitForCleanup: false);
+            var viewModel = new ConnectionViewModel(new SingleSessionHardwareDriver(options, session))
+            {
+                IsCanFdEnabled = false
+            };
+            await viewModel.RefreshInterfacesCommand.ExecuteAsync(null);
+
+            Assert.IsNull(viewModel.ActiveGatewaySession);
+
+            await viewModel.ConnectCommand.ExecuteAsync(null);
+
+            Assert.AreSame(session, viewModel.ActiveGatewaySession);
+
+            await viewModel.DisconnectCommand.ExecuteAsync(null);
+
+            Assert.IsNull(viewModel.ActiveGatewaySession);
+        }
+
+        [TestMethod]
         public async Task Connect_surfaces_the_typed_gateway_open_failure()
         {
             var driver = new MockHardwareService(
@@ -194,6 +216,138 @@ namespace Simulate.Tests
         }
 
         [TestMethod]
+        public async Task Connection_settings_are_not_editable_while_busy_or_after_shutdown()
+        {
+            var driver = new ControllableHardwareDriver();
+            var viewModel = new ConnectionViewModel(driver);
+
+            Assert.IsTrue(viewModel.CanEditConnectionSettings);
+
+            Task refresh = viewModel.RefreshInterfacesCommand.ExecuteAsync(null);
+            await driver.DiscoveryStarted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+
+            Assert.IsFalse(viewModel.CanEditConnectionSettings);
+
+            viewModel.CancelPendingOperation();
+            await refresh;
+
+            Assert.IsTrue(viewModel.CanEditConnectionSettings);
+
+            await viewModel.ShutdownAsync();
+
+            Assert.IsFalse(viewModel.CanEditConnectionSettings);
+        }
+
+        [TestMethod]
+        public async Task Connection_settings_are_not_editable_while_connected()
+        {
+            var viewModel = new ConnectionViewModel(new MockHardwareService());
+            await viewModel.RefreshInterfacesCommand.ExecuteAsync(null);
+
+            await viewModel.ConnectCommand.ExecuteAsync(null);
+
+            Assert.IsFalse(viewModel.CanEditConnectionSettings);
+            Assert.IsFalse(viewModel.RefreshInterfacesCommand.CanExecute(null));
+
+            await viewModel.DisconnectCommand.ExecuteAsync(null);
+
+            Assert.IsTrue(viewModel.CanEditConnectionSettings);
+        }
+
+        [TestMethod]
+        public void Can_fd_data_bitrate_configuration_includes_500k_and_defaults_to_2m_per_side()
+        {
+            var viewModel = new ConnectionViewModel(new MockHardwareService());
+
+            CollectionAssert.AreEqual(
+                new uint[] { 500_000, 1_000_000, 2_000_000, 4_000_000, 5_000_000, 8_000_000 },
+                viewModel.AvailableDataBaudrates.ToArray());
+            Assert.AreEqual(2_000_000u, viewModel.DataBaudrateTx);
+            Assert.AreEqual(2_000_000u, viewModel.DataBaudrateRx);
+        }
+
+        [TestMethod]
+        public void Selecting_a_tx_channel_does_not_overwrite_the_user_selected_baudrate()
+        {
+            var firstTx = new HardwareChannel
+            {
+                Name = "TX 1",
+                ChannelIndex = 0,
+                ChannelMask = 1,
+                DefaultBaudrate = 250_000
+            };
+            var rx = new HardwareChannel
+            {
+                Name = "RX",
+                ChannelIndex = 1,
+                ChannelMask = 2,
+                DefaultBaudrate = 500_000
+            };
+            var secondTx = new HardwareChannel
+            {
+                Name = "TX 2",
+                ChannelIndex = 2,
+                ChannelMask = 4,
+                DefaultBaudrate = 250_000
+            };
+            var viewModel = new ConnectionViewModel(new MockHardwareService())
+            {
+                SelectedInterface = new HardwareInterface
+                {
+                    Name = "Test CAN",
+                    Channels = new List<HardwareChannel> { firstTx, rx, secondTx }
+                }
+            };
+
+            viewModel.BaudrateTx = 500_000;
+            viewModel.SelectedTx = secondTx;
+
+            Assert.AreEqual(500_000u, viewModel.BaudrateTx);
+        }
+
+        [TestMethod]
+        public async Task Connect_passes_independent_tx_and_rx_nominal_and_data_bitrates()
+        {
+            var driver = new RecordingHardwareDriver();
+            var viewModel = new ConnectionViewModel(driver);
+            await viewModel.RefreshInterfacesCommand.ExecuteAsync(null);
+
+            viewModel.IsCanFdEnabled = true;
+            viewModel.BaudrateTx = 500_000;
+            viewModel.BaudrateRx = 250_000;
+            viewModel.DataBaudrateTx = 4_000_000;
+            viewModel.DataBaudrateRx = 2_000_000;
+
+            await viewModel.ConnectCommand.ExecuteAsync(null);
+
+            Assert.IsTrue(viewModel.IsConnected);
+            Assert.IsNotNull(driver.LastOptions);
+            Assert.AreEqual(500_000u, driver.LastOptions.TxNominalBitrate);
+            Assert.AreEqual(250_000u, driver.LastOptions.RxNominalBitrate);
+            Assert.AreEqual(4_000_000u, driver.LastOptions.TxDataBitrate);
+            Assert.AreEqual(2_000_000u, driver.LastOptions.RxDataBitrate);
+        }
+
+        [TestMethod]
+        public async Task Connect_rejects_can_fd_when_data_bitrate_is_lower_than_nominal_bitrate()
+        {
+            var driver = new RecordingHardwareDriver();
+            var viewModel = new ConnectionViewModel(driver);
+            await viewModel.RefreshInterfacesCommand.ExecuteAsync(null);
+
+            viewModel.IsCanFdEnabled = true;
+            viewModel.BaudrateTx = 1_000_000;
+            viewModel.DataBaudrateTx = 500_000; // Lower than nominal 1M
+
+            await viewModel.ConnectCommand.ExecuteAsync(null);
+
+            Assert.IsFalse(viewModel.IsConnected);
+            Assert.IsNotNull(viewModel.LastFailure);
+            Assert.AreEqual(HardwareErrorCode.InvalidConfiguration, viewModel.LastFailure.Code);
+            Assert.AreEqual(0, driver.OpenGatewaySessionCallCount);
+        }
+
+        [TestMethod]
         public async Task Disconnect_returns_control_while_session_cleanup_runs()
         {
             CanGatewayOptions options = CreateClassicOptions();
@@ -235,6 +389,100 @@ namespace Simulate.Tests
 
             Assert.IsFalse(viewModel.IsConnected);
             Assert.IsTrue(session.IsDisposed);
+        }
+
+        [TestMethod]
+        public async Task Shutdown_disconnects_once_and_permanently_disables_connection_commands()
+        {
+            CanGatewayOptions options = CreateClassicOptions();
+            var session = new BlockingCleanupSession(options, waitForCleanup: false);
+            var viewModel = new ConnectionViewModel(new SingleSessionHardwareDriver(options, session))
+            {
+                IsCanFdEnabled = false
+            };
+            await viewModel.RefreshInterfacesCommand.ExecuteAsync(null);
+            await viewModel.ConnectCommand.ExecuteAsync(null);
+
+            await viewModel.ShutdownAsync();
+            await viewModel.ShutdownAsync();
+
+            Assert.IsFalse(viewModel.IsConnected);
+            Assert.IsNull(viewModel.ActiveGatewaySession);
+            Assert.AreEqual(1, session.StopCallCount);
+            Assert.AreEqual(1, session.DisposeCallCount);
+            Assert.IsFalse(viewModel.RefreshInterfacesCommand.CanExecute(null));
+            Assert.IsFalse(viewModel.ConnectCommand.CanExecute(null));
+            Assert.IsFalse(viewModel.DisconnectCommand.CanExecute(null));
+        }
+
+        [TestMethod]
+        public async Task Shutdown_cancels_and_awaits_an_active_refresh()
+        {
+            var driver = new ControllableHardwareDriver();
+            var viewModel = new ConnectionViewModel(driver);
+            Task refresh = viewModel.RefreshInterfacesCommand.ExecuteAsync(null);
+            await driver.DiscoveryStarted.Task.WaitAsync(TimeSpan.FromSeconds(1));
+
+            await viewModel.ShutdownAsync().WaitAsync(TimeSpan.FromSeconds(1));
+            await refresh.WaitAsync(TimeSpan.FromSeconds(1));
+
+            Assert.IsFalse(viewModel.IsBusy);
+            Assert.AreEqual(0, viewModel.AvailableInterfaces.Count);
+            Assert.IsNull(viewModel.LastFailure);
+            Assert.IsFalse(viewModel.RefreshInterfacesCommand.CanExecute(null));
+        }
+
+        [TestMethod]
+        public async Task Shutdown_during_open_cleans_the_session_without_publishing_connected_state()
+        {
+            CanGatewayOptions options = CreateClassicOptions();
+            var session = new BlockingCleanupSession(options, waitForCleanup: false);
+            var driver = new CancellationAfterOpenHardwareDriver(options, session);
+            var viewModel = new ConnectionViewModel(driver)
+            {
+                IsCanFdEnabled = false
+            };
+            await viewModel.RefreshInterfacesCommand.ExecuteAsync(null);
+            Task connect = viewModel.ConnectCommand.ExecuteAsync(null);
+            await driver.OpenRequested.Task.WaitAsync(TimeSpan.FromSeconds(1));
+
+            Task shutdown = viewModel.ShutdownAsync();
+            driver.CompleteOpen();
+            await Task.WhenAll(connect, shutdown).WaitAsync(TimeSpan.FromSeconds(1));
+
+            Assert.IsFalse(viewModel.IsConnected);
+            Assert.IsNull(viewModel.ActiveGatewaySession);
+            Assert.AreEqual(1, session.StopCallCount);
+            Assert.AreEqual(1, session.DisposeCallCount);
+            Assert.IsFalse(viewModel.IsBusy);
+        }
+
+        [TestMethod]
+        public async Task Disconnect_retains_stop_failure_after_attempting_dispose()
+        {
+            CanGatewayOptions options = CreateClassicOptions();
+            var failure = new HardwareFailure(
+                HardwareOperation.Stop,
+                HardwareErrorCode.StopFailed,
+                "The native session stop failed.");
+            var session = new BlockingCleanupSession(
+                options,
+                HardwareOperationResult.Failed(failure),
+                new InvalidOperationException("The native session dispose failed."),
+                waitForCleanup: false);
+            var viewModel = new ConnectionViewModel(new SingleSessionHardwareDriver(options, session))
+            {
+                IsCanFdEnabled = false
+            };
+            await viewModel.RefreshInterfacesCommand.ExecuteAsync(null);
+            await viewModel.ConnectCommand.ExecuteAsync(null);
+
+            await viewModel.DisconnectCommand.ExecuteAsync(null);
+
+            Assert.AreSame(failure, viewModel.LastFailure);
+            Assert.AreEqual(1, session.StopCallCount);
+            Assert.AreEqual(1, session.DisposeCallCount);
+            Assert.IsFalse(viewModel.IsConnected);
         }
 
         private static CanGatewayOptions CreateClassicOptions()
@@ -288,6 +536,8 @@ namespace Simulate.Tests
 
             public int OpenGatewaySessionCallCount { get; private set; }
 
+            public CanGatewayOptions? LastOptions { get; private set; }
+
             public Task<HardwareOperationResult<IReadOnlyList<HardwareInterface>>> DiscoverInterfacesAsync(
                 CancellationToken cancellationToken = default)
             {
@@ -299,11 +549,9 @@ namespace Simulate.Tests
                 CancellationToken cancellationToken = default)
             {
                 OpenGatewaySessionCallCount++;
-                return Task.FromResult(HardwareOperationResult.Failed<ICanGatewaySession>(
-                    new HardwareFailure(
-                        HardwareOperation.OpenSession,
-                        HardwareErrorCode.OpenFailed,
-                        "The driver must not be opened for invalid options.")));
+                LastOptions = options;
+                return Task.FromResult(HardwareOperationResult.Succeeded<ICanGatewaySession>(
+                    new MockCanGatewaySession(options, new MockHardwareFaultPlan())));
             }
         }
 

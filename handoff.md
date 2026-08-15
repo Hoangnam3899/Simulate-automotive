@@ -1,4 +1,4 @@
-# Handoff — Task 15 backend/review closure complete; awaiting user delivery direction
+# Handoff — UI-01 awaiting user debug
 
 ## Source of truth
 
@@ -8,11 +8,41 @@
 
 ## Current repository state
 
-- Branch: `chore/merge-agent-skills` is synchronized with `origin` at `e822c73` (`fix: complete task 15 runtime remediation`).
-- Task 14 and all Task 15 slices 15.1–15.5 are DONE for the backend/review scope. Sol ultra lead, Luna high Axis Spec, and Terra xhigh Axis Standards/security are PASS with no Critical/Required finding.
-- Current uncommitted changes are the slice 15.4 parser/model/test implementation and the completed Task 15 closure documentation. Preserve them until the user explicitly requests commit/push.
-- UI/XAML/code-behind and project/solution configuration remain untouched.
+- Branch: `chore/merge-agent-skills`; local HEAD `b0e753b` is one commit ahead of `origin/chore/merge-agent-skills`.
+- Backend Tasks 0–15 and Checkpoint E are DONE. Build baseline at UI planning start: 0 warnings, 0 errors.
+- Current uncommitted changes contain the UI binding plan plus the approved UI-01 implementation/tests.
+- `MainWindow.xaml` changes are binding-only on six existing panel-1 controls; code-behind changes are
+  graceful-close lifecycle delegation only. Project/solution configuration remains untouched.
 - Do not commit or push without a new user instruction.
+
+## UI binding contract — source of truth
+
+- Detailed scope/model/dependency matrix: [`tasks/plan.md`](tasks/plan.md), Phase 5.
+- Per-panel acceptance/manual gates: [`tasks/todo.md`](tasks/todo.md), Phase UI binding 1–10.
+- Strict order is UI-01→UI-10. Automated tests and agent review can only move a panel to
+  `WAITING_USER_DEBUG`; only the user's explicit PASS/"cho qua" unlocks the next panel.
+- Before every transition, update PLAN/TODO/Handoff and tell the user the exact panel purpose, allowed
+  files/seams, lead/reviewer, automated checks, and manual debug steps. A generic “continue UI” message
+  is not a valid transition record.
+- If the user reports a defect, keep the current panel in `DEBUG_RETURN`, propose the model best suited
+  to that defect, fix/review it, and return it to the user. Never continue to another panel meanwhile.
+- Binding-only means existing controls and visual design remain unchanged. XAML edits, when separately
+  approved for one panel, are limited to binding/command/state expressions. No layout/style/resource/
+  control/content redesign is authorized.
+
+## Current UI inventory and constraints
+
+- Panel 1 has real Refresh/Connect/Disconnect state, safe settings editability, borrowed session handoff, and
+  idempotent graceful-close cleanup, but is now in `DEBUG_RETURN` for the user-reported baudrate contract defect.
+- Panels 2–10 contain hardcoded runtime/demo values or missing commands; the app currently has only
+  three command bindings total.
+- Live signal monitor and bus health need bounded backend telemetry seams before binding; they are not
+  simple XAML-only work.
+- TX row action glyphs are `TextBlock`, and panel 7 has no Emergency button. These remain
+  `UI_SHAPE_GATED` if they cannot be made functional without a visual/control change; do not silently
+  redesign or claim them complete.
+- Interactive DBC input makes the previously Optional document-size/regex resource bound Required in
+  UI-02.
 
 ## Slice 15.1 accomplished and reviewed
 
@@ -62,18 +92,49 @@ Luna xhigh independent Spec/Standards/security review: PASS, no Critical/Require
 
 ## Open gates outside completed Task 15 backend/review scope
 
-- S2 (`UI_GATED`): application close has no explicit session cleanup; the reference project has a closing hook for this exact port-leak risk.
+- S2 graceful-close implementation now exists under the user's exact UI-01 approval; Terra xhigh review passed,
+  but physical/user runtime verification remains open, so it is not yet `USER_ACCEPTED`.
 - Q3 implementation and Luna xhigh independent review are complete.
 - Slice 15.5 lead gate: PASS — build 0/0; full 173/173; high-risk stress 720/720; formatter, NuGet audit, diff/secret/UI scope PASS. Luna high Axis Spec and Terra xhigh Axis Standards/security cross-reviews both PASS with no Critical/Required finding.
 - Hardware status remains accurately separated as `PASS`/`FAIL`/`NEEDS_VERIFY`; no physical claim was promoted from fake/in-memory evidence.
 
-## Next action
+## UI-01 implementation and Terra xhigh review checkpoint
 
-- Await a user instruction to commit/push the verified changes, or an explicit, limited UI/code-behind approval for S2/UI integration.
-- Keep the shutdown hook paused until that UI approval exists, and keep real Vector items `NEEDS_VERIFY` until bench evidence is captured.
+- `ConnectionViewModel` exposes the open `ICanGatewaySession` as a borrowed composition reference while
+  remaining its sole stop/dispose owner. Settings and Refresh are disabled while busy/connected/shutting down.
+- Shutdown atomically becomes terminal, cancels and awaits active discovery/open, rejects late session
+  publication, then performs best-effort stop/dispose once while retaining the first typed cleanup failure.
+- `MainViewModel.ShutdownAsync()` stops configured simulation work before connection cleanup and still runs
+  connection cleanup from `finally` when simulation stop faults.
+- `MainWindow.xaml.cs` only delegates the `Closing` lifecycle asynchronously; no Vector or simulation business
+  logic was placed in code-behind.
+- `MainWindow.xaml` only adds `IsEnabled` bindings to the six existing Interface/TX/RX/CAN FD/bitrate controls.
+  There is no control/layout/style/resource/content change.
+- TDD added public-seam coverage for session handoff, settings state, disconnect failure precedence,
+  idempotent shutdown, active refresh/open races, and engine-before-session close ordering.
+- Verification: focused Connection/Simulation ViewModel 29/29 PASS; lifecycle stress 10/10 runs PASS;
+  build 0 warnings/0 errors; full suite 182/182 PASS; targeted formatter, `git diff --check`, secret assignment,
+  protected config and binding-only XAML scope PASS.
+- No package/project/solution change, commit, or push. UI-02 remains locked.
+- Terra xhigh two-axis review: **PASS**, no Critical/Required finding. Axis Spec verified real connection state,
+  ownership/late-open cleanup and simulation-before-session close. Axis Standards verified MVVM separation,
+  code-behind lifecycle-only, off-Dispatcher native cleanup, public-seam tests, formatter/diff/config/secret scope.
+- Terra independent verification: build 0/0; focused 29/29; full 182/182; lifecycle stress 5 tests × 10 runs
+  (50 executions) PASS. Physical Vector behavior remains `NEEDS_VERIFY`.
+
+## UI-01 bitrate flexibility & channel name formatting completed (2026-08-15)
+
+- Tách độc lập `BaudrateTx` và `BaudrateRx` trong `ConnectionViewModel` (Nominal: 125k, 250k, 500k, 1M).
+- Tách độc lập `DataBaudrateTx` và `DataBaudrateRx` (Data: 500k, 1M, 2M, 4M, 5M, 8M; default 2M).
+- Hỗ trợ CAN FD với Nominal 500k / Data 500k; loại bỏ phép nhân cứng `Baudrate * 4`.
+- Chống tự động ghi đè baudrate người dùng khi đổi channel trong `OnSelectedTxChanged` / `OnSelectedRxChanged`.
+- XAML binding Panel 1: `Baudrate TX` -> `Connection.BaudrateTx`, `Baudrate RX` -> `Connection.BaudrateRx`.
+- Cấu hình per-channel độc lập trong `VectorHardwareService` khi nominal hoặc data bitrate giữa RX và TX khác nhau.
+- Định dạng tên hiển thị channel thành `{HardwareTypeName} Channel {Index}` (ví dụ: `VN1640A Channel 1`, `VN1640A Channel 2`), giúp dễ đọc và không tràn ComboBox.
+- Verification: `dotnet build Simulate.sln` PASS 0 warning/0 error; `dotnet test Simulate.sln` PASS 190/190 tests.
 
 ## Suggested skills
 
-1. `git-workflow-and-versioning` only after the user requests a commit or push.
-2. `security-and-hardening` and `test-driven-development` before an approved DBC file-input/UI phase.
-3. `code-review` before any further production or UI integration change.
+1. `code-review` for verification gates.
+2. `debugging-and-error-recovery` whenever review or manual UI testing reports a failure.
+3. `git-workflow-and-versioning` when committing or pushing changes.

@@ -193,23 +193,68 @@ namespace Simulate.Services
                     else
                     {
                         currentOperation = HardwareOperation.ConfigureSession;
-                        VectorNativeStatus configurationStatus = options.BusMode == CanBusMode.Classic
-                            ? api.SetClassicCanBitrate(
-                                openPortResult.PortHandle,
-                                accessMask,
-                                options.NominalBitrate)
-                            : api.SetCanFdBitrates(
-                                openPortResult.PortHandle,
-                                accessMask,
-                                options.NominalBitrate,
-                                options.DataBitrate!.Value,
-                                VectorCanFdProtocolMode.Iso);
+                        VectorNativeStatus configurationStatus;
+                        string configurationApi;
+                        if (options.BusMode == CanBusMode.Classic)
+                        {
+                            configurationApi = "XL_CanSetChannelBitrate";
+                            if (options.RxNominalBitrate == options.TxNominalBitrate)
+                            {
+                                configurationStatus = api.SetClassicCanBitrate(
+                                    openPortResult.PortHandle,
+                                    accessMask,
+                                    options.TxNominalBitrate);
+                            }
+                            else
+                            {
+                                configurationStatus = api.SetClassicCanBitrate(
+                                    openPortResult.PortHandle,
+                                    options.RxChannel.ChannelMask,
+                                    options.RxNominalBitrate);
+                                if (configurationStatus.IsSuccess)
+                                {
+                                    configurationStatus = api.SetClassicCanBitrate(
+                                        openPortResult.PortHandle,
+                                        options.TxChannel.ChannelMask,
+                                        options.TxNominalBitrate);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            configurationApi = "XL_CanFdSetConfiguration";
+                            if (options.RxNominalBitrate == options.TxNominalBitrate &&
+                                options.RxDataBitrate == options.TxDataBitrate)
+                            {
+                                configurationStatus = api.SetCanFdBitrates(
+                                    openPortResult.PortHandle,
+                                    accessMask,
+                                    options.TxNominalBitrate,
+                                    options.TxDataBitrate!.Value,
+                                    VectorCanFdProtocolMode.Iso);
+                            }
+                            else
+                            {
+                                configurationStatus = api.SetCanFdBitrates(
+                                    openPortResult.PortHandle,
+                                    options.RxChannel.ChannelMask,
+                                    options.RxNominalBitrate,
+                                    options.RxDataBitrate!.Value,
+                                    VectorCanFdProtocolMode.Iso);
+                                if (configurationStatus.IsSuccess)
+                                {
+                                    configurationStatus = api.SetCanFdBitrates(
+                                        openPortResult.PortHandle,
+                                        options.TxChannel.ChannelMask,
+                                        options.TxNominalBitrate,
+                                        options.TxDataBitrate!.Value,
+                                        VectorCanFdProtocolMode.Iso);
+                                }
+                            }
+                        }
 
                         if (!configurationStatus.IsSuccess)
                         {
-                            string configurationApi = options.BusMode == CanBusMode.Classic
-                                ? "XL_CanSetChannelBitrate"
-                                : "XL_CanFdSetConfiguration";
                             failure = CreateNativeFailure(
                                 HardwareOperation.ConfigureSession,
                                 HardwareErrorCode.ConfigurationFailed,
@@ -286,9 +331,10 @@ namespace Simulate.Services
                     interfacesByDevice.Add(deviceKey, hardwareInterface);
                 }
 
-                string channelName = string.IsNullOrWhiteSpace(channel.TransceiverName)
-                    ? $"Channel {channel.HardwareChannel + 1}"
-                    : $"{channel.TransceiverName} (CH {channel.HardwareChannel + 1})";
+                string prefix = string.IsNullOrWhiteSpace(channel.HardwareTypeName)
+                    ? (channel.IsVirtual ? "Virtual" : "CAN")
+                    : channel.HardwareTypeName;
+                string channelName = $"{prefix} Channel {channel.HardwareChannel + 1}";
                 uint bitrate = channel.CurrentCanBitrate == 0 ? 500_000u : channel.CurrentCanBitrate;
 
                 hardwareInterface.Channels.Add(new HardwareChannel

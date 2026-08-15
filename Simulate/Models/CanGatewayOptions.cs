@@ -8,39 +8,28 @@ namespace Simulate.Models
             HardwareChannel rxChannel,
             HardwareChannel txChannel,
             CanBusMode busMode,
-            uint nominalBitrate,
-            uint? dataBitrate)
+            uint rxNominalBitrate,
+            uint txNominalBitrate,
+            uint? rxDataBitrate,
+            uint? txDataBitrate)
         {
             ValidateChannels(rxChannel, txChannel);
-
-            if (nominalBitrate == 0)
-            {
-                throw new ArgumentOutOfRangeException(
-                    nameof(nominalBitrate),
-                    nominalBitrate,
-                    "The nominal bitrate must be greater than zero.");
-            }
-
-            if (busMode == CanBusMode.FlexibleDataRate && (!dataBitrate.HasValue || dataBitrate.Value == 0))
-            {
-                throw new ArgumentOutOfRangeException(
-                    nameof(dataBitrate),
-                    dataBitrate,
-                    "CAN FD requires a data-phase bitrate greater than zero.");
-            }
-
-            if (busMode == CanBusMode.Classic && dataBitrate.HasValue)
-            {
-                throw new ArgumentException(
-                    "Classic CAN does not use a data-phase bitrate.",
-                    nameof(dataBitrate));
-            }
+            ValidateBitrate(nameof(rxNominalBitrate), rxNominalBitrate, "RX nominal");
+            ValidateBitrate(nameof(txNominalBitrate), txNominalBitrate, "TX nominal");
+            ValidateDataBitrates(
+                busMode,
+                rxNominalBitrate,
+                txNominalBitrate,
+                rxDataBitrate,
+                txDataBitrate);
 
             RxChannel = rxChannel;
             TxChannel = txChannel;
             BusMode = busMode;
-            NominalBitrate = nominalBitrate;
-            DataBitrate = dataBitrate;
+            RxNominalBitrate = rxNominalBitrate;
+            TxNominalBitrate = txNominalBitrate;
+            RxDataBitrate = rxDataBitrate;
+            TxDataBitrate = txDataBitrate;
         }
 
         public HardwareChannel RxChannel { get; }
@@ -49,21 +38,40 @@ namespace Simulate.Models
 
         public CanBusMode BusMode { get; }
 
-        public uint NominalBitrate { get; }
+        public uint RxNominalBitrate { get; }
 
-        public uint? DataBitrate { get; }
+        public uint TxNominalBitrate { get; }
+
+        public uint NominalBitrate => TxNominalBitrate;
+
+        public uint? RxDataBitrate { get; }
+
+        public uint? TxDataBitrate { get; }
+
+        public uint? DataBitrate => TxDataBitrate;
 
         public static CanGatewayOptions CreateClassic(
             HardwareChannel rxChannel,
             HardwareChannel txChannel,
             uint nominalBitrate)
         {
+            return CreateClassic(rxChannel, txChannel, nominalBitrate, nominalBitrate);
+        }
+
+        public static CanGatewayOptions CreateClassic(
+            HardwareChannel rxChannel,
+            HardwareChannel txChannel,
+            uint rxNominalBitrate,
+            uint txNominalBitrate)
+        {
             return new CanGatewayOptions(
                 rxChannel,
                 txChannel,
                 CanBusMode.Classic,
-                nominalBitrate,
-                dataBitrate: null);
+                rxNominalBitrate,
+                txNominalBitrate,
+                rxDataBitrate: null,
+                txDataBitrate: null);
         }
 
         public static CanGatewayOptions CreateFlexibleDataRate(
@@ -72,12 +80,84 @@ namespace Simulate.Models
             uint nominalBitrate,
             uint dataBitrate)
         {
+            return CreateFlexibleDataRate(
+                rxChannel,
+                txChannel,
+                nominalBitrate,
+                nominalBitrate,
+                dataBitrate,
+                dataBitrate);
+        }
+
+        public static CanGatewayOptions CreateFlexibleDataRate(
+            HardwareChannel rxChannel,
+            HardwareChannel txChannel,
+            uint rxNominalBitrate,
+            uint txNominalBitrate,
+            uint rxDataBitrate,
+            uint txDataBitrate)
+        {
             return new CanGatewayOptions(
                 rxChannel,
                 txChannel,
                 CanBusMode.FlexibleDataRate,
-                nominalBitrate,
-                dataBitrate);
+                rxNominalBitrate,
+                txNominalBitrate,
+                rxDataBitrate,
+                txDataBitrate);
+        }
+
+        private static void ValidateBitrate(string parameterName, uint bitrate, string bitrateName)
+        {
+            if (bitrate == 0)
+            {
+                throw new ArgumentOutOfRangeException(
+                    parameterName,
+                    bitrate,
+                    $"The {bitrateName} bitrate must be greater than zero.");
+            }
+        }
+
+        private static void ValidateDataBitrates(
+            CanBusMode busMode,
+            uint rxNominalBitrate,
+            uint txNominalBitrate,
+            uint? rxDataBitrate,
+            uint? txDataBitrate)
+        {
+            if (busMode == CanBusMode.Classic)
+            {
+                if (rxDataBitrate.HasValue || txDataBitrate.HasValue)
+                {
+                    throw new ArgumentException("Classic CAN does not use data-phase bitrates.");
+                }
+
+                return;
+            }
+
+            if (!rxDataBitrate.HasValue || !txDataBitrate.HasValue)
+            {
+                throw new ArgumentException("CAN FD requires data-phase bitrates for both RX and TX channels.");
+            }
+
+            ValidateBitrate(nameof(rxDataBitrate), rxDataBitrate.Value, "RX data-phase");
+            ValidateBitrate(nameof(txDataBitrate), txDataBitrate.Value, "TX data-phase");
+
+            if (rxDataBitrate.Value < rxNominalBitrate)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(rxDataBitrate),
+                    rxDataBitrate,
+                    "The RX CAN FD data bitrate must be greater than or equal to the RX nominal bitrate.");
+            }
+
+            if (txDataBitrate.Value < txNominalBitrate)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(txDataBitrate),
+                    txDataBitrate,
+                    "The TX CAN FD data bitrate must be greater than or equal to the TX nominal bitrate.");
+            }
         }
 
         private static void ValidateChannels(HardwareChannel rxChannel, HardwareChannel txChannel)
