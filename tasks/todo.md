@@ -1198,3 +1198,28 @@ read-only projection; panel 10 không sở hữu hardware, parser hay engine.
 - [x] Thêm 5 unit tests mới kiểm thử cấu hình bitrate độc lập, bảo vệ giá trị người dùng chọn khi đổi kênh, và validation CAN FD.
 - [x] Định dạng lại tên hiển thị channel thành `{HardwareTypeName} Channel {Index}` (ví dụ: `VN1640A Channel 1`, `VN1640A Channel 2`), giúp hiển thị trực quan, phân biệt rõ cổng vật lý mà không bị tràn/cắt ngắn ComboBox.
 - [x] Verification: `dotnet build Simulate.sln` PASS 0 warning/0 error; `dotnet test Simulate.sln` PASS 190/190 tests.
+
+## Work log — 2026-08-20 (UI-02 DBC Management Implementation & Real DBC Testing)
+
+- [x] Thêm `IFileDialogService` và `DefaultFileDialogService` để trừu tượng hóa hộp thoại chọn file phục vụ testability.
+- [x] Thêm `DbcManagementViewModel` quản lý trạng thái tải/hủy DBC, kiểm tra giới hạn dung lượng tệp an toàn (50MB), UTF-8 encoding, và trích xuất số lượng Messages, Nodes, Signals chuẩn xác.
+- [x] Tích hợp `DbcManagementViewModel` vào `MainViewModel` và kết nối với `SimulationViewModel` để tự động load danh sách Messages/Signals khi nạp DBC.
+- [x] Cập nhật `MainWindow.xaml` (Panel 2) binding `LoadedFileNameDisplay`, `CheckmarkVisibility`, `MessageCount`, `NodeCount`, `SignalCount`, `LoadDbcCommand`, `UnloadDbcCommand`, `CanLoadDbc`, `CanUnloadDbc`.
+- [x] Viết bộ kiểm thử toàn diện `DbcManagementViewModelTests.cs` (9 unit tests) bao gồm kiểm thử tự động với toàn bộ các file DBC thực tế trong thư mục `C:\Users\Hnam\Desktop\Simulate\DBC` (cả CAN class và CAN FD).
+- [x] Verification: `dotnet build Simulate.sln` PASS 0 warning/0 error; `dotnet test Simulate.sln` PASS 199/199 tests.
+
+## Work log — 2026-08-20 (UI-03 TX Message List Selective Drafting Implementation)
+
+- [x] Cập nhật `MessageModel` thành `ObservableObject`, bổ sung `DisplayIndex`, `RawIdentifier`, `IsExtendedIdentifier`, `LastSent`, và `DbcSource`.
+- [x] Thêm `IMessageDialogService` và `DefaultMessageDialogService` để trừu tượng hóa hộp thoại chọn Message.
+- [x] Tạo giao diện `SelectMessageWindow` (Modal Dialog) với ô tìm kiếm nhanh (Search Box) và danh sách Message từ DBC có checkbox chọn nhiều.
+- [x] Cập nhật `SimulationViewModel`:
+  - Khởi tạo danh sách `Messages` ban đầu hoàn toàn rỗng khi nạp DBC.
+  - Thêm `AddMessagesCommand`, `DeleteMessageCommand`, `DeleteAllMessagesCommand`, `MoveUpCommand`, `MoveDownCommand`.
+  - Quản lý `SelectedMessage`, cập nhật tự động `DisplayIndex` (`1, 2, 3...`), và lọc trùng lặp khi thêm thông điệp.
+  - Tự động dọn sạch bảng phát khi DBC bị hủy (Unload).
+- [x] Cập nhật `MainWindow.xaml` (Panel 3): Gắn Command cho 5 nút Toolbar và sửa lỗi binding các cột DataGrid (`#`, `Enable`, `Mode`, `Send Type`, `Signals`, `Last Sent`).
+- [x] Tạo mới bộ kiểm thử toàn diện `SimulationMessageDraftTests.cs` (10 unit tests) kiểm thử toàn bộ hành vi thêm, xóa, đổi thứ tự, lọc trùng, hủy DBC.
+- [x] Sửa lỗi XamlParseException bằng cách định nghĩa tài nguyên cục bộ `DialogButton` và `BoolToVis`.
+- [x] Nâng cấp bảng màu cho `SelectMessageWindow` (Dark Slate `#141D2E` / `#1C273C` / `#23314B` với điểm nhấn Cyan `#38BDF8`), tăng độ sáng, độ tương phản và căn giữa nội dung DataGrid theo yêu cầu người dùng.
+- [x] Verification: `dotnet build Simulate.sln` PASS 0 warning/0 error; `dotnet test Simulate.sln` PASS 210/210 tests.

@@ -133,6 +133,24 @@ Luna xhigh independent Spec/Standards/security review: PASS, no Critical/Require
 - Định dạng tên hiển thị channel thành `{HardwareTypeName} Channel {Index}` (ví dụ: `VN1640A Channel 1`, `VN1640A Channel 2`), giúp dễ đọc và không tràn ComboBox.
 - Verification: `dotnet build Simulate.sln` PASS 0 warning/0 error; `dotnet test Simulate.sln` PASS 190/190 tests.
 
+## UI-02 DBC Management implementation & Real DBC corpus testing (2026-08-20)
+
+- Thêm `IFileDialogService` và `DefaultFileDialogService` để trừu tượng hóa hộp thoại chọn file.
+- Thêm `DbcManagementViewModel` quản lý an toàn file bounds (50MB), UTF-8 text parsing, đếm chính xác Messages, Nodes, Signals.
+- Tích hợp `DbcManagementViewModel` vào `MainViewModel` và tự động cập nhật projections cho `SimulationViewModel`.
+- Binding Panel 2 trong `MainWindow.xaml`: `LoadedFileNameDisplay`, `CheckmarkVisibility`, `MessageCount`, `NodeCount`, `SignalCount`, `LoadDbcCommand`, `UnloadDbcCommand`.
+- Kiểm thử tự động với toàn bộ các file DBC thực tế trong thư mục `C:\Users\Hnam\Desktop\Simulate\DBC` (cả CAN class và CAN FD).
+- Verification: `dotnet build Simulate.sln` PASS 0 warning/0 error; `dotnet test Simulate.sln` PASS 199/199 tests.
+
+## UI-03 TX Message List selective drafting implementation (2026-08-20)
+
+- Cập nhật `MessageModel` thành `ObservableObject`, hỗ trợ `DisplayIndex`, `LastSent`, `DbcSource`.
+- Tạo `IMessageDialogService` và `SelectMessageWindow` (Modal dialog) với ô tìm kiếm nhanh và danh sách chọn message từ DBC.
+- `SimulationViewModel` giữ danh sách `Messages` ban đầu rỗng khi nạp DBC; thêm các lệnh `AddMessagesCommand`, `DeleteMessageCommand`, `DeleteAllMessagesCommand`, `MoveUpCommand`, `MoveDownCommand`.
+- Binding Panel 3 `MainWindow.xaml`: gắn Toolbar commands và sửa toàn bộ lỗi binding cột DataGrid (`#`, `Enable`, `Mode`, `Send Type`, `Signals`, `Last Sent`).
+- Tạo bộ kiểm thử `SimulationMessageDraftTests.cs` (10 unit tests).
+- Verification: `dotnet build Simulate.sln` PASS 0 warning/0 error; `dotnet test Simulate.sln` PASS 209/209 tests.
+
 ## Suggested skills
 
 1. `code-review` for verification gates.

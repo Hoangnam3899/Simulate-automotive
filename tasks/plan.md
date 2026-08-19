@@ -278,9 +278,9 @@ Không dùng câu chung chung như “tiếp tục UI”; phải ghi tên panel 
 
 | UI | Khu vực | Backend/seam chính | Lead | Independent review | Trạng thái |
 |---|---|---|---|---|---|
-| 1 | Connection / Setup | `ConnectionViewModel`, baudrate contract, session ownership, graceful close | **Terra xhigh → Sol ultra** | **Terra xhigh** | `DEBUG_RETURN — baudrate architecture/state defect reported by user` |
-| 2 | DBC Management | safe file input, `DbcParser`, document/composition state | **Terra xhigh** | **Sol xhigh** | `LOCKED_BY_UI-01` |
-| 3 | TX Message List | DBC projection và editable simulation draft | **Terra xhigh** | **Luna xhigh** | `LOCKED_BY_UI-02` |
+| 1 | Connection / Setup | `ConnectionViewModel`, baudrate contract, session ownership, graceful close | **Terra xhigh → Sol ultra** | **Terra xhigh** | `USER_ACCEPTED` |
+| 2 | DBC Management | safe file input, `DbcParser`, document/composition state | **Terra xhigh** | **Sol xhigh** | `USER_ACCEPTED` |
+| 3 | TX Message List | DBC projection và editable simulation draft | **Terra xhigh** | **Luna xhigh** | `WAITING_USER_DEBUG` |
 | 4 | Live Signal Monitor | bounded live-frame/signal telemetry, Dispatcher projection | **Sol ultra** | **Terra xhigh** | `LOCKED_BY_UI-03` |
 | 5 | Fault Configuration | selected signal + typed timing/fault draft validation | **Terra xhigh** | **Luna high** | `LOCKED_BY_UI-04` |
 | 6 | Signal Value Configuration | physical value/`VAL_` selection và override replacement | **Terra xhigh** | **Sol xhigh** | `LOCKED_BY_UI-05` |

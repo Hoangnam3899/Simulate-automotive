@@ -5,16 +5,45 @@ using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace Simulate.ViewModels
 {
-    public class MessageModel
+    public partial class MessageModel : ObservableObject
     {
-        public string Id { get; set; } = string.Empty;
-        public string Name { get; set; } = string.Empty;
-        public int Dlc { get; set; }
-        public string Cycle { get; set; } = string.Empty;
-        public string GatewayMode { get; set; } = string.Empty;
-        public string SendType { get; set; } = string.Empty;
-        public int SignalCount { get; set; }
-        public bool IsEnabled { get; set; }
+        [ObservableProperty]
+        private int _displayIndex;
+
+        [ObservableProperty]
+        private string _id = string.Empty;
+
+        [ObservableProperty]
+        private uint _rawIdentifier;
+
+        [ObservableProperty]
+        private bool _isExtendedIdentifier;
+
+        [ObservableProperty]
+        private string _name = string.Empty;
+
+        [ObservableProperty]
+        private int _dlc;
+
+        [ObservableProperty]
+        private string _cycle = "—";
+
+        [ObservableProperty]
+        private string _gatewayMode = "PassThrough";
+
+        [ObservableProperty]
+        private string _sendType = "Cyclic";
+
+        [ObservableProperty]
+        private int _signalCount;
+
+        [ObservableProperty]
+        private bool _isEnabled = true;
+
+        [ObservableProperty]
+        private string _lastSent = "—";
+
+        public Simulate.Models.DbcMessage? DbcSource { get; set; }
     }
 
     public class SignalModel
@@ -58,6 +87,8 @@ namespace Simulate.ViewModels
 
         public ConnectionViewModel Connection { get; }
 
+        public DbcManagementViewModel Dbc { get; }
+
         public SimulationViewModel Simulation { get; }
 
         public ObservableCollection<MessageModel> Messages => Simulation.Messages;
@@ -65,19 +96,29 @@ namespace Simulate.ViewModels
         public ObservableCollection<FaultQueueModel> FaultQueue => Simulation.FaultQueue;
 
         public MainViewModel()
-            : this(ApplicationComposition.CreateConnectionViewModel(), new SimulationViewModel())
+            : this(ApplicationComposition.CreateConnectionViewModel(), new DbcManagementViewModel(), new SimulationViewModel())
+        {
+        }
+
+        public MainViewModel(ConnectionViewModel connection, SimulationViewModel simulation)
+            : this(connection, new DbcManagementViewModel(), simulation)
         {
         }
 
         /// <summary>
-        /// Initializes a view model with caller-composed connection and simulation dependencies.
+        /// Initializes a view model with caller-composed connection, dbc, and simulation dependencies.
         /// </summary>
         /// <param name="connection">The connection state exposed to existing bindings.</param>
+        /// <param name="dbc">The DBC management state exposed to existing bindings.</param>
         /// <param name="simulation">The simulation projection exposed to existing bindings.</param>
-        public MainViewModel(ConnectionViewModel connection, SimulationViewModel simulation)
+        public MainViewModel(ConnectionViewModel connection, DbcManagementViewModel dbc, SimulationViewModel simulation)
         {
             Connection = connection ?? throw new ArgumentNullException(nameof(connection));
+            Dbc = dbc ?? throw new ArgumentNullException(nameof(dbc));
             Simulation = simulation ?? throw new ArgumentNullException(nameof(simulation));
+
+            Dbc.DocumentLoaded += (sender, document) => Simulation.LoadDocument(document);
+            Dbc.DocumentUnloaded += (sender, args) => Simulation.ClearDocument();
         }
 
         /// <summary>

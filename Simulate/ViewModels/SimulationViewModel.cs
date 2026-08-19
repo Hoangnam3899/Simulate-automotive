@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Simulate.Models;
 using Simulate.Services;
 
@@ -16,6 +17,8 @@ namespace Simulate.ViewModels
     public partial class SimulationViewModel : ObservableObject
     {
         private readonly ISimulationEngine? _engine;
+        private readonly IMessageDialogService _messageDialogService;
+        private DbcDocument? _currentDocument;
 
         [ObservableProperty]
         private bool _isRunning;
@@ -32,11 +35,26 @@ namespace Simulate.ViewModels
         [ObservableProperty]
         private HardwareFailure? _lastFailure;
 
+        [ObservableProperty]
+        private MessageModel? _selectedMessage;
+
+        public bool CanAddMessages => _currentDocument is not null;
+        public bool CanDeleteMessage => SelectedMessage is not null;
+        public bool CanDeleteAllMessages => Messages.Count > 0;
+        public bool CanMoveUp => SelectedMessage is not null && Messages.IndexOf(SelectedMessage) > 0;
+        public bool CanMoveDown => SelectedMessage is not null && Messages.IndexOf(SelectedMessage) >= 0 && Messages.IndexOf(SelectedMessage) < Messages.Count - 1;
+
         /// <summary>
         /// Initializes an unconfigured projection for the UI before a DBC document and engine are composed.
         /// </summary>
         public SimulationViewModel()
+            : this(new DefaultMessageDialogService())
         {
+        }
+
+        public SimulationViewModel(IMessageDialogService messageDialogService)
+        {
+            _messageDialogService = messageDialogService ?? throw new ArgumentNullException(nameof(messageDialogService));
         }
 
         /// <summary>
@@ -45,12 +63,20 @@ namespace Simulate.ViewModels
         /// <param name="plan">The immutable DBC-bound simulation configuration to project.</param>
         /// <param name="engine">The caller-owned engine whose state is reflected without hardware access.</param>
         public SimulationViewModel(SimulationPlan plan, ISimulationEngine engine)
+            : this(plan, engine, new DefaultMessageDialogService())
+        {
+        }
+
+        public SimulationViewModel(SimulationPlan plan, ISimulationEngine engine, IMessageDialogService messageDialogService)
         {
             ArgumentNullException.ThrowIfNull(plan);
             _engine = engine ?? throw new ArgumentNullException(nameof(engine));
+            _messageDialogService = messageDialogService ?? throw new ArgumentNullException(nameof(messageDialogService));
 
+            _currentDocument = plan.Document;
             ProjectPlan(plan);
             RefreshRuntimeState();
+            NotifyToolbarCommands();
         }
 
         /// <summary>
@@ -72,6 +98,224 @@ namespace Simulate.ViewModels
         /// Gets a value indicating whether this instance has an engine supplied at the composition boundary.
         /// </summary>
         public bool IsConfigured => _engine is not null;
+
+        partial void OnSelectedMessageChanged(MessageModel? value)
+        {
+            NotifyToolbarCommands();
+        }
+
+        [RelayCommand(CanExecute = nameof(CanAddMessages))]
+        public void AddMessages()
+        {
+            if (_currentDocument is null)
+            {
+                return;
+            }
+
+            var alreadyAdded = Messages
+                .Where(m => m.DbcSource is not null)
+                .Select(m => m.DbcSource!)
+                .ToList();
+
+            IReadOnlyList<DbcMessage>? selected = _messageDialogService.SelectMessages(_currentDocument, alreadyAdded);
+            if (selected is not null && selected.Count > 0)
+            {
+                AddMessages(selected);
+            }
+        }
+
+        public void AddMessage(DbcMessage message)
+        {
+            ArgumentNullException.ThrowIfNull(message);
+
+            string messageId = FormatIdentifier(message.Identifier, message.IsExtendedIdentifier);
+            var model = new MessageModel
+            {
+                DisplayIndex = Messages.Count + 1,
+                Id = messageId,
+                RawIdentifier = message.Identifier,
+                IsExtendedIdentifier = message.IsExtendedIdentifier,
+                Name = message.Name,
+                Dlc = message.PayloadLength,
+                Cycle = "100 ms",
+                GatewayMode = "PassThrough",
+                SendType = "Cyclic",
+                SignalCount = message.Signals.Count,
+                IsEnabled = true,
+                LastSent = "—",
+                DbcSource = message
+            };
+
+            Messages.Add(model);
+            SelectedMessage = model;
+
+            foreach (DbcSignal signal in message.Signals)
+            {
+                Signals.Add(new SignalModel
+                {
+                    Name = signal.Name,
+                    StartBit = signal.StartBit,
+                    Length = signal.BitLength,
+                    Factor = signal.Factor,
+                    Offset = signal.Offset,
+                    Unit = signal.Unit,
+                    Min = signal.Minimum,
+                    Max = signal.Maximum,
+                    Value = signal.Offset,
+                    MessageId = messageId,
+                    MessageName = message.Name,
+                    IsOverridden = false,
+                    Cycle = model.Cycle
+                });
+            }
+
+            NotifyToolbarCommands();
+        }
+
+        public void AddMessages(IEnumerable<DbcMessage> messages)
+        {
+            ArgumentNullException.ThrowIfNull(messages);
+
+            foreach (var message in messages)
+            {
+                bool exists = Messages.Any(m => m.RawIdentifier == message.Identifier && m.IsExtendedIdentifier == message.IsExtendedIdentifier);
+                if (!exists)
+                {
+                    AddMessage(message);
+                }
+            }
+
+            ReindexMessages();
+            NotifyToolbarCommands();
+        }
+
+        [RelayCommand(CanExecute = nameof(CanDeleteMessage))]
+        public void DeleteMessage()
+        {
+            if (SelectedMessage is null)
+            {
+                return;
+            }
+
+            var toRemove = SelectedMessage;
+            int index = Messages.IndexOf(toRemove);
+
+            var signalsToRemove = Signals.Where(s => s.MessageId == toRemove.Id).ToList();
+            foreach (var sig in signalsToRemove)
+            {
+                Signals.Remove(sig);
+            }
+
+            Messages.Remove(toRemove);
+            ReindexMessages();
+
+            if (Messages.Count > 0)
+            {
+                int newIndex = Math.Clamp(index, 0, Messages.Count - 1);
+                SelectedMessage = Messages[newIndex];
+            }
+            else
+            {
+                SelectedMessage = null;
+            }
+
+            NotifyToolbarCommands();
+        }
+
+        [RelayCommand(CanExecute = nameof(CanDeleteAllMessages))]
+        public void DeleteAllMessages()
+        {
+            Messages.Clear();
+            Signals.Clear();
+            SelectedMessage = null;
+            NotifyToolbarCommands();
+        }
+
+        [RelayCommand(CanExecute = nameof(CanMoveUp))]
+        public void MoveUp()
+        {
+            if (SelectedMessage is null)
+            {
+                return;
+            }
+
+            int index = Messages.IndexOf(SelectedMessage);
+            if (index > 0)
+            {
+                Messages.Move(index, index - 1);
+                ReindexMessages();
+                NotifyToolbarCommands();
+            }
+        }
+
+        [RelayCommand(CanExecute = nameof(CanMoveDown))]
+        public void MoveDown()
+        {
+            if (SelectedMessage is null)
+            {
+                return;
+            }
+
+            int index = Messages.IndexOf(SelectedMessage);
+            if (index >= 0 && index < Messages.Count - 1)
+            {
+                Messages.Move(index, index + 1);
+                ReindexMessages();
+                NotifyToolbarCommands();
+            }
+        }
+
+        private void ReindexMessages()
+        {
+            for (int i = 0; i < Messages.Count; i++)
+            {
+                Messages[i].DisplayIndex = i + 1;
+            }
+        }
+
+        private void NotifyToolbarCommands()
+        {
+            OnPropertyChanged(nameof(CanAddMessages));
+            OnPropertyChanged(nameof(CanDeleteMessage));
+            OnPropertyChanged(nameof(CanDeleteAllMessages));
+            OnPropertyChanged(nameof(CanMoveUp));
+            OnPropertyChanged(nameof(CanMoveDown));
+            AddMessagesCommand.NotifyCanExecuteChanged();
+            DeleteMessageCommand.NotifyCanExecuteChanged();
+            DeleteAllMessagesCommand.NotifyCanExecuteChanged();
+            MoveUpCommand.NotifyCanExecuteChanged();
+            MoveDownCommand.NotifyCanExecuteChanged();
+        }
+
+        /// <summary>
+        /// Sets the active DBC document without auto-populating TX messages.
+        /// </summary>
+        public void LoadDocument(DbcDocument document)
+        {
+            ArgumentNullException.ThrowIfNull(document);
+            _currentDocument = document;
+
+            Messages.Clear();
+            Signals.Clear();
+            FaultQueue.Clear();
+            SelectedMessage = null;
+
+            NotifyToolbarCommands();
+        }
+
+        /// <summary>
+        /// Clears message, signal, and fault queue projections when DBC is unloaded.
+        /// </summary>
+        public void ClearDocument()
+        {
+            _currentDocument = null;
+            Messages.Clear();
+            Signals.Clear();
+            FaultQueue.Clear();
+            SelectedMessage = null;
+
+            NotifyToolbarCommands();
+        }
 
         /// <summary>
         /// Refreshes observable runtime state without starting, stopping, or owning the engine.
