@@ -148,11 +148,22 @@ Luna xhigh independent Spec/Standards/security review: PASS, no Critical/Require
 - Tạo `IMessageDialogService` và `SelectMessageWindow` (Modal dialog) với ô tìm kiếm nhanh và danh sách chọn message từ DBC.
 - `SimulationViewModel` giữ danh sách `Messages` ban đầu rỗng khi nạp DBC; thêm các lệnh `AddMessagesCommand`, `DeleteMessageCommand`, `DeleteAllMessagesCommand`, `MoveUpCommand`, `MoveDownCommand`.
 - Binding Panel 3 `MainWindow.xaml`: gắn Toolbar commands và sửa toàn bộ lỗi binding cột DataGrid (`#`, `Enable`, `Mode`, `Send Type`, `Signals`, `Last Sent`).
+- Tối ưu bảng màu cho `SelectMessageWindow` (Dark Slate `#141D2E` / `#1C273C` / `#23314B` với điểm nhấn Cyan `#38BDF8`), tăng độ tương phản và công thái học hiển thị.
 - Tạo bộ kiểm thử `SimulationMessageDraftTests.cs` (10 unit tests).
-- Verification: `dotnet build Simulate.sln` PASS 0 warning/0 error; `dotnet test Simulate.sln` PASS 209/209 tests.
+- Verification: `dotnet build Simulate.sln` PASS 0 warning/0 error; `dotnet test Simulate.sln` PASS 210/210 tests.
+- Committed to `chore/merge-agent-skills` (Commit `ade2cca`).
+
+## Next Panel: UI-04 (Live Signal Monitor)
+- Trạng thái: `READY_FOR_SPEC`.
+- Nhiệm vụ:
+  1. Binding search box (`Search signals...`), filter dropdown (`All Messages` + dynamic list các message đã chọn), nút Pause (`Ⅱ`), và nút Clear.
+  2. Bounded live-signal telemetry mapping: `Signal Name`, `Message`, `Raw Value`, `Physical Value`, `Unit`, `Status`, `Updated`.
+  3. Xây dựng unit tests và xác thực runtime.
 
 ## Suggested skills
 
-1. `code-review` for verification gates.
-2. `debugging-and-error-recovery` whenever review or manual UI testing reports a failure.
-3. `git-workflow-and-versioning` when committing or pushing changes.
+1. `codebase-design` for UI telemetry & data filtering seams.
+2. `incremental-implementation` for component-by-component delivery.
+3. `test-driven-development` for monitor filtering & pause/clear mechanics.
+4. `code-review` for verification quality gates.
+5. `git-workflow-and-versioning` when committing or pushing changes.

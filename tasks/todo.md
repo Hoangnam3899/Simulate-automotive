@@ -1223,3 +1223,8 @@ read-only projection; panel 10 không sở hữu hardware, parser hay engine.
 - [x] Sửa lỗi XamlParseException bằng cách định nghĩa tài nguyên cục bộ `DialogButton` và `BoolToVis`.
 - [x] Nâng cấp bảng màu cho `SelectMessageWindow` (Dark Slate `#141D2E` / `#1C273C` / `#23314B` với điểm nhấn Cyan `#38BDF8`), tăng độ sáng, độ tương phản và căn giữa nội dung DataGrid theo yêu cầu người dùng.
 - [x] Verification: `dotnet build Simulate.sln` PASS 0 warning/0 error; `dotnet test Simulate.sln` PASS 210/210 tests.
+- [x] Committed changes: `ade2cca` ("feat: implement Panel 2 DBC Management and Panel 3 TX Message List selective drafting").
+
+## Next: Panel 4 (Live Signal Monitor / UI-04)
+- [ ] Thiết kế logic tìm kiếm (Search Box), bộ lọc thông điệp (Message Filter ComboBox), nút Pause/Resume và nút Clear Monitor.
+- [ ] Bounded live-telemetry streaming và DataGrid mapping cho Signal Name, Message, Raw Value, Physical Value, Unit, Status, Updated.
