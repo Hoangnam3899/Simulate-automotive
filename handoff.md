@@ -153,17 +153,36 @@ Luna xhigh independent Spec/Standards/security review: PASS, no Critical/Require
 - Verification: `dotnet build Simulate.sln` PASS 0 warning/0 error; `dotnet test Simulate.sln` PASS 210/210 tests.
 - Committed to `chore/merge-agent-skills` (Commit `ade2cca`).
 
-## Next Panel: UI-04 (Live Signal Monitor)
+## UI-04 Live Signal Monitor implementation (2026-08-20)
+
+- Nâng cấp `SignalModel` thành `ObservableObject`, bổ sung `RawValue`, `PhysicalValueDisplay`, `HasReceivedData`, `StatusText`, `StatusColor`, `LastUpdated` và phương thức `UpdateValue` / `ResetData`.
+- Bổ sung phương thức giải mã `UnpackRaw` và `Unpack` tuple trong `SignalCodec.cs` hỗ trợ cả Intel và Motorola byte order.
+- `SimulationViewModel`:
+  - Thêm `SignalSearchText`, `SelectedSignalMessageFilter`, `AvailableSignalMessageFilters`, `IsSignalMonitorPaused`, `PauseMonitorButtonContent`, `FilteredSignals` (ICollectionView).
+  - Thêm `TogglePauseMonitorCommand`, `ClearSignalMonitorCommand`.
+  - Triển khai `ProcessIncomingFrame` tự động giải mã bit-level và cập nhật trạng thái màu **Xanh lá (`#10B981` — `● Active`)** khi có data, giữ màu **Xám (`#64748B` — `● No Data`)** khi chưa có data theo yêu cầu người dùng (không dùng hiệu ứng blink).
+- Binding Panel 4 `MainWindow.xaml`: gắn Toolbar search, dropdown filter, pause/resume, clear, và sửa lỗi binding các cột DataGrid (`MessageName`, `RawValue`, `PhysicalValueDisplay`, `Unit`, `StatusText/StatusColor`, `LastUpdated`).
+- Tạo bộ kiểm thử `LiveSignalMonitorTests.cs` (7 unit tests).
+- Cải tiến gom nhóm `MapCanInterfaces` trong `VectorHardwareService.cs`:
+  - `Virtual CAN` gom tất cả các kênh ảo (`Virtual Bus 1 - Channel 1, 2`, `Virtual Bus 2 - Channel 1, 2`...).
+  - Phần cứng thật tách riêng (`VN1640A 1`...).
+  - Tùy chọn `All Vector Devices` tập hợp toàn bộ kênh.
+  - Bổ sung unit tests trong `VectorHardwareServiceTests.cs`.
+- Verification: `dotnet build Simulate.sln` PASS 0 warning/0 error; `dotnet test Simulate.sln` PASS 219/219 tests.
+
+## Next Panel: UI-05 (Fault Configuration)
 - Trạng thái: `READY_FOR_SPEC`.
 - Nhiệm vụ:
-  1. Binding search box (`Search signals...`), filter dropdown (`All Messages` + dynamic list các message đã chọn), nút Pause (`Ⅱ`), và nút Clear.
-  2. Bounded live-signal telemetry mapping: `Signal Name`, `Message`, `Raw Value`, `Physical Value`, `Unit`, `Status`, `Updated`.
-  3. Xây dựng unit tests và xác thực runtime.
+  1. Chọn tín hiệu cần can thiệp lỗi từ Live Monitor (`Selected Signal`).
+  2. Cấu hình Fault Type (Stuck at Value, Bit Flip, Offset, Noise, Ramp, Replay...).
+  3. Cấu hình Timing / Injection Mode (Cyclic, OneShot, Duration, Stop Time, Override existing, Restore after stop).
+  4. Nút `+ Add to Queue` đưa fault vào hàng đợi `FaultQueue`.
 
 ## Suggested skills
 
-1. `codebase-design` for UI telemetry & data filtering seams.
-2. `incremental-implementation` for component-by-component delivery.
-3. `test-driven-development` for monitor filtering & pause/clear mechanics.
-4. `code-review` for verification quality gates.
-5. `git-workflow-and-versioning` when committing or pushing changes.
+1. `domain-modeling` for fault injection types and timing contracts.
+2. `codebase-design` for queue projection and validation seams.
+3. `incremental-implementation` for component-by-component delivery.
+4. `test-driven-development` for fault queue rules and validation logic.
+5. `code-review` for verification quality gates.
+6. `git-workflow-and-versioning` when committing or pushing changes.

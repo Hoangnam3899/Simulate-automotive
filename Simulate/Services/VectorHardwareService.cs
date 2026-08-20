@@ -312,32 +312,60 @@ namespace Simulate.Services
         private static List<HardwareInterface> MapCanInterfaces(
             IReadOnlyList<VectorChannelDescriptor> channels)
         {
-            var interfacesByDevice = new Dictionary<string, HardwareInterface>();
-
-            foreach (VectorChannelDescriptor channel in channels)
+            var validChannels = channels.Where(IsValidCanChannel).ToList();
+            if (validChannels.Count == 0)
             {
-                if (!IsValidCanChannel(channel))
+                return new List<HardwareInterface>();
+            }
+
+            var result = new List<HardwareInterface>();
+
+            // 1. Group all Virtual Channels into a single "Virtual CAN" interface
+            var virtualChannels = validChannels.Where(c => c.IsVirtual).ToList();
+            if (virtualChannels.Count > 0)
+            {
+                var virtualInterface = new HardwareInterface { Name = "Virtual CAN" };
+                bool hasMultipleBuses = virtualChannels.Select(c => c.HardwareIndex).Distinct().Count() > 1;
+
+                foreach (VectorChannelDescriptor channel in virtualChannels)
                 {
-                    continue;
+                    string channelName = hasMultipleBuses
+                        ? $"Virtual Bus {channel.HardwareIndex + 1} - Channel {channel.HardwareChannel + 1}"
+                        : $"VIRTUAL Channel {channel.HardwareChannel + 1}";
+                    uint bitrate = channel.CurrentCanBitrate == 0 ? 500_000u : channel.CurrentCanBitrate;
+
+                    virtualInterface.Channels.Add(new HardwareChannel
+                    {
+                        Name = channelName,
+                        ChannelIndex = channel.ChannelIndex,
+                        ChannelMask = channel.ChannelMask,
+                        DefaultBaudrate = bitrate
+                    });
                 }
 
+                result.Add(virtualInterface);
+            }
+
+            // 2. Group Physical Hardware Channels by Device
+            var physicalChannels = validChannels.Where(c => !c.IsVirtual).ToList();
+            var physicalInterfacesByDevice = new Dictionary<string, HardwareInterface>();
+
+            foreach (VectorChannelDescriptor channel in physicalChannels)
+            {
                 string deviceKey = $"{channel.HardwareTypeCode}_{channel.HardwareIndex}";
-                if (!interfacesByDevice.TryGetValue(deviceKey, out HardwareInterface? hardwareInterface))
+                if (!physicalInterfacesByDevice.TryGetValue(deviceKey, out HardwareInterface? hwInterface))
                 {
-                    string deviceName = channel.IsVirtual
-                        ? $"Virtual CAN Bus {channel.HardwareIndex + 1}"
-                        : $"{channel.HardwareTypeName} {channel.HardwareIndex + 1}";
-                    hardwareInterface = new HardwareInterface { Name = deviceName };
-                    interfacesByDevice.Add(deviceKey, hardwareInterface);
+                    string deviceName = $"{channel.HardwareTypeName} {channel.HardwareIndex + 1}";
+                    hwInterface = new HardwareInterface { Name = deviceName };
+                    physicalInterfacesByDevice.Add(deviceKey, hwInterface);
+                    result.Add(hwInterface);
                 }
 
-                string prefix = string.IsNullOrWhiteSpace(channel.HardwareTypeName)
-                    ? (channel.IsVirtual ? "Virtual" : "CAN")
-                    : channel.HardwareTypeName;
+                string prefix = string.IsNullOrWhiteSpace(channel.HardwareTypeName) ? "CAN" : channel.HardwareTypeName;
                 string channelName = $"{prefix} Channel {channel.HardwareChannel + 1}";
                 uint bitrate = channel.CurrentCanBitrate == 0 ? 500_000u : channel.CurrentCanBitrate;
 
-                hardwareInterface.Channels.Add(new HardwareChannel
+                hwInterface.Channels.Add(new HardwareChannel
                 {
                     Name = channelName,
                     ChannelIndex = channel.ChannelIndex,
@@ -346,7 +374,28 @@ namespace Simulate.Services
                 });
             }
 
-            return new List<HardwareInterface>(interfacesByDevice.Values);
+            // 3. If multiple interfaces exist (e.g. Virtual + HW or multiple HW), provide "All Vector Devices"
+            if (result.Count > 1)
+            {
+                var allInterface = new HardwareInterface { Name = "All Vector Devices" };
+                foreach (var iface in result)
+                {
+                    foreach (var ch in iface.Channels)
+                    {
+                        allInterface.Channels.Add(new HardwareChannel
+                        {
+                            Name = $"[{iface.Name}] {ch.Name}",
+                            ChannelIndex = ch.ChannelIndex,
+                            ChannelMask = ch.ChannelMask,
+                            DefaultBaudrate = ch.DefaultBaudrate
+                        });
+                    }
+                }
+
+                result.Add(allInterface);
+            }
+
+            return result;
         }
 
         private static bool IsValidCanChannel(VectorChannelDescriptor channel)

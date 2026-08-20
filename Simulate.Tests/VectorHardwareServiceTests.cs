@@ -80,11 +80,87 @@ namespace Simulate.Tests
             Assert.IsTrue(result.IsSuccess);
             Assert.IsNotNull(result.Value);
             Assert.AreEqual(1, result.Value.Count);
-            Assert.AreEqual("Virtual CAN Bus 1", result.Value[0].Name);
+            Assert.AreEqual("Virtual CAN", result.Value[0].Name);
             Assert.AreEqual(1, result.Value[0].Channels.Count);
             Assert.AreEqual(1, result.Value[0].Channels[0].ChannelIndex);
             Assert.AreEqual("VIRTUAL Channel 2", result.Value[0].Channels[0].Name);
             Assert.IsFalse(api.IsDriverOpen);
+        }
+
+        [TestMethod]
+        public async Task Discovery_groups_multiple_virtual_buses_with_bus_prefixed_channel_names()
+        {
+            var api = new FakeVectorXlApi
+            {
+                Channels = new VectorChannelDescriptor[]
+                {
+                    new()
+                    {
+                        HardwareTypeCode = 1,
+                        HardwareTypeName = "Virtual",
+                        HardwareIndex = 0, // Bus 1
+                        HardwareChannel = 0,
+                        ChannelIndex = 0,
+                        ChannelMask = 1,
+                        IsPresent = true,
+                        IsVirtual = true,
+                        HasActiveCanCapability = true,
+                        CurrentCanBitrate = 500_000
+                    },
+                    new()
+                    {
+                        HardwareTypeCode = 1,
+                        HardwareTypeName = "Virtual",
+                        HardwareIndex = 0, // Bus 1
+                        HardwareChannel = 1,
+                        ChannelIndex = 1,
+                        ChannelMask = 2,
+                        IsPresent = true,
+                        IsVirtual = true,
+                        HasActiveCanCapability = true,
+                        CurrentCanBitrate = 500_000
+                    },
+                    new()
+                    {
+                        HardwareTypeCode = 1,
+                        HardwareTypeName = "Virtual",
+                        HardwareIndex = 1, // Bus 2
+                        HardwareChannel = 0,
+                        ChannelIndex = 2,
+                        ChannelMask = 4,
+                        IsPresent = true,
+                        IsVirtual = true,
+                        HasActiveCanCapability = true,
+                        CurrentCanBitrate = 500_000
+                    },
+                    new()
+                    {
+                        HardwareTypeCode = 1,
+                        HardwareTypeName = "Virtual",
+                        HardwareIndex = 1, // Bus 2
+                        HardwareChannel = 1,
+                        ChannelIndex = 3,
+                        ChannelMask = 8,
+                        IsPresent = true,
+                        IsVirtual = true,
+                        HasActiveCanCapability = true,
+                        CurrentCanBitrate = 500_000
+                    }
+                }
+            };
+            var service = new VectorHardwareService(() => api);
+
+            HardwareOperationResult<IReadOnlyList<HardwareInterface>> result =
+                await service.DiscoverInterfacesAsync();
+
+            Assert.IsTrue(result.IsSuccess);
+            Assert.AreEqual(1, result.Value!.Count);
+            Assert.AreEqual("Virtual CAN", result.Value[0].Name);
+            Assert.AreEqual(4, result.Value[0].Channels.Count);
+            Assert.AreEqual("Virtual Bus 1 - Channel 1", result.Value[0].Channels[0].Name);
+            Assert.AreEqual("Virtual Bus 1 - Channel 2", result.Value[0].Channels[1].Name);
+            Assert.AreEqual("Virtual Bus 2 - Channel 1", result.Value[0].Channels[2].Name);
+            Assert.AreEqual("Virtual Bus 2 - Channel 2", result.Value[0].Channels[3].Name);
         }
 
         [TestMethod]
@@ -135,6 +211,55 @@ namespace Simulate.Tests
             Assert.AreEqual(2, result.Value[0].Channels.Count);
             Assert.AreEqual("VN1640A Channel 1", result.Value[0].Channels[0].Name);
             Assert.AreEqual("VN1640A Channel 2", result.Value[0].Channels[1].Name);
+        }
+
+        [TestMethod]
+        public async Task Discovery_creates_All_Vector_Devices_when_virtual_and_physical_devices_coexist()
+        {
+            var api = new FakeVectorXlApi
+            {
+                Channels = new VectorChannelDescriptor[]
+                {
+                    new()
+                    {
+                        HardwareTypeCode = 1,
+                        HardwareTypeName = "Virtual",
+                        HardwareIndex = 0,
+                        HardwareChannel = 0,
+                        ChannelIndex = 0,
+                        ChannelMask = 1,
+                        IsPresent = true,
+                        IsVirtual = true,
+                        HasActiveCanCapability = true,
+                        CurrentCanBitrate = 500_000
+                    },
+                    new()
+                    {
+                        HardwareTypeCode = 57,
+                        HardwareTypeName = "VN1640A",
+                        HardwareIndex = 0,
+                        HardwareChannel = 0,
+                        ChannelIndex = 1,
+                        ChannelMask = 2,
+                        IsPresent = true,
+                        IsVirtual = false,
+                        HasActiveCanCapability = true,
+                        TransceiverName = "CANpiggy 1057Gcap",
+                        CurrentCanBitrate = 500_000
+                    }
+                }
+            };
+            var service = new VectorHardwareService(() => api);
+
+            HardwareOperationResult<IReadOnlyList<HardwareInterface>> result =
+                await service.DiscoverInterfacesAsync();
+
+            Assert.IsTrue(result.IsSuccess);
+            Assert.AreEqual(3, result.Value!.Count);
+            Assert.AreEqual("Virtual CAN", result.Value[0].Name);
+            Assert.AreEqual("VN1640A 1", result.Value[1].Name);
+            Assert.AreEqual("All Vector Devices", result.Value[2].Name);
+            Assert.AreEqual(2, result.Value[2].Channels.Count);
         }
 
         [TestMethod]

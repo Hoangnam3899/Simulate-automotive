@@ -6,7 +6,7 @@ namespace Simulate.Services
 {
     public static class SignalCodec
     {
-        public static double UnpackPhysical(ReadOnlySpan<byte> payload, DbcSignal signal)
+        public static ulong UnpackRaw(ReadOnlySpan<byte> payload, DbcSignal signal)
         {
             ArgumentNullException.ThrowIfNull(signal);
 
@@ -27,6 +27,12 @@ namespace Simulate.Services
                 payloadBit = GetNextPayloadBit(payloadBit, signal.ByteOrder);
             }
 
+            return rawValue;
+        }
+
+        public static (ulong Raw, double Physical) Unpack(ReadOnlySpan<byte> payload, DbcSignal signal)
+        {
+            ulong rawValue = UnpackRaw(payload, signal);
             double numericRawValue = signal.IsSigned
                 ? DecodeSignedRawValue(rawValue, signal.BitLength)
                 : rawValue;
@@ -36,7 +42,12 @@ namespace Simulate.Services
                 throw new InvalidOperationException("The decoded physical value is not finite.");
             }
 
-            return physicalValue;
+            return (rawValue, physicalValue);
+        }
+
+        public static double UnpackPhysical(ReadOnlySpan<byte> payload, DbcSignal signal)
+        {
+            return Unpack(payload, signal).Physical;
         }
 
         private static long DecodeSignedRawValue(ulong rawValue, int bitLength)

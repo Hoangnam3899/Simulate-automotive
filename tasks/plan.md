@@ -281,7 +281,7 @@ Không dùng câu chung chung như “tiếp tục UI”; phải ghi tên panel 
 | 1 | Connection / Setup | `ConnectionViewModel`, baudrate contract, session ownership, graceful close | **Terra xhigh → Sol ultra** | **Terra xhigh** | `USER_ACCEPTED` |
 | 2 | DBC Management | safe file input, `DbcParser`, document/composition state | **Terra xhigh** | **Sol xhigh** | `USER_ACCEPTED` |
 | 3 | TX Message List | DBC projection và editable simulation draft | **Terra xhigh** | **Luna xhigh** | `USER_ACCEPTED` |
-| 4 | Live Signal Monitor | bounded live-frame/signal telemetry, Dispatcher projection | **Sol ultra** | **Terra xhigh** | `READY_FOR_SPEC` |
+| 4 | Live Signal Monitor | bounded live-frame/signal telemetry, Dispatcher projection | **Sol ultra** | **Terra xhigh** | `WAITING_USER_DEBUG` |
 | 5 | Fault Configuration | selected signal + typed timing/fault draft validation | **Terra xhigh** | **Luna high** | `LOCKED_BY_UI-04` |
 | 6 | Signal Value Configuration | physical value/`VAL_` selection và override replacement | **Terra xhigh** | **Sol xhigh** | `LOCKED_BY_UI-05` |
 | 7 | Execution Control | engine/session start-stop-pause lifecycle | **Sol ultra** | **Terra xhigh** | `LOCKED_BY_UI-06` |

@@ -1,9 +1,11 @@
 using System;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Data;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Simulate.Models;
@@ -38,6 +40,21 @@ namespace Simulate.ViewModels
         [ObservableProperty]
         private MessageModel? _selectedMessage;
 
+        [ObservableProperty]
+        private string _signalSearchText = string.Empty;
+
+        [ObservableProperty]
+        private string _selectedSignalMessageFilter = "All Messages";
+
+        [ObservableProperty]
+        private bool _isSignalMonitorPaused;
+
+        public ObservableCollection<string> AvailableSignalMessageFilters { get; } = new() { "All Messages" };
+
+        public ICollectionView? FilteredSignals { get; }
+
+        public string PauseMonitorButtonContent => IsSignalMonitorPaused ? "▶" : "Ⅱ";
+
         public bool CanAddMessages => _currentDocument is not null;
         public bool CanDeleteMessage => SelectedMessage is not null;
         public bool CanDeleteAllMessages => Messages.Count > 0;
@@ -55,6 +72,12 @@ namespace Simulate.ViewModels
         public SimulationViewModel(IMessageDialogService messageDialogService)
         {
             _messageDialogService = messageDialogService ?? throw new ArgumentNullException(nameof(messageDialogService));
+
+            FilteredSignals = CollectionViewSource.GetDefaultView(Signals);
+            if (FilteredSignals is not null)
+            {
+                FilteredSignals.Filter = FilterSignal;
+            }
         }
 
         /// <summary>
@@ -73,10 +96,17 @@ namespace Simulate.ViewModels
             _engine = engine ?? throw new ArgumentNullException(nameof(engine));
             _messageDialogService = messageDialogService ?? throw new ArgumentNullException(nameof(messageDialogService));
 
+            FilteredSignals = CollectionViewSource.GetDefaultView(Signals);
+            if (FilteredSignals is not null)
+            {
+                FilteredSignals.Filter = FilterSignal;
+            }
+
             _currentDocument = plan.Document;
             ProjectPlan(plan);
             RefreshRuntimeState();
             NotifyToolbarCommands();
+            UpdateAvailableSignalMessageFilters();
         }
 
         /// <summary>
@@ -102,6 +132,122 @@ namespace Simulate.ViewModels
         partial void OnSelectedMessageChanged(MessageModel? value)
         {
             NotifyToolbarCommands();
+        }
+
+        partial void OnSignalSearchTextChanged(string value)
+        {
+            FilteredSignals?.Refresh();
+        }
+
+        partial void OnSelectedSignalMessageFilterChanged(string value)
+        {
+            FilteredSignals?.Refresh();
+        }
+
+        partial void OnIsSignalMonitorPausedChanged(bool value)
+        {
+            OnPropertyChanged(nameof(PauseMonitorButtonContent));
+        }
+
+        [RelayCommand]
+        public void TogglePauseMonitor()
+        {
+            IsSignalMonitorPaused = !IsSignalMonitorPaused;
+        }
+
+        [RelayCommand]
+        public void ClearSignalMonitor()
+        {
+            foreach (var signal in Signals)
+            {
+                signal.ResetData();
+            }
+        }
+
+        private bool FilterSignal(object item)
+        {
+            if (item is not SignalModel signal)
+            {
+                return false;
+            }
+
+            if (!string.IsNullOrEmpty(SelectedSignalMessageFilter) &&
+                !string.Equals(SelectedSignalMessageFilter, "All Messages", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!string.Equals(signal.MessageName, SelectedSignalMessageFilter, StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(SignalSearchText))
+            {
+                string search = SignalSearchText.Trim();
+                bool matchesName = signal.Name.Contains(search, StringComparison.OrdinalIgnoreCase);
+                bool matchesMsgName = signal.MessageName.Contains(search, StringComparison.OrdinalIgnoreCase);
+                bool matchesMsgId = signal.MessageId.Contains(search, StringComparison.OrdinalIgnoreCase);
+                if (!matchesName && !matchesMsgName && !matchesMsgId)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        public void ProcessIncomingFrame(uint identifier, bool isExtended, ReadOnlySpan<byte> payload, DateTime? timestamp = null)
+        {
+            if (IsSignalMonitorPaused)
+            {
+                return;
+            }
+
+            string messageId = FormatIdentifier(identifier, isExtended);
+            DateTime time = timestamp ?? DateTime.Now;
+
+            foreach (var signal in Signals)
+            {
+                if (string.Equals(signal.MessageId, messageId, StringComparison.OrdinalIgnoreCase) && signal.DbcSource is not null)
+                {
+                    try
+                    {
+                        (ulong raw, double physical) = SignalCodec.Unpack(payload, signal.DbcSource);
+                        signal.UpdateValue(raw, physical, time);
+                    }
+                    catch
+                    {
+                        // Payload may be shorter or malformed for this signal layout
+                    }
+                }
+            }
+        }
+
+        private void UpdateAvailableSignalMessageFilters()
+        {
+            var distinctMessages = Signals
+                .Select(s => s.MessageName)
+                .Where(n => !string.IsNullOrWhiteSpace(n))
+                .Distinct()
+                .OrderBy(n => n)
+                .ToList();
+
+            string currentSelection = SelectedSignalMessageFilter;
+
+            AvailableSignalMessageFilters.Clear();
+            AvailableSignalMessageFilters.Add("All Messages");
+            foreach (var msg in distinctMessages)
+            {
+                AvailableSignalMessageFilters.Add(msg);
+            }
+
+            if (AvailableSignalMessageFilters.Contains(currentSelection))
+            {
+                SelectedSignalMessageFilter = currentSelection;
+            }
+            else
+            {
+                SelectedSignalMessageFilter = "All Messages";
+            }
         }
 
         [RelayCommand(CanExecute = nameof(CanAddMessages))]
@@ -162,13 +308,22 @@ namespace Simulate.ViewModels
                     Min = signal.Minimum,
                     Max = signal.Maximum,
                     Value = signal.Offset,
+                    RawValue = "—",
+                    PhysicalValueDisplay = "—",
                     MessageId = messageId,
                     MessageName = message.Name,
                     IsOverridden = false,
-                    Cycle = model.Cycle
+                    Cycle = model.Cycle,
+                    HasReceivedData = false,
+                    StatusText = "● No Data",
+                    StatusColor = "#64748B",
+                    LastUpdated = "—",
+                    DbcSource = signal
                 });
             }
 
+            UpdateAvailableSignalMessageFilters();
+            FilteredSignals?.Refresh();
             NotifyToolbarCommands();
         }
 
@@ -186,6 +341,8 @@ namespace Simulate.ViewModels
             }
 
             ReindexMessages();
+            UpdateAvailableSignalMessageFilters();
+            FilteredSignals?.Refresh();
             NotifyToolbarCommands();
         }
 
@@ -219,6 +376,8 @@ namespace Simulate.ViewModels
                 SelectedMessage = null;
             }
 
+            UpdateAvailableSignalMessageFilters();
+            FilteredSignals?.Refresh();
             NotifyToolbarCommands();
         }
 
@@ -228,6 +387,8 @@ namespace Simulate.ViewModels
             Messages.Clear();
             Signals.Clear();
             SelectedMessage = null;
+            UpdateAvailableSignalMessageFilters();
+            FilteredSignals?.Refresh();
             NotifyToolbarCommands();
         }
 
@@ -300,6 +461,8 @@ namespace Simulate.ViewModels
             FaultQueue.Clear();
             SelectedMessage = null;
 
+            UpdateAvailableSignalMessageFilters();
+            FilteredSignals?.Refresh();
             NotifyToolbarCommands();
         }
 
@@ -314,6 +477,8 @@ namespace Simulate.ViewModels
             FaultQueue.Clear();
             SelectedMessage = null;
 
+            UpdateAvailableSignalMessageFilters();
+            FilteredSignals?.Refresh();
             NotifyToolbarCommands();
         }
 

@@ -1225,6 +1225,26 @@ read-only projection; panel 10 không sở hữu hardware, parser hay engine.
 - [x] Verification: `dotnet build Simulate.sln` PASS 0 warning/0 error; `dotnet test Simulate.sln` PASS 210/210 tests.
 - [x] Committed changes: `ade2cca` ("feat: implement Panel 2 DBC Management and Panel 3 TX Message List selective drafting").
 
-## Next: Panel 4 (Live Signal Monitor / UI-04)
-- [ ] Thiết kế logic tìm kiếm (Search Box), bộ lọc thông điệp (Message Filter ComboBox), nút Pause/Resume và nút Clear Monitor.
-- [ ] Bounded live-telemetry streaming và DataGrid mapping cho Signal Name, Message, Raw Value, Physical Value, Unit, Status, Updated.
+## Work log — 2026-08-20 (UI-04 Live Signal Monitor & UI-01 Driver/Channel Grouping Enhancement)
+
+- [x] Nâng cấp `SignalModel` thành `ObservableObject`, bổ sung `RawValue`, `PhysicalValueDisplay`, `HasReceivedData`, `StatusText`, `StatusColor`, `LastUpdated` và phương thức `UpdateValue` / `ResetData`.
+- [x] Bổ sung phương thức giải mã `UnpackRaw` và `Unpack` tuple trong `SignalCodec.cs` hỗ trợ cả Intel và Motorola byte order.
+- [x] Cập nhật `SimulationViewModel`:
+  - Thêm `SignalSearchText`, `SelectedSignalMessageFilter`, `AvailableSignalMessageFilters`, `IsSignalMonitorPaused`, `PauseMonitorButtonContent`, `FilteredSignals` (ICollectionView).
+  - Thêm `TogglePauseMonitorCommand`, `ClearSignalMonitorCommand`.
+  - Triển khai `ProcessIncomingFrame` tự động giải mã bit-level và cập nhật trạng thái màu **Xanh lá (`#10B981` — `● Active`)** khi có data, giữ màu **Xám (`#64748B` — `● No Data`)** khi chưa có data theo yêu cầu người dùng.
+- [x] Cập nhật `MainWindow.xaml` (Panel 4):
+  - Gắn binding cho ô Search, ComboBox Filter, nút Pause (`Ⅱ`/`▶`), nút Clear.
+  - Sửa toàn bộ lỗi binding cột DataGrid (`MessageName`, `RawValue`, `PhysicalValueDisplay`, `Unit`, `StatusText/StatusColor`, `LastUpdated`).
+- [x] Cải tiến logic gom nhóm thiết bị `MapCanInterfaces` trong `VectorHardwareService.cs`:
+  - Gom toàn bộ các kênh ảo vào `Virtual CAN` với tên kênh chi tiết (`Virtual Bus 1 - Channel 1`, `Virtual Bus 1 - Channel 2`, `Virtual Bus 2 - Channel 1`, `Virtual Bus 2 - Channel 2`...).
+  - Tách các thiết bị phần cứng thật thành từng nhóm riêng (`VN1640A 1`...).
+  - Tự động bổ sung tùy chọn `All Vector Devices` khi có nhiều thiết bị trên hệ thống.
+- [x] Bổ sung unit tests cho Multi-bus Virtual Discovery và All Vector Devices trong `VectorHardwareServiceTests.cs`.
+- [x] Verification: `dotnet build Simulate.sln` PASS 0 warning/0 error; `dotnet test Simulate.sln` PASS 219/219 tests.
+
+## Next: Panel 5 (Fault Configuration / UI-05)
+- [ ] Chọn tín hiệu cần can thiệp lỗi (Selected Signal binding).
+- [ ] Cấu hình Fault Type (Stuck at Value, Bit Flip, Offset, Noise, Ramp, Replay...).
+- [ ] Cấu hình Timing / Injection Mode (Cyclic, OneShot, Burst, Duration, Stop Time).
+- [ ] Nút `+ Add to Queue` đưa fault vào hàng đợi `FaultQueue`.

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -46,21 +47,90 @@ namespace Simulate.ViewModels
         public Simulate.Models.DbcMessage? DbcSource { get; set; }
     }
 
-    public class SignalModel
+    public partial class SignalModel : ObservableObject
     {
-        public string Name { get; set; } = string.Empty;
-        public int StartBit { get; set; }
-        public int Length { get; set; }
-        public double Factor { get; set; }
-        public double Offset { get; set; }
-        public string Unit { get; set; } = string.Empty;
-        public double Min { get; set; }
-        public double Max { get; set; }
-        public double Value { get; set; }
-        public string MessageId { get; set; } = string.Empty;
-        public string MessageName { get; set; } = string.Empty;
-        public bool IsOverridden { get; set; }
-        public string Cycle { get; set; } = string.Empty;
+        [ObservableProperty]
+        private string _name = string.Empty;
+
+        [ObservableProperty]
+        private int _startBit;
+
+        [ObservableProperty]
+        private int _length;
+
+        [ObservableProperty]
+        private double _factor = 1.0;
+
+        [ObservableProperty]
+        private double _offset;
+
+        [ObservableProperty]
+        private string _unit = string.Empty;
+
+        [ObservableProperty]
+        private double _min;
+
+        [ObservableProperty]
+        private double _max;
+
+        [ObservableProperty]
+        private string _rawValue = "—";
+
+        [ObservableProperty]
+        private double _value;
+
+        [ObservableProperty]
+        private string _physicalValueDisplay = "—";
+
+        [ObservableProperty]
+        private string _messageId = string.Empty;
+
+        [ObservableProperty]
+        private string _messageName = string.Empty;
+
+        [ObservableProperty]
+        private bool _isOverridden;
+
+        [ObservableProperty]
+        private string _cycle = "—";
+
+        [ObservableProperty]
+        private bool _hasReceivedData;
+
+        [ObservableProperty]
+        private string _statusText = "● No Data";
+
+        [ObservableProperty]
+        private string _statusColor = "#64748B";
+
+        [ObservableProperty]
+        private string _lastUpdated = "—";
+
+        public Simulate.Models.DbcSignal? DbcSource { get; set; }
+
+        public void UpdateValue(ulong raw, double physical, DateTime timestamp)
+        {
+            RawValue = $"0x{raw:X}";
+            Value = physical;
+            PhysicalValueDisplay = string.IsNullOrWhiteSpace(Unit)
+                ? physical.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
+                : $"{physical.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)} {Unit}";
+            HasReceivedData = true;
+            StatusText = IsOverridden ? "● Injected" : "● Active";
+            StatusColor = IsOverridden ? "#EF4444" : "#10B981";
+            LastUpdated = timestamp.ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture);
+        }
+
+        public void ResetData()
+        {
+            RawValue = "—";
+            Value = Offset;
+            PhysicalValueDisplay = "—";
+            HasReceivedData = false;
+            StatusText = "● No Data";
+            StatusColor = "#64748B";
+            LastUpdated = "—";
+        }
     }
 
     public class FaultQueueModel
