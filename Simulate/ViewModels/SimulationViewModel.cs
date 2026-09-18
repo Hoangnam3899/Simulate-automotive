@@ -163,9 +163,46 @@ namespace Simulate.ViewModels
         /// </summary>
         public bool IsConfigured => _engine is not null;
 
+        private bool _isSyncingMessageSelection;
+
         partial void OnSelectedMessageChanged(MessageModel? value)
         {
             NotifyToolbarCommands();
+            if (!_isSyncingMessageSelection)
+            {
+                _isSyncingMessageSelection = true;
+                try
+                {
+                    if (value is not null)
+                    {
+                        if (!AvailableSignalMessageFilters.Contains(value.Name))
+                        {
+                            AvailableSignalMessageFilters.Add(value.Name);
+                        }
+                        SelectedSignalMessageFilter = value.Name;
+                    }
+                    else
+                    {
+                        SelectedSignalMessageFilter = "All Messages";
+                    }
+                }
+                finally
+                {
+                    _isSyncingMessageSelection = false;
+                }
+            }
+
+            if (SelectedSignal is not null && value is not null &&
+                !string.Equals(SelectedSignal.MessageId, value.Id, StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(SelectedSignal.MessageName, value.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                SelectedSignal = Signals.FirstOrDefault(s =>
+                    string.Equals(s.MessageId, value.Id, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(s.MessageName, value.Name, StringComparison.OrdinalIgnoreCase));
+            }
+
+            FilteredSignals?.Refresh();
+            FilteredValueSignals?.Refresh();
         }
 
         partial void OnSelectedSignalChanged(SignalModel? value)
@@ -180,7 +217,32 @@ namespace Simulate.ViewModels
 
         partial void OnSelectedSignalMessageFilterChanged(string value)
         {
+            if (!_isSyncingMessageSelection)
+            {
+                _isSyncingMessageSelection = true;
+                try
+                {
+                    if (string.Equals(value, "All Messages", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(value))
+                    {
+                        SelectedMessage = null;
+                    }
+                    else
+                    {
+                        var matchingMsg = Messages.FirstOrDefault(m => string.Equals(m.Name, value, StringComparison.OrdinalIgnoreCase));
+                        if (matchingMsg is not null)
+                        {
+                            SelectedMessage = matchingMsg;
+                        }
+                    }
+                }
+                finally
+                {
+                    _isSyncingMessageSelection = false;
+                }
+            }
+
             FilteredSignals?.Refresh();
+            FilteredValueSignals?.Refresh();
         }
 
         partial void OnIsSignalMonitorPausedChanged(bool value)
@@ -210,8 +272,16 @@ namespace Simulate.ViewModels
                 return false;
             }
 
-            if (!string.IsNullOrEmpty(SelectedSignalMessageFilter) &&
-                !string.Equals(SelectedSignalMessageFilter, "All Messages", StringComparison.OrdinalIgnoreCase))
+            if (SelectedMessage is not null)
+            {
+                if (!string.Equals(signal.MessageId, SelectedMessage.Id, StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(signal.MessageName, SelectedMessage.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+            }
+            else if (!string.IsNullOrEmpty(SelectedSignalMessageFilter) &&
+                     !string.Equals(SelectedSignalMessageFilter, "All Messages", StringComparison.OrdinalIgnoreCase))
             {
                 if (!string.Equals(signal.MessageName, SelectedSignalMessageFilter, StringComparison.OrdinalIgnoreCase))
                 {
@@ -242,6 +312,15 @@ namespace Simulate.ViewModels
         partial void OnShowOnlyOverriddenChanged(bool value)
         {
             FilteredValueSignals?.Refresh();
+        }
+
+        [RelayCommand]
+        public void ClearAllOverrides()
+        {
+            foreach (var signal in Signals.Where(s => s.IsOverridden).ToList())
+            {
+                signal.IsOverridden = false;
+            }
         }
 
         private void OnSignalsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -312,6 +391,15 @@ namespace Simulate.ViewModels
             if (item is not SignalModel signal)
             {
                 return false;
+            }
+
+            if (SelectedMessage is not null)
+            {
+                if (!string.Equals(signal.MessageId, SelectedMessage.Id, StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(signal.MessageName, SelectedMessage.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
             }
 
             if (ShowOnlyOverridden && !signal.IsOverridden)

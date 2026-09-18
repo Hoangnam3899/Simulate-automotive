@@ -1,6 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -106,33 +107,152 @@ namespace Simulate.ViewModels
         [ObservableProperty]
         private string _lastUpdated = "—";
 
-        public Simulate.Models.DbcSignal? DbcSource { get; set; }
+        [ObservableProperty]
+        private bool _isValueValid = true;
+
+        [ObservableProperty]
+        private string _valueColor = "#F8FAFC";
+
+        private Simulate.Models.DbcSignal? _dbcSource;
+        public Simulate.Models.DbcSignal? DbcSource
+        {
+            get => _dbcSource;
+            set
+            {
+                _dbcSource = value;
+                _availableValueDescriptions = null;
+                OnPropertyChanged(nameof(HasValueDescriptions));
+                OnPropertyChanged(nameof(AvailableValueDescriptions));
+                OnPropertyChanged(nameof(PhysicalValueInput));
+            }
+        }
+
+        public bool HasValueDescriptions => DbcSource?.ValueDescriptions != null && DbcSource.ValueDescriptions.Count > 0;
+
+        private ObservableCollection<string>? _availableValueDescriptions;
+        public ObservableCollection<string> AvailableValueDescriptions
+        {
+            get
+            {
+                if (_availableValueDescriptions == null)
+                {
+                    _availableValueDescriptions = new ObservableCollection<string>();
+                    if (HasValueDescriptions && DbcSource != null)
+                    {
+                        foreach (var vd in DbcSource.ValueDescriptions)
+                        {
+                            _availableValueDescriptions.Add($"[{vd.RawValue}] {vd.Description}");
+                        }
+                    }
+                }
+                return _availableValueDescriptions;
+            }
+        }
+
+        public string PhysicalValueInput
+        {
+            get
+            {
+                if (HasValueDescriptions && DbcSource != null)
+                {
+                    var desc = DbcSource.ValueDescriptions.FirstOrDefault(d => Math.Abs(d.PhysicalValue - Value) < 1e-6);
+                    if (desc != null)
+                    {
+                        return $"[{desc.RawValue}] {desc.Description}";
+                    }
+                    long raw = Factor != 0 ? (long)Math.Round((Value - Offset) / Factor) : (long)Math.Round(Value);
+                    desc = DbcSource.ValueDescriptions.FirstOrDefault(d => d.RawValue == raw);
+                    if (desc != null)
+                    {
+                        return $"[{desc.RawValue}] {desc.Description}";
+                    }
+                    return $"[{raw}]";
+                }
+                return Value.ToString("0.##", CultureInfo.InvariantCulture);
+            }
+            set
+            {
+                if (string.IsNullOrWhiteSpace(value)) return;
+
+                if (HasValueDescriptions && DbcSource != null)
+                {
+                    int start = value.IndexOf('[');
+                    int end = value.IndexOf(']');
+                    if (start >= 0 && end > start)
+                    {
+                        string numStr = value.Substring(start + 1, end - start - 1);
+                        if (long.TryParse(numStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out long rawVal))
+                        {
+                            var desc = DbcSource.ValueDescriptions.FirstOrDefault(d => d.RawValue == rawVal);
+                            Value = desc != null ? desc.PhysicalValue : (rawVal * Factor + Offset);
+                            IsOverridden = true;
+                        }
+                    }
+                }
+                else
+                {
+                    if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double parsed))
+                    {
+                        Value = parsed;
+                        IsOverridden = true;
+                    }
+                    else
+                    {
+                        IsValueValid = false;
+                        ValueColor = "#EF4444";
+                        OnPropertyChanged(nameof(ValidationToolTip));
+                    }
+                }
+                OnPropertyChanged(nameof(PhysicalValueInput));
+            }
+        }
+
+        public string ValidationToolTip => IsValueValid
+            ? $"Giá trị: {Value}"
+            : $"⚠️ CẢNH BÁO: Giá trị {Value} vượt dải cho phép [{Min} .. {Max}]!";
+
+        partial void OnMinChanged(double value) => ValidateRange(Value);
+        partial void OnMaxChanged(double value) => ValidateRange(Value);
+
+        private void ValidateRange(double val)
+        {
+            IsValueValid = (Min == Max) || (val >= Min && val <= Max);
+            ValueColor = IsValueValid ? "#F8FAFC" : "#EF4444";
+            OnPropertyChanged(nameof(ValidationToolTip));
+        }
+
+        private string FormatDisplayValue(double physical)
+        {
+            if (HasValueDescriptions && DbcSource != null)
+            {
+                var desc = DbcSource.ValueDescriptions.FirstOrDefault(d => Math.Abs(d.PhysicalValue - physical) < 1e-6);
+                if (desc != null)
+                {
+                    return $"[{desc.RawValue}] {desc.Description}";
+                }
+                long raw = Factor != 0 ? (long)Math.Round((physical - Offset) / Factor) : (long)Math.Round(physical);
+                desc = DbcSource.ValueDescriptions.FirstOrDefault(d => d.RawValue == raw);
+                if (desc != null)
+                {
+                    return $"[{desc.RawValue}] {desc.Description}";
+                }
+            }
+
+            return string.IsNullOrWhiteSpace(Unit)
+                ? physical.ToString("0.##", CultureInfo.InvariantCulture)
+                : $"{physical.ToString("0.##", CultureInfo.InvariantCulture)} {Unit}";
+        }
 
         partial void OnIsOverriddenChanged(bool value)
         {
-            if (value)
-            {
-                StatusText = "● Injected";
-                StatusColor = "#EF4444";
-                PhysicalValueDisplay = string.IsNullOrWhiteSpace(Unit)
-                    ? Value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
-                    : $"{Value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)} {Unit}";
-            }
-            else
-            {
-                StatusText = HasReceivedData ? "● Active" : "● No Data";
-                StatusColor = HasReceivedData ? "#10B981" : "#64748B";
-            }
+            // UI 6 triggers on IsOverridden to highlight modified signals with white background and black text.
+            // UI 4 (Live Signal Monitor) reflects live bus traffic and is not prematurely set to Injected during setup.
         }
 
         partial void OnValueChanged(double value)
         {
-            if (IsOverridden)
-            {
-                PhysicalValueDisplay = string.IsNullOrWhiteSpace(Unit)
-                    ? value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
-                    : $"{value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)} {Unit}";
-            }
+            ValidateRange(value);
+            OnPropertyChanged(nameof(PhysicalValueInput));
         }
 
         public void UpdateValue(ulong raw, double physical, DateTime timestamp)
@@ -141,13 +261,11 @@ namespace Simulate.ViewModels
             if (!IsOverridden)
             {
                 Value = physical;
-                PhysicalValueDisplay = string.IsNullOrWhiteSpace(Unit)
-                    ? physical.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
-                    : $"{physical.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)} {Unit}";
             }
+            PhysicalValueDisplay = FormatDisplayValue(physical);
             HasReceivedData = true;
-            StatusText = IsOverridden ? "● Injected" : "● Active";
-            StatusColor = IsOverridden ? "#EF4444" : "#10B981";
+            StatusText = "● Active";
+            StatusColor = "#10B981";
             LastUpdated = timestamp.ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture);
         }
 

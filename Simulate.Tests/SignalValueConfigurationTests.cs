@@ -60,6 +60,7 @@ namespace Simulate.Tests
                  SG_ EngineTemp : 16|8@1+ (1,-40) [-40|215] "degC" Gateway
                 BO_ 419 BrakeStatus: 4 Gateway
                  SG_ BrakeApplied : 0|1@1+ (1,0) [0|1] "" Gateway
+                VAL_ 419 BrakeApplied 0 "Released" 1 "Applied" ;
                 """;
 
             DbcDocument document = DbcParser.Parse(documentText).Document
@@ -141,16 +142,18 @@ namespace Simulate.Tests
         }
 
         [TestMethod]
-        public void TogglingIsOverridden_UpdatesStatusAndDisplay()
+        public void TogglingIsOverridden_PreservesLiveStatusAndEnablesOverride()
         {
             var vm = CreateConfiguredViewModel(out _);
             var signal = vm.Signals.First(s => s.Name == "EngineSpeed");
             signal.Value = 3500;
 
             signal.IsOverridden = true;
-            Assert.AreEqual("● Injected", signal.StatusText);
-            Assert.AreEqual("#EF4444", signal.StatusColor);
-            Assert.AreEqual("3500 rpm", signal.PhysicalValueDisplay);
+            // Setup in UI 6 does not prematurely inject or mutate UI 4 live monitor status
+            Assert.AreEqual("● No Data", signal.StatusText);
+            Assert.AreEqual("#64748B", signal.StatusColor);
+            Assert.AreEqual("—", signal.PhysicalValueDisplay);
+            Assert.IsTrue(signal.IsOverridden);
 
             signal.IsOverridden = false;
             Assert.AreEqual("● No Data", signal.StatusText);
@@ -198,6 +201,152 @@ namespace Simulate.Tests
 
             Assert.IsTrue(vm.FaultConfig.HasSelectedSignal);
             Assert.AreEqual("Selected: EngineData.EngineSpeed", vm.FaultConfig.SelectedSignalDisplay);
+        }
+
+        [TestMethod]
+        public void SignalWithValueDescriptions_ExposesAvailableDescriptionsAndDynamicDisplay()
+        {
+            var vm = CreateConfiguredViewModel(out _);
+            var brakeSignal = vm.Signals.First(s => s.Name == "BrakeApplied");
+
+            Assert.IsTrue(brakeSignal.HasValueDescriptions);
+            Assert.IsNotNull(brakeSignal.AvailableValueDescriptions);
+            Assert.AreEqual(2, brakeSignal.AvailableValueDescriptions.Count);
+            Assert.AreEqual("[0] Released", brakeSignal.AvailableValueDescriptions[0]);
+            Assert.AreEqual("[1] Applied", brakeSignal.AvailableValueDescriptions[1]);
+            Assert.AreEqual("[0] Released", brakeSignal.PhysicalValueInput);
+
+            // Select "[1] Applied"
+            brakeSignal.PhysicalValueInput = "[1] Applied";
+            Assert.AreEqual(1d, brakeSignal.Value);
+            Assert.IsTrue(brakeSignal.IsOverridden);
+            Assert.AreEqual("—", brakeSignal.PhysicalValueDisplay);
+            Assert.AreEqual("● No Data", brakeSignal.StatusText);
+        }
+
+        [TestMethod]
+        public void ContinuousSignal_MinMaxValidation_UpdatesValueColor()
+        {
+            var vm = CreateConfiguredViewModel(out _);
+            var speedSignal = vm.Signals.First(s => s.Name == "EngineSpeed");
+
+            Assert.AreEqual(0d, speedSignal.Min);
+            Assert.AreEqual(8000d, speedSignal.Max);
+
+            // In range
+            speedSignal.PhysicalValueInput = "5000";
+            Assert.AreEqual(5000d, speedSignal.Value);
+            Assert.IsTrue(speedSignal.IsValueValid);
+            Assert.AreEqual("#F8FAFC", speedSignal.ValueColor);
+
+            // Out of range (exceeds max 8000)
+            speedSignal.PhysicalValueInput = "9000";
+            Assert.AreEqual(9000d, speedSignal.Value);
+            Assert.IsFalse(speedSignal.IsValueValid);
+            Assert.AreEqual("#EF4444", speedSignal.ValueColor);
+
+            // Negative (below min 0)
+            speedSignal.PhysicalValueInput = "-50";
+            Assert.AreEqual(-50d, speedSignal.Value);
+            Assert.IsFalse(speedSignal.IsValueValid);
+            Assert.AreEqual("#EF4444", speedSignal.ValueColor);
+            StringAssert.Contains(speedSignal.ValidationToolTip, "CẢNH BÁO");
+            StringAssert.Contains(speedSignal.ValidationToolTip, "vượt dải cho phép");
+
+            // Valid again
+            speedSignal.PhysicalValueInput = "2500";
+            Assert.AreEqual(2500d, speedSignal.Value);
+            Assert.IsTrue(speedSignal.IsValueValid);
+            Assert.AreEqual("#F8FAFC", speedSignal.ValueColor);
+            Assert.IsFalse(speedSignal.ValidationToolTip.Contains("CẢNH BÁO"));
+        }
+
+        [TestMethod]
+        public void ClearAllOverrides_ResetsAllOverriddenSignals()
+        {
+            var vm = CreateConfiguredViewModel(out var engine);
+            var speedSignal = vm.Signals.First(s => s.Name == "EngineSpeed");
+            var tempSignal = vm.Signals.First(s => s.Name == "EngineTemp");
+
+            speedSignal.IsOverridden = true;
+            tempSignal.IsOverridden = true;
+
+            Assert.AreEqual(2, vm.Signals.Count(s => s.IsOverridden));
+
+            vm.ClearAllOverridesCommand.Execute(null);
+
+            Assert.AreEqual(0, vm.Signals.Count(s => s.IsOverridden));
+            Assert.IsFalse(speedSignal.IsOverridden);
+            Assert.IsFalse(tempSignal.IsOverridden);
+        }
+
+        [TestMethod]
+        public void SelectingMessage_InMessageList_FiltersLiveMonitorAndValueConfigToSelectedMessage()
+        {
+            var vm = CreateConfiguredViewModel(out _);
+            var engineDataMsg = vm.Messages.First(m => m.Name == "EngineData");
+            var brakeStatusMsg = vm.Messages.First(m => m.Name == "BrakeStatus");
+
+            // Select BrakeStatus message in Bảng 3
+            vm.SelectedMessage = brakeStatusMsg;
+
+            // Bảng 6 (FilteredValueSignals) must only show signals of BrakeStatus
+            var valList = vm.FilteredValueSignals!.Cast<SignalModel>().ToList();
+            Assert.AreEqual(1, valList.Count);
+            Assert.AreEqual("BrakeApplied", valList[0].Name);
+            Assert.AreEqual("BrakeStatus", valList[0].MessageName);
+
+            // Bảng 4 (FilteredSignals) must also only show signals of BrakeStatus
+            var liveList = vm.FilteredSignals!.Cast<SignalModel>().ToList();
+            Assert.AreEqual(1, liveList.Count);
+            Assert.AreEqual("BrakeApplied", liveList[0].Name);
+            Assert.AreEqual("BrakeStatus", liveList[0].MessageName);
+
+            // Select EngineData message in Bảng 3
+            vm.SelectedMessage = engineDataMsg;
+
+            valList = vm.FilteredValueSignals!.Cast<SignalModel>().ToList();
+            Assert.AreEqual(2, valList.Count);
+            Assert.IsTrue(valList.All(s => s.MessageName == "EngineData"));
+
+            liveList = vm.FilteredSignals!.Cast<SignalModel>().ToList();
+            Assert.AreEqual(2, liveList.Count);
+            Assert.IsTrue(liveList.All(s => s.MessageName == "EngineData"));
+        }
+
+        [TestMethod]
+        public void ClearingSelectedMessage_RestoresAllSignalsInLiveMonitorAndValueConfig()
+        {
+            var vm = CreateConfiguredViewModel(out _);
+            var brakeStatusMsg = vm.Messages.First(m => m.Name == "BrakeStatus");
+
+            vm.SelectedMessage = brakeStatusMsg;
+            Assert.AreEqual(1, vm.FilteredValueSignals!.Cast<SignalModel>().Count());
+            Assert.AreEqual(1, vm.FilteredSignals!.Cast<SignalModel>().Count());
+
+            // Clear selection (null)
+            vm.SelectedMessage = null;
+
+            // Restores all 3 signals in both views
+            Assert.AreEqual(3, vm.FilteredValueSignals!.Cast<SignalModel>().Count());
+            Assert.AreEqual(3, vm.FilteredSignals!.Cast<SignalModel>().Count());
+        }
+
+        [TestMethod]
+        public void ChangingSelectedSignalMessageFilter_BidirectionallySyncsSelectedMessage()
+        {
+            var vm = CreateConfiguredViewModel(out _);
+
+            // User selects a message in UI 4 ComboBox filter
+            vm.SelectedSignalMessageFilter = "BrakeStatus";
+            Assert.IsNotNull(vm.SelectedMessage);
+            Assert.AreEqual("BrakeStatus", vm.SelectedMessage.Name);
+            Assert.AreEqual(1, vm.FilteredValueSignals!.Cast<SignalModel>().Count());
+
+            // User selects "All Messages" in UI 4 ComboBox filter
+            vm.SelectedSignalMessageFilter = "All Messages";
+            Assert.IsNull(vm.SelectedMessage);
+            Assert.AreEqual(3, vm.FilteredValueSignals!.Cast<SignalModel>().Count());
         }
     }
 }

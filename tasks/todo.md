@@ -952,7 +952,7 @@ search/message filter/pause/clear và grid hiện hữu; không polling/sleep tr
 
 ### UI-06 — Signal Value Configuration
 
-**Status:** `USER_ACCEPTED`.
+**Status:** `IN_PROGRESS`.
 
 **Description:** Bind signal search/filter, editable physical value, min/max/step và override state vào
 `ReplaceSignalOverrides`; `VAL_` label/key phải map raw→physical theo contract Task 11.
@@ -1283,4 +1283,50 @@ read-only projection; panel 10 không sở hữu hardware, parser hay engine.
   - Kiểm thử đồng bộ gọi `ReplaceSignalOverrides` khi bật/tắt override hoặc thay đổi giá trị.
   - Kiểm thử đồng bộ lựa chọn tín hiệu sang Bảng 5.
 - [x] Verification: `dotnet build Simulate.sln` PASS 0 warning/0 error; `dotnet test Simulate.sln` PASS 233/233 tests (100% PASS).
-- [ ] Trạng thái hiện tại: `WAITING_USER_DEBUG` (Chờ người dùng kiểm thử thủ công trên giao diện).
+
+## Work log — 2026-08-20 (UI-06 Dynamic Signal Value Selection & VAL_ Enum Support)
+
+- [x] Phân tích giải pháp công thái học từ dự án tham khảo `TreeViews and Value Converters` (đảm bảo 100% READ-ONLY không thay đổi dự án tham khảo):
+  - Áp dụng cơ chế phân loại signal động `HasValueDescriptions` từ bảng `VAL_` trong DBC.
+  - Sử dụng `DataGridTemplateColumn` kết hợp `ContentControl` và `DataTrigger`:
+    * Với signal số thực liên tục: Hiển thị `TextBox` nhập số mượt mà, kiểm tra giới hạn `[Min, Max]` và đổi màu đỏ cảnh báo (`#EF4444`) khi vi phạm dải giá trị.
+    * Với signal trạng thái/enum: Tự động chuyển đổi thành `ComboBox` dropdown hiển thị định dạng chuẩn `[RawValue] Description` (ví dụ `[0] Released`, `[1] Applied`).
+  - Hỗ trợ parser hai chiều `PhysicalValueInput`: Tự động trích xuất mã số trong ngoặc vuông `[...]` để ghi vào backend và tự động kích hoạt `IsOverridden = true`.
+  - Phản chiếu định dạng enum sang Bảng 4 (Live Signal Monitor) hiển thị `[0] Released` thay vì số thô.
+  - Bổ sung nút **"Clear All"** trong thanh tìm kiếm Bảng 6 (`ClearAllOverridesCommand`) cho phép hủy nhanh toàn bộ tín hiệu ghi đè.
+- [x] Bổ sung 3 unit tests mới trong `SignalValueConfigurationTests.cs` (nâng tổng số lên 10 tests):
+  - `SignalWithValueDescriptions_ExposesAvailableDescriptionsAndDynamicDisplay`
+  - `ContinuousSignal_MinMaxValidation_UpdatesValueColor`
+  - `ClearAllOverrides_ResetsAllOverriddenSignals`
+- [x] Verification: `dotnet build Simulate.sln` PASS 0 warning/0 error; `dotnet test Simulate.sln` PASS 236/236 tests (100% PASS).
+- [x] Tối ưu trực quan theo phản hồi người dùng:
+  - **Bảng 6**: Khi tín hiệu được thay đổi/ghi đè (`IsOverridden == true`), ô giá trị Value (cả TextBox và ComboBox) tự động chuyển sang **nền trắng chữ đen** (`#FFFFFF` background, `#000000` text, font SemiBold) giúp phân biệt tức thì tín hiệu đang cấu hình.
+  - **Bảng 4 (Live Signal Monitor)**: Tách biệt hoàn toàn trạng thái setup của Bảng 6 khỏi Bảng 4; Bảng 4 giữ nguyên trạng thái bus thực tế (`● No Data` / `● Active`), tuyệt đối không hiển thị sớm `● Injected` khi chưa khởi động tiêm lỗi ở Bảng 7.
+
+## Work log — 2026-08-20 (UI-06 & UI-04 Bug Fix: Min/Max Range Validation Warning & Message-Filtered Signal Isolation)
+
+- [x] **Khắc phục Lỗi 1 (Cảnh báo vi phạm dải Min/Max tại Bảng 6)**:
+  - **Nguyên nhân gốc**: Khi tín hiệu được nhập/ghi đè, trigger `IsOverridden == true` ép màu chữ thành `#000000` và nền thành `#FFFFFF`, ghi đè hoàn toàn màu đỏ cảnh báo `ValueColor` (`#EF4444`), đồng thời ô thiếu viền cảnh báo và icon chỉ báo lỗi.
+  - **Giải pháp xử lý**:
+    * Trong `SignalModel` (`MainViewModel.cs`): Thêm thuộc tính `ValidationToolTip` tự động cập nhật câu cảnh báo tiếng Việt chi tiết (`⚠️ CẢNH BÁO: Giá trị {Value} vượt dải cho phép [{Min} .. {Max}]!`). Bổ sung bắt lỗi khi parse chuỗi phi số trong `PhysicalValueInput`.
+    * Trong `MainWindow.xaml`: Cấu hình thứ tự trigger ưu tiên `IsValueValid == False` sau `IsOverridden == True`. Khi giá trị ngoài dải cho phép:
+      - Nền ô chuyển sang màu đỏ nhạt cảnh báo (`Background="#FEF2F2"`).
+      - Viền ô chuyển sang màu đỏ rực dày (`BorderBrush="#EF4444"`, `BorderThickness="1.5"`).
+      - Chữ chuyển sang màu đỏ đậm in đậm (`Foreground="#DC2626"`, `FontWeight="Bold"`).
+      - Xuất hiện biểu tượng cảnh báo `⚠️` màu đỏ ngay cạnh ô nhập với tooltip cảnh báo tiếng Việt rõ ràng.
+- [x] **Khắc phục Lỗi 2 (Hiển thị riêng tín hiệu của message được chọn ở Bảng 3 cho Bảng 4 và Bảng 6)**:
+  - **Nguyên nhân gốc**: `FilterSignal` (Bảng 4) và `FilterValueSignal` (Bảng 6) chưa lọc theo `SelectedMessage`, và `OnSelectedMessageChanged` chưa kích hoạt làm mới hai view này khi người dùng click chọn dòng trong Bảng 3.
+  - **Giải pháp xử lý**:
+    * Cập nhật `FilterValueSignal` và `FilterSignal` trong `SimulationViewModel.cs`: Khi `SelectedMessage is not null`, chỉ hiển thị các tín hiệu thuộc message đó (`signal.MessageId == SelectedMessage.Id || signal.MessageName == SelectedMessage.Name`). Khi `SelectedMessage is null`, hiển thị toàn bộ tín hiệu để duy trì tương thích.
+    * Đồng bộ hai chiều an toàn giữa `SelectedMessage` (Bảng 3) và `SelectedSignalMessageFilter` (Bảng 4) qua guard `_isSyncingMessageSelection`. Khi người dùng click chọn 1 message ở Bảng 3, cả Bảng 4 và Bảng 6 lập tức đồng bộ lọc hiển thị riêng các tín hiệu của message đó.
+    * Khi chuyển đổi message, `SelectedSignal` tự động chuyển sang tín hiệu đầu tiên của message mới, đồng bộ mượt mà sang Bảng 5 (Fault Configuration).
+- [x] **Bộ kiểm thử tự động**:
+  - Bổ sung các unit test trong `SignalValueConfigurationTests.cs`:
+    * `ContinuousSignal_MinMaxValidation_UpdatesValidationToolTip`
+    * `SelectingMessage_InMessageList_FiltersLiveMonitorAndValueConfigToSelectedMessage`
+    * `ClearingSelectedMessage_RestoresAllSignalsInLiveMonitorAndValueConfig`
+    * `ChangingSelectedSignalMessageFilter_BidirectionallySyncsSelectedMessage`
+  - Verification: `dotnet build Simulate.sln` PASS 0 warning / 0 error; `dotnet test Simulate.sln` PASS 239/239 tests (100% PASS).
+- [ ] Trạng thái hiện tại: `WAITING_USER_VERIFICATION` (Chờ người dùng kiểm tra giao diện).
+
+

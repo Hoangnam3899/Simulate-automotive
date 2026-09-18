@@ -1,4 +1,4 @@
-# Handoff — UI-07 Ready for Implementation (UI-06 USER_ACCEPTED)
+# Handoff — UI-06 In Progress (Signal Value Configuration)
 
 ## Source of truth
 
@@ -9,11 +9,10 @@
 ## Current repository state
 
 - Branch: `chore/merge-agent-skills`.
-- Panels 1–6 đều đã hoàn thành và đạt `USER_ACCEPTED` sau kiểm thử thực tế từ người dùng.
-- Panel 6 (Signal Value Configuration) đã được mở rộng không gian, tăng cỡ chữ 9.5pt, dòng 24px chống bấm nhầm, đồng bộ hai chiều vào backend simulation engine và được người dùng xác nhận "đã ngon".
-- Bảng 8 & 9 đã được thu gọn gọn gàng (Height="78px"), loại bỏ diện tích thừa.
+- Panels 1–5 đã hoàn thành và đạt `USER_ACCEPTED`.
+- Panel 6 (Signal Value Configuration) đang tiếp tục được phát triển và hoàn thiện tính năng (`IN_PROGRESS`).
+- Phần tối ưu layout (mở rộng Bảng 6, thu gọn Bảng 8 & 9) đã được tích hợp tại commit `7350ba1`.
 - Toàn bộ suite kiểm thử: 233/233 tests PASS (100%), biên dịch 0 warning / 0 error.
-- Sẵn sàng chuyển giao sang UI-07 (Execution Control).
 - Do not commit or push without a new user instruction.
 
 ## UI binding contract — source of truth

@@ -120,7 +120,177 @@
         <!-- Fault configuration, signal values, execution -->
         <Grid Grid.Row="3" Margin="8,0,8,4"><Grid.ColumnDefinitions><ColumnDefinition Width="1.0*"/><ColumnDefinition Width="1.72*"/><ColumnDefinition Width=".72*"/></Grid.ColumnDefinitions>
             <Border Grid.Column="0" Style="{StaticResource Panel}" BorderBrush="{StaticResource AccentRed}" Margin="0,0,3,0" Padding="8,6"><Border.Resources><Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}"><Setter Property="Height" Value="22"/><Setter Property="FontSize" Value="9.5"/><Style.Triggers><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.35"/><Setter Property="Background" Value="#080C16"/></Trigger></Style.Triggers></Style><Style TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}"><Setter Property="Height" Value="22"/><Setter Property="FontSize" Value="9.5"/></Style><Style x:Key="FormLabel" TargetType="TextBlock" BasedOn="{StaticResource TinyLabel}"><Setter Property="FontSize" Value="8.5"/><Setter Property="Foreground" Value="{StaticResource TextSecondary}"/><Setter Property="Margin" Value="0,0,0,1"/><Style.Triggers><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.35"/></Trigger></Style.Triggers></Style></Border.Resources><Grid><Grid.RowDefinitions><RowDefinition Height="20"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><Grid><TextBlock Text="5. FAULT CONFIGURATION" Style="{StaticResource SectionTitle}"/><TextBlock Text="{Binding FaultConfig.SelectedSignalDisplay}" Foreground="{StaticResource AccentCyan}" FontSize="9" HorizontalAlignment="Right" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" MaxWidth="190"/></Grid><Grid Grid.Row="1" Margin="0,3,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><StackPanel Margin="0,0,3,0"><TextBlock Text="Fault Type" Style="{StaticResource FormLabel}" ToolTip="Kiểu can thiệp lỗi vào tín hiệu (Signal Override, Stuck, Bit Flip, Offset...)"/><ComboBox ItemsSource="{Binding FaultConfig.AvailableFaultTypes}" SelectedItem="{Binding FaultConfig.SelectedFaultType}" ToolTip="Chọn kiểu can thiệp lỗi"/><StackPanel IsEnabled="{Binding FaultConfig.IsCycleEnabled}" Margin="0,3,0,0"><TextBlock Text="Cycle" Style="{StaticResource FormLabel}" ToolTip="Khoảng thời gian giữa 2 lần phát liên tiếp (ms)"/><TextBox Text="{Binding FaultConfig.CycleTimeText, UpdateSourceTrigger=PropertyChanged}" ToolTip="Chu kỳ lặp lại (ms)"/></StackPanel><StackPanel IsEnabled="{Binding FaultConfig.IsRepeatEnabled}" Margin="0,3,0,0"><TextBlock Text="Repeat" Style="{StaticResource FormLabel}" ToolTip="Số lần lặp lại (0 = phát liên tục không giới hạn)"/><TextBox Text="{Binding FaultConfig.RepeatCountText, UpdateSourceTrigger=PropertyChanged}" ToolTip="Số lần lặp lại (0 = liên tục)"/></StackPanel></StackPanel><StackPanel Grid.Column="1" Margin="3,0"><TextBlock Text="Injection Mode" Style="{StaticResource FormLabel}" ToolTip="Chế độ phát (Cyclic, One-Shot, Event, Sequence)"/><ComboBox ItemsSource="{Binding FaultConfig.AvailableInjectionModes}" SelectedItem="{Binding FaultConfig.SelectedInjectionMode}" ToolTip="Chọn chế độ phát"/><StackPanel IsEnabled="{Binding FaultConfig.IsDurationEnabled}" Margin="0,3,0,0"><TextBlock Text="Duration" Style="{StaticResource FormLabel}" ToolTip="Thời lượng duy trì lỗi trước khi tự động kết thúc"/><TextBox Text="{Binding FaultConfig.DurationText, UpdateSourceTrigger=PropertyChanged}" ToolTip="Thời lượng tiêm lỗi (s/ms)"/></StackPanel><StackPanel IsEnabled="{Binding FaultConfig.IsDelayEnabled}" Margin="0,3,0,0"><TextBlock Text="Delay" Style="{StaticResource FormLabel}" ToolTip="Thời gian chờ trước khi bắt đầu phát/tiêm lỗi (ms)"/><TextBox Text="{Binding FaultConfig.StartDelayText, UpdateSourceTrigger=PropertyChanged}" ToolTip="Thời gian trễ khởi đầu (ms)"/></StackPanel></StackPanel><StackPanel Grid.Column="2" Margin="3,0,0,0"><TextBlock Text="Override Control" Style="{StaticResource FormLabel}" ToolTip="Giá trị can thiệp được cấu hình và quản lý tại Bảng 6 (Signal Value Configuration)"/><TextBlock Text="Value set in Panel 6" Foreground="{StaticResource TextMuted}" FontSize="8" Margin="0,2,0,0"/><CheckBox Content="Override existing" IsChecked="{Binding FaultConfig.IsOverrideExisting}" ToolTip="Bóc tách gói tin live từ RX, ghi đè tín hiệu trước khi chuyển tiếp sang TX" Foreground="White" FontSize="8.5" Margin="0,8,0,0"/><CheckBox Content="Restore after stop" IsChecked="{Binding FaultConfig.IsRestoreAfterStop}" ToolTip="Tự động khôi phục giá trị gốc của ECU khi bấm Stop" Foreground="White" FontSize="8.5" Margin="0,5,0,0"/></StackPanel></Grid><Grid Grid.Row="2" Margin="0,3,0,0"><TextBlock Text="{Binding FaultConfig.CombinedGuideText}" Foreground="{StaticResource TextSecondary}" FontSize="7.5" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,108,0"/><Button Content="+ Add to Queue" Command="{Binding FaultConfig.AddToQueueCommand}" Visibility="{Binding FaultConfig.AddToQueueVisibility}" Style="{StaticResource TinyButton}" Height="23" FontSize="8.5" HorizontalAlignment="Right" Width="105"/></Grid></Grid></Border>
-            <Border Grid.Column="1" Style="{StaticResource Panel}" Margin="3,0" Padding="8,6"><Grid><Grid.RowDefinitions><RowDefinition Height="22"/><RowDefinition Height="26"/><RowDefinition Height="*"/></Grid.RowDefinitions><TextBlock Text="6. SIGNAL VALUE CONFIGURATION" Style="{StaticResource SectionTitle}"/><Grid Grid.Row="1" Margin="0,2,0,4"><TextBox Text="{Binding Simulation.SignalValueSearchText, UpdateSourceTrigger=PropertyChanged}" FontSize="9.5" Height="22" Width="190" HorizontalAlignment="Left" ToolTip="Tìm kiếm tín hiệu theo tên hoặc message"/><CheckBox Content="Show Only Overridden" IsChecked="{Binding Simulation.ShowOnlyOverridden}" Foreground="{StaticResource TextSecondary}" FontSize="8.5" HorizontalAlignment="Right" VerticalAlignment="Center" ToolTip="Chỉ hiển thị các tín hiệu đang được ghi đè (Override)"/></Grid><DataGrid Grid.Row="2" ItemsSource="{Binding Simulation.FilteredValueSignals}" SelectedItem="{Binding Simulation.SelectedSignal, Mode=TwoWay}" FontSize="9.5" RowHeight="24" CanUserSortColumns="False"><DataGrid.ColumnHeaderStyle><Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}"><Setter Property="FontSize" Value="8.5"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Padding" Value="4,2"/></Style></DataGrid.ColumnHeaderStyle><DataGrid.Columns><DataGridTextColumn Header="Signal Name" Binding="{Binding Name}" IsReadOnly="True" Width="*"/><DataGridTextColumn Header="Message" Binding="{Binding MessageName}" IsReadOnly="True" Width="80"/><DataGridTextColumn Header="Value" Binding="{Binding Value, UpdateSourceTrigger=LostFocus, StringFormat={}{0:0.##}}" Width="85"/><DataGridTextColumn Header="Unit" Binding="{Binding Unit}" IsReadOnly="True" Width="40"/><DataGridTextColumn Header="Min" Binding="{Binding Min}" IsReadOnly="True" Width="44"/><DataGridTextColumn Header="Max" Binding="{Binding Max}" IsReadOnly="True" Width="46"/><DataGridTextColumn Header="Step" Binding="{Binding Factor}" IsReadOnly="True" Width="40"/><DataGridTemplateColumn Header="Override" Width="65"><DataGridTemplateColumn.CellTemplate><DataTemplate><CheckBox IsChecked="{Binding IsOverridden, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Center" VerticalAlignment="Center" ToolTip="Bật / tắt ghi đè giá trị tín hiệu này"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn></DataGrid.Columns></DataGrid></Grid></Border>
+            <Border Grid.Column="1" Style="{StaticResource Panel}" Margin="3,0" Padding="8,6">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="22"/>
+                        <RowDefinition Height="26"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="6. SIGNAL VALUE CONFIGURATION" Style="{StaticResource SectionTitle}"/>
+                    <Grid Grid.Row="1" Margin="0,2,0,4">
+                        <TextBox Text="{Binding Simulation.SignalValueSearchText, UpdateSourceTrigger=PropertyChanged}" FontSize="9.5" Height="22" Width="170" HorizontalAlignment="Left" ToolTip="Tìm kiếm tín hiệu theo tên hoặc message"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <Button Content="Clear All" Command="{Binding Simulation.ClearAllOverridesCommand}" Style="{StaticResource TinyButton}" Height="20" FontSize="8" Padding="6,1" Margin="0,0,8,0" ToolTip="Hủy toàn bộ tín hiệu đang ghi đè"/>
+                            <CheckBox Content="Show Only Overridden" IsChecked="{Binding Simulation.ShowOnlyOverridden}" Foreground="{StaticResource TextSecondary}" FontSize="8.5" VerticalAlignment="Center" ToolTip="Chỉ hiển thị các tín hiệu đang được ghi đè (Override)"/>
+                        </StackPanel>
+                    </Grid>
+                    <DataGrid Grid.Row="2" ItemsSource="{Binding Simulation.FilteredValueSignals}" SelectedItem="{Binding Simulation.SelectedSignal, Mode=TwoWay}" FontSize="9.5" RowHeight="24" CanUserSortColumns="False">
+                        <DataGrid.ColumnHeaderStyle>
+                            <Style TargetType="DataGridColumnHeader" BasedOn="{StaticResource {x:Type DataGridColumnHeader}}">
+                                <Setter Property="FontSize" Value="8.5"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                <Setter Property="Padding" Value="4,2"/>
+                            </Style>
+                        </DataGrid.ColumnHeaderStyle>
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Signal Name" Binding="{Binding Name}" IsReadOnly="True" Width="*"/>
+                            <DataGridTextColumn Header="Message" Binding="{Binding MessageName}" IsReadOnly="True" Width="80"/>
+                            <DataGridTemplateColumn Header="Value" Width="135">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <ContentControl Content="{Binding}">
+                                            <ContentControl.Style>
+                                                <Style TargetType="ContentControl">
+                                                    <Setter Property="ContentTemplate">
+                                                        <Setter.Value>
+                                                            <DataTemplate>
+                                                                <Border CornerRadius="2" Padding="2,1">
+                                                                    <Border.Style>
+                                                                        <Style TargetType="Border">
+                                                                            <Setter Property="Background" Value="Transparent"/>
+                                                                            <Setter Property="BorderBrush" Value="Transparent"/>
+                                                                            <Setter Property="BorderThickness" Value="1"/>
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding IsOverridden}" Value="True">
+                                                                                    <Setter Property="Background" Value="#FFFFFF"/>
+                                                                                    <Setter Property="BorderBrush" Value="#CBD5E1"/>
+                                                                                </DataTrigger>
+                                                                                <DataTrigger Binding="{Binding IsValueValid}" Value="False">
+                                                                                    <Setter Property="Background" Value="#FEF2F2"/>
+                                                                                    <Setter Property="BorderBrush" Value="#EF4444"/>
+                                                                                    <Setter Property="BorderThickness" Value="1.5"/>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </Border.Style>
+                                                                    <Grid>
+                                                                        <Grid.ColumnDefinitions>
+                                                                            <ColumnDefinition Width="*"/>
+                                                                            <ColumnDefinition Width="Auto"/>
+                                                                        </Grid.ColumnDefinitions>
+                                                                        <TextBox Grid.Column="0" Text="{Binding PhysicalValueInput, UpdateSourceTrigger=LostFocus}" BorderThickness="0" Background="Transparent" Padding="2,0" VerticalAlignment="Center" FontSize="9.5" ToolTip="{Binding ValidationToolTip}">
+                                                                            <TextBox.Style>
+                                                                                <Style TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+                                                                                    <Setter Property="Foreground" Value="{Binding ValueColor}"/>
+                                                                                    <Setter Property="FontWeight" Value="Normal"/>
+                                                                                    <Setter Property="CaretBrush" Value="{StaticResource AccentCyan}"/>
+                                                                                    <Style.Triggers>
+                                                                                        <DataTrigger Binding="{Binding IsOverridden}" Value="True">
+                                                                                            <Setter Property="Foreground" Value="#000000"/>
+                                                                                            <Setter Property="FontWeight" Value="SemiBold"/>
+                                                                                            <Setter Property="CaretBrush" Value="#000000"/>
+                                                                                        </DataTrigger>
+                                                                                        <DataTrigger Binding="{Binding IsValueValid}" Value="False">
+                                                                                            <Setter Property="Foreground" Value="#DC2626"/>
+                                                                                            <Setter Property="FontWeight" Value="Bold"/>
+                                                                                            <Setter Property="CaretBrush" Value="#DC2626"/>
+                                                                                        </DataTrigger>
+                                                                                    </Style.Triggers>
+                                                                                </Style>
+                                                                            </TextBox.Style>
+                                                                        </TextBox>
+                                                                        <TextBlock Grid.Column="1" Text="⚠️" Foreground="#EF4444" FontSize="9" VerticalAlignment="Center" Margin="2,0,2,0" ToolTip="{Binding ValidationToolTip}">
+                                                                            <TextBlock.Style>
+                                                                                <Style TargetType="TextBlock">
+                                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                                    <Style.Triggers>
+                                                                                        <DataTrigger Binding="{Binding IsValueValid}" Value="False">
+                                                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                                                        </DataTrigger>
+                                                                                    </Style.Triggers>
+                                                                                </Style>
+                                                                            </TextBlock.Style>
+                                                                        </TextBlock>
+                                                                    </Grid>
+                                                                </Border>
+                                                            </DataTemplate>
+                                                        </Setter.Value>
+                                                    </Setter>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasValueDescriptions}" Value="True">
+                                                            <Setter Property="ContentTemplate">
+                                                                <Setter.Value>
+                                                                    <DataTemplate>
+                                                                        <Border CornerRadius="2">
+                                                                            <Border.Style>
+                                                                                <Style TargetType="Border">
+                                                                                    <Setter Property="Background" Value="Transparent"/>
+                                                                                    <Setter Property="BorderBrush" Value="Transparent"/>
+                                                                                    <Setter Property="BorderThickness" Value="1"/>
+                                                                                    <Style.Triggers>
+                                                                                        <DataTrigger Binding="{Binding IsOverridden}" Value="True">
+                                                                                            <Setter Property="Background" Value="#FFFFFF"/>
+                                                                                            <Setter Property="BorderBrush" Value="#CBD5E1"/>
+                                                                                        </DataTrigger>
+                                                                                        <DataTrigger Binding="{Binding IsValueValid}" Value="False">
+                                                                                            <Setter Property="Background" Value="#FEF2F2"/>
+                                                                                            <Setter Property="BorderBrush" Value="#EF4444"/>
+                                                                                            <Setter Property="BorderThickness" Value="1.5"/>
+                                                                                        </DataTrigger>
+                                                                                    </Style.Triggers>
+                                                                                </Style>
+                                                                            </Border.Style>
+                                                                            <ComboBox ItemsSource="{Binding AvailableValueDescriptions}" SelectedItem="{Binding PhysicalValueInput, UpdateSourceTrigger=PropertyChanged}" BorderThickness="1" Padding="3,1" Height="22" VerticalAlignment="Center" FontSize="9" ToolTip="{Binding ValidationToolTip}">
+                                                                                <ComboBox.Style>
+                                                                                    <Style TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+                                                                                        <Setter Property="Background" Value="#1E293B"/>
+                                                                                        <Setter Property="Foreground" Value="#F8FAFC"/>
+                                                                                        <Setter Property="BorderBrush" Value="#334155"/>
+                                                                                        <Setter Property="FontWeight" Value="Normal"/>
+                                                                                        <Style.Triggers>
+                                                                                            <DataTrigger Binding="{Binding IsOverridden}" Value="True">
+                                                                                                <Setter Property="Background" Value="#FFFFFF"/>
+                                                                                                <Setter Property="Foreground" Value="#000000"/>
+                                                                                                <Setter Property="BorderBrush" Value="#CBD5E1"/>
+                                                                                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                                                                            </DataTrigger>
+                                                                                            <DataTrigger Binding="{Binding IsValueValid}" Value="False">
+                                                                                                <Setter Property="BorderBrush" Value="#EF4444"/>
+                                                                                                <Setter Property="Foreground" Value="#DC2626"/>
+                                                                                                <Setter Property="FontWeight" Value="Bold"/>
+                                                                                            </DataTrigger>
+                                                                                        </Style.Triggers>
+                                                                                    </Style>
+                                                                                </ComboBox.Style>
+                                                                            </ComboBox>
+                                                                        </Border>
+                                                                    </DataTemplate>
+                                                                </Setter.Value>
+                                                            </Setter>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </ContentControl.Style>
+                                        </ContentControl>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            <DataGridTextColumn Header="Unit" Binding="{Binding Unit}" IsReadOnly="True" Width="40"/>
+                            <DataGridTextColumn Header="Min" Binding="{Binding Min}" IsReadOnly="True" Width="44"/>
+                            <DataGridTextColumn Header="Max" Binding="{Binding Max}" IsReadOnly="True" Width="46"/>
+                            <DataGridTextColumn Header="Step" Binding="{Binding Factor}" IsReadOnly="True" Width="40"/>
+                            <DataGridTemplateColumn Header="Override" Width="65">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <CheckBox IsChecked="{Binding IsOverridden, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Center" VerticalAlignment="Center" ToolTip="Bật / tắt ghi đè giá trị tín hiệu này"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </Border>
             <Border Grid.Column="2" Style="{StaticResource Panel}" Margin="3,0,0,0"><Grid><Grid.RowDefinitions><RowDefinition Height="22"/><RowDefinition Height="46"/><RowDefinition Height="30"/><RowDefinition Height="*"/></Grid.RowDefinitions><TextBlock Text="7. EXECUTION CONTROL" Style="{StaticResource SectionTitle}"/><Grid Grid.Row="1" Margin="0,3,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Button Content="▶  Start Injection" Background="{StaticResource AccentGreen}" Style="{StaticResource TinyButton}" Margin="0,0,3,0"/><Button Grid.Column="1" Content="■  Stop" Background="{StaticResource AccentRed}" Style="{StaticResource TinyButton}" Margin="3,0,0,0"/></Grid><Grid Grid.Row="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Button Content="Ⅱ  Pause" Style="{StaticResource TinyButton}" Background="#B45309" Margin="0,0,3,0"/><Button Grid.Column="1" Content="Clear Queue" Style="{StaticResource TinyButton}" Background="Transparent" BorderBrush="{StaticResource CardBorder}" BorderThickness="1" Margin="3,0,0,0"/></Grid><Grid Grid.Row="3" Margin="0,9,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><StackPanel><TextBlock Text="Queue Status" Style="{StaticResource TinyLabel}"/><TextBlock Text="Idle" Style="{StaticResource TinyText}"/></StackPanel><StackPanel Grid.Column="1"><TextBlock Text="Queue Items" Style="{StaticResource TinyLabel}"/><TextBlock Text="0" Style="{StaticResource TinyText}"/></StackPanel><StackPanel Grid.Column="2"><TextBlock Text="Running" Style="{StaticResource TinyLabel}"/><TextBlock Text="—" Style="{StaticResource TinyText}"/></StackPanel></Grid></Grid></Border>
         </Grid>
 
