@@ -283,8 +283,8 @@ Không dùng câu chung chung như “tiếp tục UI”; phải ghi tên panel 
 | 3 | TX Message List | DBC projection và editable simulation draft | **Terra xhigh** | **Luna xhigh** | `USER_ACCEPTED` |
 | 4 | Live Signal Monitor | bounded live-frame/signal telemetry, Dispatcher projection | **Sol ultra** | **Terra xhigh** | `USER_ACCEPTED` |
 | 5 | Fault Configuration | selected signal, direct fault (Cyclic/One-Shot), sequence queue, conditional Add to Queue | **Terra xhigh** | **Luna high** | `USER_ACCEPTED` |
-| 6 | Signal Value Configuration | physical value/`VAL_` selection và override replacement | **Terra xhigh** | **Sol xhigh** | `READY_FOR_IMPLEMENTATION` |
-| 7 | Execution Control | engine/session start-stop-pause lifecycle | **Sol ultra** | **Terra xhigh** | `LOCKED_BY_UI-06` |
+| 6 | Signal Value Configuration | physical value/`VAL_` selection và override replacement | **Terra xhigh** | **Sol xhigh** | `USER_ACCEPTED` |
+| 7 | Execution Control | engine/session start-stop-pause lifecycle | **Sol ultra** | **Terra xhigh** | `READY_FOR_IMPLEMENTATION` |
 | 8 | Log / Output | bounded observable application log, filter/clear/export | **Terra high** | **Luna high** | `LOCKED_BY_UI-07` |
 | 9 | Bus Monitor / Health | typed runtime/native health telemetry + bounded history | **Sol ultra** | **Terra xhigh** | `LOCKED_BY_UI-08` |
 | 10 | Status Overview | aggregate connection/DBC/engine/health + footer projection | **Terra xhigh** | **Luna high** | `LOCKED_BY_UI-09` |

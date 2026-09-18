@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
@@ -47,6 +48,12 @@ namespace Simulate.ViewModels
         private string _signalSearchText = string.Empty;
 
         [ObservableProperty]
+        private string _signalValueSearchText = string.Empty;
+
+        [ObservableProperty]
+        private bool _showOnlyOverridden;
+
+        [ObservableProperty]
         private string _selectedSignalMessageFilter = "All Messages";
 
         [ObservableProperty]
@@ -55,6 +62,8 @@ namespace Simulate.ViewModels
         public ObservableCollection<string> AvailableSignalMessageFilters { get; } = new() { "All Messages" };
 
         public ICollectionView? FilteredSignals { get; }
+
+        public ICollectionView? FilteredValueSignals { get; }
 
         public string PauseMonitorButtonContent => IsSignalMonitorPaused ? "▶" : "Ⅱ";
 
@@ -82,6 +91,14 @@ namespace Simulate.ViewModels
                 FilteredSignals.Filter = FilterSignal;
             }
 
+            FilteredValueSignals = new ListCollectionView(Signals);
+            if (FilteredValueSignals is not null)
+            {
+                FilteredValueSignals.Filter = FilterValueSignal;
+            }
+
+            Signals.CollectionChanged += OnSignalsCollectionChanged;
+
             FaultConfig = new FaultConfigurationViewModel(FaultQueue);
         }
 
@@ -106,6 +123,14 @@ namespace Simulate.ViewModels
             {
                 FilteredSignals.Filter = FilterSignal;
             }
+
+            FilteredValueSignals = new ListCollectionView(Signals);
+            if (FilteredValueSignals is not null)
+            {
+                FilteredValueSignals.Filter = FilterValueSignal;
+            }
+
+            Signals.CollectionChanged += OnSignalsCollectionChanged;
 
             FaultConfig = new FaultConfigurationViewModel(FaultQueue);
 
@@ -201,6 +226,105 @@ namespace Simulate.ViewModels
                 bool matchesMsgName = signal.MessageName.Contains(search, StringComparison.OrdinalIgnoreCase);
                 bool matchesMsgId = signal.MessageId.Contains(search, StringComparison.OrdinalIgnoreCase);
                 if (!matchesName && !matchesMsgName && !matchesMsgId)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        partial void OnSignalValueSearchTextChanged(string value)
+        {
+            FilteredValueSignals?.Refresh();
+        }
+
+        partial void OnShowOnlyOverriddenChanged(bool value)
+        {
+            FilteredValueSignals?.Refresh();
+        }
+
+        private void OnSignalsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.NewItems is not null)
+            {
+                foreach (SignalModel item in e.NewItems)
+                {
+                    item.PropertyChanged += OnSignalItemPropertyChanged;
+                }
+            }
+
+            if (e.OldItems is not null)
+            {
+                foreach (SignalModel item in e.OldItems)
+                {
+                    item.PropertyChanged -= OnSignalItemPropertyChanged;
+                }
+            }
+
+            FilteredValueSignals?.Refresh();
+        }
+
+        private void OnSignalItemPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (sender is not SignalModel signal)
+            {
+                return;
+            }
+
+            if (e.PropertyName == nameof(SignalModel.IsOverridden) || e.PropertyName == nameof(SignalModel.Value))
+            {
+                if (ShowOnlyOverridden && e.PropertyName == nameof(SignalModel.IsOverridden))
+                {
+                    FilteredValueSignals?.Refresh();
+                }
+
+                SyncSignalOverrides(signal.MessageId);
+            }
+        }
+
+        public void SyncSignalOverrides(string messageId)
+        {
+            if (_engine is null || string.IsNullOrEmpty(messageId))
+            {
+                return;
+            }
+
+            var message = Messages.FirstOrDefault(m => m.Id == messageId);
+            if (message is null)
+            {
+                return;
+            }
+
+            var activeOverrides = Signals
+                .Where(s => s.MessageId == messageId && s.IsOverridden)
+                .Select(s => new SignalOverride(s.Name, s.Value))
+                .ToList();
+
+            _engine.ReplaceSignalOverrides(
+                message.RawIdentifier,
+                message.IsExtendedIdentifier,
+                activeOverrides);
+        }
+
+        private bool FilterValueSignal(object item)
+        {
+            if (item is not SignalModel signal)
+            {
+                return false;
+            }
+
+            if (ShowOnlyOverridden && !signal.IsOverridden)
+            {
+                return false;
+            }
+
+            if (!string.IsNullOrWhiteSpace(SignalValueSearchText))
+            {
+                string search = SignalValueSearchText.Trim();
+                bool matchesName = signal.Name.Contains(search, StringComparison.OrdinalIgnoreCase);
+                bool matchesMsgName = signal.MessageName.Contains(search, StringComparison.OrdinalIgnoreCase);
+                if (!matchesName && !matchesMsgName)
                 {
                     return false;
                 }
@@ -656,13 +780,16 @@ namespace Simulate.ViewModels
                 Messages.Add(new MessageModel
                 {
                     Id = messageId,
+                    RawIdentifier = message.Identifier,
+                    IsExtendedIdentifier = message.IsExtendedIdentifier,
                     Name = message.Name,
                     Dlc = message.PayloadLength,
                     Cycle = FormatCycle(rule),
                     GatewayMode = rule?.GatewayMode.ToString() ?? "Unconfigured",
                     SendType = rule?.SendType.ToString() ?? "Unconfigured",
                     SignalCount = message.Signals.Count,
-                    IsEnabled = rule?.IsEnabled ?? false
+                    IsEnabled = rule?.IsEnabled ?? false,
+                    DbcSource = message
                 });
 
                 foreach (DbcSignal signal in message.Signals)
@@ -684,7 +811,8 @@ namespace Simulate.ViewModels
                         MessageId = messageId,
                         MessageName = message.Name,
                         IsOverridden = isOverridden,
-                        Cycle = FormatCycle(rule)
+                        Cycle = FormatCycle(rule),
+                        DbcSource = signal
                     });
                 }
 

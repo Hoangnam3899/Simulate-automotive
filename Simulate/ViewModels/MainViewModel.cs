@@ -108,13 +108,43 @@ namespace Simulate.ViewModels
 
         public Simulate.Models.DbcSignal? DbcSource { get; set; }
 
+        partial void OnIsOverriddenChanged(bool value)
+        {
+            if (value)
+            {
+                StatusText = "● Injected";
+                StatusColor = "#EF4444";
+                PhysicalValueDisplay = string.IsNullOrWhiteSpace(Unit)
+                    ? Value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
+                    : $"{Value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)} {Unit}";
+            }
+            else
+            {
+                StatusText = HasReceivedData ? "● Active" : "● No Data";
+                StatusColor = HasReceivedData ? "#10B981" : "#64748B";
+            }
+        }
+
+        partial void OnValueChanged(double value)
+        {
+            if (IsOverridden)
+            {
+                PhysicalValueDisplay = string.IsNullOrWhiteSpace(Unit)
+                    ? value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
+                    : $"{value.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)} {Unit}";
+            }
+        }
+
         public void UpdateValue(ulong raw, double physical, DateTime timestamp)
         {
             RawValue = $"0x{raw:X}";
-            Value = physical;
-            PhysicalValueDisplay = string.IsNullOrWhiteSpace(Unit)
-                ? physical.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
-                : $"{physical.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)} {Unit}";
+            if (!IsOverridden)
+            {
+                Value = physical;
+                PhysicalValueDisplay = string.IsNullOrWhiteSpace(Unit)
+                    ? physical.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)
+                    : $"{physical.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)} {Unit}";
+            }
             HasReceivedData = true;
             StatusText = IsOverridden ? "● Injected" : "● Active";
             StatusColor = IsOverridden ? "#EF4444" : "#10B981";
@@ -124,11 +154,14 @@ namespace Simulate.ViewModels
         public void ResetData()
         {
             RawValue = "—";
-            Value = Offset;
-            PhysicalValueDisplay = "—";
+            if (!IsOverridden)
+            {
+                Value = Offset;
+                PhysicalValueDisplay = "—";
+            }
             HasReceivedData = false;
-            StatusText = "● No Data";
-            StatusColor = "#64748B";
+            StatusText = IsOverridden ? "● Injected" : "● No Data";
+            StatusColor = IsOverridden ? "#EF4444" : "#64748B";
             LastUpdated = "—";
         }
     }

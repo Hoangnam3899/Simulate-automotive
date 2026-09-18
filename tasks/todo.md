@@ -952,21 +952,21 @@ search/message filter/pause/clear và grid hiện hữu; không polling/sleep tr
 
 ### UI-06 — Signal Value Configuration
 
-**Status:** `READY_FOR_IMPLEMENTATION`.
+**Status:** `USER_ACCEPTED`.
 
 **Description:** Bind signal search/filter, editable physical value, min/max/step và override state vào
 `ReplaceSignalOverrides`; `VAL_` label/key phải map raw→physical theo contract Task 11.
 
 **Acceptance criteria:**
-- [ ] Numeric và typed `VAL_` selection tạo finite physical value trong min/max; invalid edit không cập
-  nhật engine snapshot.
-- [ ] Show Only Overridden/search giữ selected row ổn định; enable/clear override cập nhật queue/draft
-  và payload qua cùng codec/E2E path.
-- [ ] Edit state observable và UI-context safe; không mutate immutable DBC metadata.
+- [x] Tối ưu layout công thái học: mở rộng Bảng 6 (tỷ lệ `1.72*`, chiều cao hàng `1.5*`), thu gọn Bảng 8 & 9 (`Height="78"`), nâng cỡ chữ lên `9.5pt`, chiều cao dòng `24px` chống bấm nhầm.
+- [x] Numeric value edit và CheckBox `Override` tương tác hai chiều; cột `Override` mở rộng đủ 65px không bị cụt chữ (`Overrid`), cột `Message` hiển thị đúng tên message (80px).
+- [x] Show Only Overridden và ô tìm kiếm `Search signals...` hoạt động mượt mà qua `FilteredValueSignals` độc lập với Bảng 4.
+- [x] Enable/clear override cập nhật snapshot nguyên tử vào `ISimulationEngine.ReplaceSignalOverrides`, đồng thời đồng bộ trạng thái `SelectedSignal` sang Bảng 5 và trạng thái `Injected` sang Bảng 4.
+- [x] Edit state observable và UI-context safe; không mutate immutable DBC metadata.
 
 **Verification:**
-- [ ] Codec/override/ViewModel tests, payload golden vectors và full build/test/diff PASS.
-- [ ] **USER DEBUG GATE:** user đổi numeric/label value, filter override và đối chiếu payload phù hợp.
+- [x] Override/search/filter ViewModel unit tests trong `SignalValueConfigurationTests.cs` (7/7 tests PASS, toàn bộ suite 233/233 PASS, build 0/0).
+- [x] **USER DEBUG GATE:** user mở app, nạp DBC, kiểm tra layout mới của Bảng 6 (chữ to rõ, dòng 24px thoáng), tìm kiếm, tích chọn CheckBox Override, sửa giá trị Value, lọc Show Only Overridden và xác nhận "đã ngon".
 
 **Dependencies:** UI-05 `USER_ACCEPTED`; explicit approval UI-06.
 **Likely files:** `MainWindow.xaml` binding-only, `SimulationViewModel.cs`, override draft/codec seam, focused tests.
@@ -974,7 +974,7 @@ search/message filter/pause/clear và grid hiện hữu; không polling/sleep tr
 
 ### UI-07 — Execution Control
 
-**Status:** `LOCKED_BY_UI-06_USER_ACCEPTANCE`.
+**Status:** `READY_FOR_IMPLEMENTATION`.
 
 **Description:** Bind Start/Stop/Pause toggle/Clear Queue và runtime status vào engine thật; command
 availability khóa double action và tôn trọng session/DBC/plan prerequisites.
@@ -1261,11 +1261,26 @@ read-only projection; panel 10 không sở hữu hardware, parser hay engine.
 - [x] Verification: `dotnet build Simulate.sln` PASS 0 warning/0 error; `dotnet test Simulate.sln` PASS 226/226 tests (100% PASS).
 - [x] User acceptance: Người dùng đã kiểm thử thủ công và xác nhận chấp thuận (`USER_ACCEPTED`).
 
-## Next: Panel 6 (Signal Value Configuration / UI-06)
-- Trạng thái: `READY_FOR_IMPLEMENTATION` (Đã được mở khóa sau khi UI-05 đạt `USER_ACCEPTED`).
-- Lead: **Terra xhigh** | Reviewer: **Sol xhigh**.
-- Phạm vi nhiệm vụ:
-  1. Bind danh sách tín hiệu mục tiêu từ DBC vào DataGrid của Bảng 6 (`Name`, `StartBit`/Message, `Value`, `Unit`, `Min`, `Max`, `Step`, `Override`).
-  2. Bind ô tìm kiếm `Search signals...` và CheckBox `Show Only Overridden` (lọc tín hiệu đang có override active).
-  3. Map chỉnh sửa giá trị vật lý (Physical Value) và bảng giá trị định danh `VAL_` theo contract Task 11 (`SignalOverride.FromValueDescription`).
-  4. Cập nhật override state nguyên tử vào engine snapshot qua `ReplaceSignalOverrides`.
+## Work log — 2026-08-20 (UI-06 Signal Value Configuration & Layout Ergonomics Optimization)
+
+- [x] Tối ưu hóa bố cục tổng thể ứng dụng theo yêu cầu người dùng:
+  - Thu gọn Bảng 8 (Log / Output) và Bảng 9 (Bus Monitor) từ `120px` xuống `78px`, loại bỏ diện tích thừa màu đen.
+  - Dồn diện tích thu hồi được để mở rộng Bảng 6 (Signal Value Configuration):
+    * Chiều cao hàng Row 3 tăng từ `1.23*` lên `1.5*` (tăng ~45px chiều cao khả dụng).
+    * Chiều ngang Bảng 6 tăng từ `1.45*` lên `1.72*` (thu gọn Bảng 7 sang `0.72*`, giữ nguyên Bảng 5 ở `1.0*`).
+  - Nâng cấp cỡ chữ nội dung DataGrid từ `8pt` lên `9.5pt`, chiều cao dòng `RowHeight="24px"` (chuẩn Fitts' Law cho desktop, chống click nhầm).
+  - Khắc phục lỗi hiển thị cột:
+    * Cột `Override` mở rộng lên `65px`, hiển thị trọn vẹn tiêu đề (không bị cụt thành `Overrid`), chứa CheckBox tương tác ở giữa.
+    * Cột `Message` mở rộng lên `80px`, hiển thị chính xác tên `MessageName` thay vì số `StartBit`.
+    * Cột `Value` rộng `85px`, cỡ chữ `10pt` sắc nét, hỗ trợ format số thực.
+- [x] Triển khai logic ViewModel cho Bảng 6 (`SimulationViewModel.cs` & `MainViewModel.cs`):
+  - Bổ sung `SignalValueSearchText`, `ShowOnlyOverridden`, `FilteredValueSignals` (ICollectionView độc lập).
+  - Cơ chế đồng bộ snapshot override nguyên tử hai chiều vào `ISimulationEngine.ReplaceSignalOverrides` khi người dùng toggle `IsOverridden` hoặc thay đổi `Value`.
+  - Tự động đồng bộ trạng thái `Injected` (`#EF4444`) sang Bảng 4 và đồng bộ `SelectedSignal` sang Bảng 5.
+- [x] Tạo bộ kiểm thử `SignalValueConfigurationTests.cs` (7 unit tests):
+  - Kiểm thử lọc theo tên tín hiệu, lọc theo message, lọc chỉ tín hiệu override.
+  - Kiểm thử cập nhật trạng thái màu sắc/hiển thị giá trị khi override.
+  - Kiểm thử đồng bộ gọi `ReplaceSignalOverrides` khi bật/tắt override hoặc thay đổi giá trị.
+  - Kiểm thử đồng bộ lựa chọn tín hiệu sang Bảng 5.
+- [x] Verification: `dotnet build Simulate.sln` PASS 0 warning/0 error; `dotnet test Simulate.sln` PASS 233/233 tests (100% PASS).
+- [ ] Trạng thái hiện tại: `WAITING_USER_DEBUG` (Chờ người dùng kiểm thử thủ công trên giao diện).

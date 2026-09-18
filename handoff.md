@@ -1,4 +1,4 @@
-# Handoff — UI-06 Ready for Implementation (UI-05 USER_ACCEPTED)
+# Handoff — UI-07 Ready for Implementation (UI-06 USER_ACCEPTED)
 
 ## Source of truth
 
@@ -9,10 +9,11 @@
 ## Current repository state
 
 - Branch: `chore/merge-agent-skills`.
-- Panels 1, 2, 3, 4, và 5 đều đã hoàn thành và đạt `USER_ACCEPTED` sau kiểm thử thực tế từ người dùng.
-- Panel 5 (Fault Configuration) đã được tái thiết kế công thái học hoàn chỉnh, bổ sung visual guides và tự động làm mờ các trường không dùng theo mode.
-- Solution biên dịch thành công 0 warning / 0 error; 226/226 tests PASS.
-- Sẵn sàng chuyển giao sang UI-06 (Signal Value Configuration).
+- Panels 1–6 đều đã hoàn thành và đạt `USER_ACCEPTED` sau kiểm thử thực tế từ người dùng.
+- Panel 6 (Signal Value Configuration) đã được mở rộng không gian, tăng cỡ chữ 9.5pt, dòng 24px chống bấm nhầm, đồng bộ hai chiều vào backend simulation engine và được người dùng xác nhận "đã ngon".
+- Bảng 8 & 9 đã được thu gọn gọn gàng (Height="78px"), loại bỏ diện tích thừa.
+- Toàn bộ suite kiểm thử: 233/233 tests PASS (100%), biên dịch 0 warning / 0 error.
+- Sẵn sàng chuyển giao sang UI-07 (Execution Control).
 - Do not commit or push without a new user instruction.
 
 ## UI binding contract — source of truth
@@ -187,14 +188,26 @@ Luna xhigh independent Spec/Standards/security review: PASS, no Critical/Require
   - Bộ unit tests `FaultConfigurationTests.cs` (7 tests toàn diện).
 - Verification: `dotnet build Simulate.sln` PASS 0 warning/0 error; `dotnet test Simulate.sln` PASS 226/226 tests.
 
-## Next Panel: UI-06 (Signal Value Configuration)
-- Trạng thái: `READY_FOR_IMPLEMENTATION` (Đã mở khóa sau khi UI-05 đạt `USER_ACCEPTED`).
-- Lead: **Terra xhigh** | Reviewer: **Sol xhigh**.
-- Nhiệm vụ:
-  1. Bind danh sách tín hiệu mục tiêu từ DBC vào DataGrid Bảng 6 (`Name`, `StartBit`/Message, `Value`, `Unit`, `Min`, `Max`, `Step`, `Override`).
-  2. Bind ô tìm kiếm `Search signals...` và CheckBox `Show Only Overridden` (lọc tín hiệu đang có override active).
-  3. Map chỉnh sửa giá trị vật lý (Physical Value) và bảng giá trị định danh `VAL_` theo contract Task 11 (`SignalOverride.FromValueDescription`).
-  4. Cập nhật override state nguyên tử vào engine snapshot qua `ReplaceSignalOverrides`.
+## UI-06 Signal Value Configuration & Layout Ergonomics completed — USER_ACCEPTED (2026-08-20)
+
+- Trạng thái: `USER_ACCEPTED` (Người dùng đã kiểm thử thực tế và xác nhận "đã ngon").
+- Đã hoàn tất nâng cấp công thái học toàn diện:
+  * Thu gọn Bảng 8 & 9 từ `120px` xuống `78px`, loại bỏ diện tích thừa.
+  * Mở rộng Bảng 6 theo chiều dọc (Row 3 tăng lên `1.5*`) và chiều ngang (`1.72*`).
+  * Tăng font DataGrid lên `9.5pt`, chiều cao dòng `RowHeight="24px"` chống click nhầm.
+  * Mở rộng cột `Override` lên 65px đủ chữ (không bị cắt `Overrid`), chứa CheckBox hai chiều.
+  * Mở rộng cột `Message` lên 80px hiển thị đúng tên message thay vì `StartBit`.
+- Đã kết nối logic ViewModel:
+  * `SignalValueSearchText` và `ShowOnlyOverridden` điều khiển `FilteredValueSignals` mượt mà.
+  * Đồng bộ snapshot nguyên tử vào `ISimulationEngine.ReplaceSignalOverrides`.
+  * Tự động phản chiếu trạng thái `Injected` (`#EF4444`) sang Bảng 4 và đồng bộ `SelectedSignal` sang Bảng 5.
+- Bộ unit tests `SignalValueConfigurationTests.cs` (7 tests toàn diện).
+- Verification: `dotnet build Simulate.sln` PASS 0 warning/0 error; `dotnet test Simulate.sln` PASS 233/233 tests (100% PASS).
+
+## Next Panel: UI-07 (Execution Control)
+- Trạng thái: `READY_FOR_IMPLEMENTATION` (Đã mở khóa sau khi UI-06 đạt `USER_ACCEPTED`).
+- Lead: **Sol ultra** | Reviewer: **Terra xhigh**.
+- Nhiệm vụ: Gắn command thật cho Start Injection, Stop, Pause, Clear Queue và hiển thị Queue Status/Items/Running.
 
 ## Suggested skills
 
