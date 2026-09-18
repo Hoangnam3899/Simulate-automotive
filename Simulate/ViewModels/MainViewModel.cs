@@ -164,6 +164,7 @@ namespace Simulate.ViewModels
         public ObservableCollection<MessageModel> Messages => Simulation.Messages;
         public ObservableCollection<SignalModel> Signals => Simulation.Signals;
         public ObservableCollection<FaultQueueModel> FaultQueue => Simulation.FaultQueue;
+        public FaultConfigurationViewModel FaultConfig => Simulation.FaultConfig;
 
         public MainViewModel()
             : this(ApplicationComposition.CreateConnectionViewModel(), new DbcManagementViewModel(), new SimulationViewModel())

@@ -932,21 +932,19 @@ search/message filter/pause/clear và grid hiện hữu; không polling/sleep tr
 
 ### UI-05 — Fault Configuration
 
-**Status:** `LOCKED_BY_UI-04_USER_ACCEPTANCE`.
+**Status:** `USER_ACCEPTED`.
 
-**Description:** Bind selected message/signal, fault/mode/timing fields và Add to Queue vào typed draft
-configuration. Không invent fault type/backend semantics mà engine chưa hỗ trợ.
+**Description:** Bind selected message/signal, fault/mode/timing fields, hỗ trợ direct fault injection cho Cyclic/One-Shot và kịch bản chuỗi (Sequence). Nút Add to Queue chỉ xuất hiện khi chọn mode Sequence.
 
 **Acceptance criteria:**
-- [ ] Selected label và các field hiện hữu dùng state typed; time/repeat/value parse invariant và invalid
-  input không crash hoặc tạo partial queue item.
-- [ ] Add to Queue tạo đúng một validated rule/override row, giữ replacement/restore semantics đã được
-  backend hỗ trợ và chống duplicate ngoài contract.
-- [ ] Unsupported option giữ disabled/unavailable typed state; không thêm option/control để “làm đủ”.
+- [x] Tự động nhận diện tín hiệu từ Live Monitor (`Selected: <Message>.<Signal>`); nếu chưa chọn thì hiển thị trạng thái chưa chọn an toàn.
+- [x] Hỗ trợ tiêm lỗi trực tiếp (Single/Direct) khi ở chế độ `Cyclic` hoặc `One-Shot`, trở thành active fault để Bảng 7 chạy ngay.
+- [x] Chế độ `Sequence` hiển thị nút `+ Add to Queue` (`Visible`); các chế độ `Cyclic`/`One-Shot` ẩn nút này (`Collapsed`).
+- [x] Add to Queue ở chế độ `Sequence` tạo đúng một validated item đưa vào `FaultQueue`, không crash khi input invalid.
 
 **Verification:**
-- [ ] Validation/queue command tests và full build/test/diff PASS.
-- [ ] **USER DEBUG GATE:** user nhập valid/invalid values, add queue, kiểm tra row và error behavior.
+- [x] Validation/queue command tests và full build/test/diff PASS (226/226 tests PASS, 0 warning/0 error).
+- [x] **USER DEBUG GATE:** user đã kiểm tra thực tế (chọn signal, chuyển mode, ẩn/hiện nút Add to Queue, làm mờ ô nhập theo mode, căn chỉnh chống tụt chữ) và xác nhận phê duyệt ("oke rồi đấy").
 
 **Dependencies:** UI-04 `USER_ACCEPTED`; explicit approval UI-05.
 **Likely files:** `MainWindow.xaml` binding-only, fault/draft state trong ViewModel, plan validation, focused tests.
@@ -954,7 +952,7 @@ configuration. Không invent fault type/backend semantics mà engine chưa hỗ 
 
 ### UI-06 — Signal Value Configuration
 
-**Status:** `LOCKED_BY_UI-05_USER_ACCEPTANCE`.
+**Status:** `READY_FOR_IMPLEMENTATION`.
 
 **Description:** Bind signal search/filter, editable physical value, min/max/step và override state vào
 `ReplaceSignalOverrides`; `VAL_` label/key phải map raw→physical theo contract Task 11.
@@ -1243,8 +1241,31 @@ read-only projection; panel 10 không sở hữu hardware, parser hay engine.
 - [x] Bổ sung unit tests cho Multi-bus Virtual Discovery và All Vector Devices trong `VectorHardwareServiceTests.cs`.
 - [x] Verification: `dotnet build Simulate.sln` PASS 0 warning/0 error; `dotnet test Simulate.sln` PASS 219/219 tests.
 
-## Next: Panel 5 (Fault Configuration / UI-05)
-- [ ] Chọn tín hiệu cần can thiệp lỗi (Selected Signal binding).
-- [ ] Cấu hình Fault Type (Stuck at Value, Bit Flip, Offset, Noise, Ramp, Replay...).
-- [ ] Cấu hình Timing / Injection Mode (Cyclic, OneShot, Burst, Duration, Stop Time).
-- [ ] Nút `+ Add to Queue` đưa fault vào hàng đợi `FaultQueue`.
+## Work log — 2026-08-20 (UI-05 Fault Configuration Redesign & Visual Guides Enhancement)
+
+- [x] Nâng cấp công thái học Bảng 5 (Fault Configuration) theo phê duyệt của người dùng:
+  - Bổ sung `FaultTypeGuideText` hiển thị mô tả trực quan cơ chế hoạt động tương ứng với từng kiểu lỗi trong `Fault Type` (`Signal Override`, `Stuck at Value`, `Bit Flip`, `Offset`, `Noise`, `Ramp`).
+  - Hiển thị song song cả hướng dẫn `FaultTypeGuideText` và `ModeGuideText` qua thuộc tính `CombinedGuideText` ở chân Bảng 5 với căn lề thông minh chống đè nút `+ Add to Queue`.
+  - Loại bỏ ô `Fault Value` không cần thiết ở Cột 3 để tránh trùng lặp với **Bảng 6 (Signal Value Configuration)**; thay bằng nhãn đồng bộ `Override Control` và `Value set in Panel 6`.
+  - Bổ sung `ToolTip` giải thích trực quan bằng tiếng Việt cho toàn bộ các control và tham số: `Fault Type`, `Cycle`, `Repeat`, `Injection Mode`, `Duration`, `Delay`, `Override existing`, `Restore after stop`.
+  - Thiết lập cơ chế tự động kích hoạt/làm mờ động (`IsEnabled`):
+    * `Event`: Vô hiệu hóa toàn bộ 4 ô `Cycle`, `Repeat`, `Duration`, `Delay`.
+    * `One-Shot`: Chỉ bật ô `Delay`, vô hiệu hóa 3 ô `Cycle`, `Repeat`, `Duration`.
+    * `Cyclic` / `Sequence`: Bật toàn bộ cả 4 ô để nhập liệu đầy đủ.
+  - Bổ sung Style Trigger `Opacity="0.35"` và nền `#080C16` cho TextBox và TextBlock khi `IsEnabled="False"`, làm cho các ô không dùng xám mờ và chìm hẳn xuống nền tối cực kỳ rõ rệt.
+  - Tinh chỉnh bố cục chiều dọc chống tràn/tụt chữ:
+    * Gộp dòng hiển thị tín hiệu mục tiêu `Selected: ...` lên ngang hàng với tiêu đề `5. FAULT CONFIGURATION` (bên phải), tiết kiệm 20px chiều dọc.
+    * Chiều cao ô nhập TextBox & ComboBox cân đối ở `Height="22"`, `FontSize="9.5pt"`, nhãn `FontSize="8.5pt"`, `Margin="0,3,0,0"` rất gọn gàng.
+    * Giải phóng hoàn toàn không gian chân bảng cho dòng mô tả `CombinedGuideText` và nút `+ Add to Queue`, loại bỏ 100% tình trạng chữ bị tụt hay đè lên các ô `Repeat`/`Delay`.
+- [x] Cập nhật bộ kiểm thử `FaultConfigurationTests.cs` (7 unit tests): bổ sung kiểm thử chuyển đổi `FaultTypeGuideText` và `CombinedGuideText` trên toàn bộ các loại lỗi, cùng kiểm thử ma trận `FieldEnablement` trên cả 4 modes.
+- [x] Verification: `dotnet build Simulate.sln` PASS 0 warning/0 error; `dotnet test Simulate.sln` PASS 226/226 tests (100% PASS).
+- [x] User acceptance: Người dùng đã kiểm thử thủ công và xác nhận chấp thuận (`USER_ACCEPTED`).
+
+## Next: Panel 6 (Signal Value Configuration / UI-06)
+- Trạng thái: `READY_FOR_IMPLEMENTATION` (Đã được mở khóa sau khi UI-05 đạt `USER_ACCEPTED`).
+- Lead: **Terra xhigh** | Reviewer: **Sol xhigh**.
+- Phạm vi nhiệm vụ:
+  1. Bind danh sách tín hiệu mục tiêu từ DBC vào DataGrid của Bảng 6 (`Name`, `StartBit`/Message, `Value`, `Unit`, `Min`, `Max`, `Step`, `Override`).
+  2. Bind ô tìm kiếm `Search signals...` và CheckBox `Show Only Overridden` (lọc tín hiệu đang có override active).
+  3. Map chỉnh sửa giá trị vật lý (Physical Value) và bảng giá trị định danh `VAL_` theo contract Task 11 (`SignalOverride.FromValueDescription`).
+  4. Cập nhật override state nguyên tử vào engine snapshot qua `ReplaceSignalOverrides`.

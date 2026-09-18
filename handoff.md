@@ -1,4 +1,4 @@
-# Handoff — UI-01 awaiting user debug
+# Handoff — UI-06 Ready for Implementation (UI-05 USER_ACCEPTED)
 
 ## Source of truth
 
@@ -8,11 +8,11 @@
 
 ## Current repository state
 
-- Branch: `chore/merge-agent-skills`; local HEAD `b0e753b` is one commit ahead of `origin/chore/merge-agent-skills`.
-- Backend Tasks 0–15 and Checkpoint E are DONE. Build baseline at UI planning start: 0 warnings, 0 errors.
-- Current uncommitted changes contain the UI binding plan plus the approved UI-01 implementation/tests.
-- `MainWindow.xaml` changes are binding-only on six existing panel-1 controls; code-behind changes are
-  graceful-close lifecycle delegation only. Project/solution configuration remains untouched.
+- Branch: `chore/merge-agent-skills`.
+- Panels 1, 2, 3, 4, và 5 đều đã hoàn thành và đạt `USER_ACCEPTED` sau kiểm thử thực tế từ người dùng.
+- Panel 5 (Fault Configuration) đã được tái thiết kế công thái học hoàn chỉnh, bổ sung visual guides và tự động làm mờ các trường không dùng theo mode.
+- Solution biên dịch thành công 0 warning / 0 error; 226/226 tests PASS.
+- Sẵn sàng chuyển giao sang UI-06 (Signal Value Configuration).
 - Do not commit or push without a new user instruction.
 
 ## UI binding contract — source of truth
@@ -170,19 +170,37 @@ Luna xhigh independent Spec/Standards/security review: PASS, no Critical/Require
   - Bổ sung unit tests trong `VectorHardwareServiceTests.cs`.
 - Verification: `dotnet build Simulate.sln` PASS 0 warning/0 error; `dotnet test Simulate.sln` PASS 219/219 tests.
 
-## Next Panel: UI-05 (Fault Configuration)
-- Trạng thái: `READY_FOR_SPEC`.
+## UI-05 Fault Configuration completed — USER_ACCEPTED (2026-08-20)
+
+- Trạng thái: `USER_ACCEPTED` (Người dùng đã hoàn thành kiểm thử thủ công và xác nhận chấp thuận).
+- Đã hoàn tất thiết kế lại và nâng cấp công thái học Panel 5:
+  - Bổ sung `FaultTypeGuideText` giải thích cơ chế từng kiểu lỗi khi chọn `Fault Type`.
+  - Hiển thị song song cả hướng dẫn `Fault Type` và `Injection Mode` qua `CombinedGuideText`.
+  - Loại bỏ ô nhập `Fault Value` thừa (tránh trùng lặp với Bảng 6); thay bằng nhãn đồng bộ `Override Control` và `Value set in Panel 6`.
+  - Bổ sung `ToolTip` giải thích trực quan bằng tiếng Việt cho toàn bộ control và tham số.
+  - Tự động kích hoạt/làm mờ động (`IsEnabled`):
+    * `Event`: Làm mờ toàn bộ 4 ô `Cycle`, `Repeat`, `Duration`, `Delay`.
+    * `One-Shot`: Chỉ bật ô `Delay`, làm mờ 3 ô `Cycle`, `Repeat`, `Duration`.
+    * `Cyclic` / `Sequence`: Bật toàn bộ 4 ô nhập liệu.
+  - Hiệu ứng xám mờ rõ rệt (`Opacity="0.35"` và nền `#080C16`) cho cả ô nhập và nhãn khi bị disabled.
+  - Tinh chỉnh bố cục chiều dọc: gộp `Selected: ...` lên ngang hàng với tiêu đề `5. FAULT CONFIGURATION`, cân đối `Height="22"`, dọn sạch hiện tượng tụt chữ và đè lên footer.
+  - Bộ unit tests `FaultConfigurationTests.cs` (7 tests toàn diện).
+- Verification: `dotnet build Simulate.sln` PASS 0 warning/0 error; `dotnet test Simulate.sln` PASS 226/226 tests.
+
+## Next Panel: UI-06 (Signal Value Configuration)
+- Trạng thái: `READY_FOR_IMPLEMENTATION` (Đã mở khóa sau khi UI-05 đạt `USER_ACCEPTED`).
+- Lead: **Terra xhigh** | Reviewer: **Sol xhigh**.
 - Nhiệm vụ:
-  1. Chọn tín hiệu cần can thiệp lỗi từ Live Monitor (`Selected Signal`).
-  2. Cấu hình Fault Type (Stuck at Value, Bit Flip, Offset, Noise, Ramp, Replay...).
-  3. Cấu hình Timing / Injection Mode (Cyclic, OneShot, Duration, Stop Time, Override existing, Restore after stop).
-  4. Nút `+ Add to Queue` đưa fault vào hàng đợi `FaultQueue`.
+  1. Bind danh sách tín hiệu mục tiêu từ DBC vào DataGrid Bảng 6 (`Name`, `StartBit`/Message, `Value`, `Unit`, `Min`, `Max`, `Step`, `Override`).
+  2. Bind ô tìm kiếm `Search signals...` và CheckBox `Show Only Overridden` (lọc tín hiệu đang có override active).
+  3. Map chỉnh sửa giá trị vật lý (Physical Value) và bảng giá trị định danh `VAL_` theo contract Task 11 (`SignalOverride.FromValueDescription`).
+  4. Cập nhật override state nguyên tử vào engine snapshot qua `ReplaceSignalOverrides`.
 
 ## Suggested skills
 
-1. `domain-modeling` for fault injection types and timing contracts.
-2. `codebase-design` for queue projection and validation seams.
-3. `incremental-implementation` for component-by-component delivery.
-4. `test-driven-development` for fault queue rules and validation logic.
+1. `domain-modeling` for signal override types and `VAL_` mapping contracts.
+2. `codebase-design` for signal collection filtering and editability seams.
+3. `incremental-implementation` for step-by-step panel delivery.
+4. `test-driven-development` for override validation and filter logic.
 5. `code-review` for verification quality gates.
 6. `git-workflow-and-versioning` when committing or pushing changes.

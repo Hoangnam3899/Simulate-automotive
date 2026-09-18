@@ -281,9 +281,9 @@ Không dùng câu chung chung như “tiếp tục UI”; phải ghi tên panel 
 | 1 | Connection / Setup | `ConnectionViewModel`, baudrate contract, session ownership, graceful close | **Terra xhigh → Sol ultra** | **Terra xhigh** | `USER_ACCEPTED` |
 | 2 | DBC Management | safe file input, `DbcParser`, document/composition state | **Terra xhigh** | **Sol xhigh** | `USER_ACCEPTED` |
 | 3 | TX Message List | DBC projection và editable simulation draft | **Terra xhigh** | **Luna xhigh** | `USER_ACCEPTED` |
-| 4 | Live Signal Monitor | bounded live-frame/signal telemetry, Dispatcher projection | **Sol ultra** | **Terra xhigh** | `WAITING_USER_DEBUG` |
-| 5 | Fault Configuration | selected signal + typed timing/fault draft validation | **Terra xhigh** | **Luna high** | `LOCKED_BY_UI-04` |
-| 6 | Signal Value Configuration | physical value/`VAL_` selection và override replacement | **Terra xhigh** | **Sol xhigh** | `LOCKED_BY_UI-05` |
+| 4 | Live Signal Monitor | bounded live-frame/signal telemetry, Dispatcher projection | **Sol ultra** | **Terra xhigh** | `USER_ACCEPTED` |
+| 5 | Fault Configuration | selected signal, direct fault (Cyclic/One-Shot), sequence queue, conditional Add to Queue | **Terra xhigh** | **Luna high** | `USER_ACCEPTED` |
+| 6 | Signal Value Configuration | physical value/`VAL_` selection và override replacement | **Terra xhigh** | **Sol xhigh** | `READY_FOR_IMPLEMENTATION` |
 | 7 | Execution Control | engine/session start-stop-pause lifecycle | **Sol ultra** | **Terra xhigh** | `LOCKED_BY_UI-06` |
 | 8 | Log / Output | bounded observable application log, filter/clear/export | **Terra high** | **Luna high** | `LOCKED_BY_UI-07` |
 | 9 | Bus Monitor / Health | typed runtime/native health telemetry + bounded history | **Sol ultra** | **Terra xhigh** | `LOCKED_BY_UI-08` |
@@ -346,7 +346,7 @@ cho đến khi user nói UI-01 PASS.
 | 2 | Load/unload DBC, filename/valid state/counts thật; external file có size/regex bounds | Chọn DBC hợp lệ/sai/trùng, unload/reload và kiểm tra message/node/signal count |
 | 3 | Grid dùng đúng message fields; Add/Delete/Delete All/Move dùng selected row và draft state | Kiểm tra thứ tự, enable, mode/send type/cycle/signal count; xác nhận behavior cell-action bị gate nếu cần đổi control |
 | 4 | Raw/physical/unit/status/timestamp cập nhật bounded; search/filter/pause/clear hoạt động | Chạy traffic, pause/resume/clear, lọc theo message và kiểm tra UI không freeze |
-| 5 | Selected signal và fault/timing fields tạo queue item typed, validation không làm crash | Nhập valid/invalid timing/value, Add to Queue, kiểm tra item và thông báo lỗi |
+| 5 | Selected signal, direct single fault (Cyclic/One-Shot), sequence queue (chỉ hiện Add to Queue khi ở Sequence mode), validation | Chọn signal, chuyển mode Cyclic/One-Shot (Add to Queue ẩn, active fault trực tiếp), chuyển mode Sequence (Add to Queue hiện, thêm vào FaultQueue) |
 | 6 | Value edit/`VAL_` map thành physical override; min/max/step và filter đúng | Đổi numeric/label value, bật/tắt override, kiểm tra payload qua Mock/hardware phù hợp |
 | 7 | Start/Stop/Pause/Resume/Clear Queue và status dùng engine thật, command state chống double action | Chạy injection, pause/resume/stop, lặp nhanh và kiểm tra cleanup; `Emergency` không được tuyên bố có UI nếu chưa có control |
 | 8 | Log thật, bounded, lọc level, clear và export an toàn | Tạo connect/load/run/error events, lọc/clear/export rồi đối chiếu file |

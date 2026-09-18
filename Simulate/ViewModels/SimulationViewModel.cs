@@ -41,6 +41,9 @@ namespace Simulate.ViewModels
         private MessageModel? _selectedMessage;
 
         [ObservableProperty]
+        private SignalModel? _selectedSignal;
+
+        [ObservableProperty]
         private string _signalSearchText = string.Empty;
 
         [ObservableProperty]
@@ -78,6 +81,8 @@ namespace Simulate.ViewModels
             {
                 FilteredSignals.Filter = FilterSignal;
             }
+
+            FaultConfig = new FaultConfigurationViewModel(FaultQueue);
         }
 
         /// <summary>
@@ -102,6 +107,8 @@ namespace Simulate.ViewModels
                 FilteredSignals.Filter = FilterSignal;
             }
 
+            FaultConfig = new FaultConfigurationViewModel(FaultQueue);
+
             _currentDocument = plan.Document;
             ProjectPlan(plan);
             RefreshRuntimeState();
@@ -124,6 +131,8 @@ namespace Simulate.ViewModels
         /// </summary>
         public ObservableCollection<FaultQueueModel> FaultQueue { get; } = new();
 
+        public FaultConfigurationViewModel FaultConfig { get; }
+
         /// <summary>
         /// Gets a value indicating whether this instance has an engine supplied at the composition boundary.
         /// </summary>
@@ -132,6 +141,11 @@ namespace Simulate.ViewModels
         partial void OnSelectedMessageChanged(MessageModel? value)
         {
             NotifyToolbarCommands();
+        }
+
+        partial void OnSelectedSignalChanged(SignalModel? value)
+        {
+            FaultConfig.SetTargetSignal(value);
         }
 
         partial void OnSignalSearchTextChanged(string value)
