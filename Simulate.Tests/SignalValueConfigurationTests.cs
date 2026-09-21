@@ -354,5 +354,48 @@ namespace Simulate.Tests
             Assert.IsNull(vm.SelectedMessage);
             Assert.AreEqual(3, vm.FilteredValueSignals!.Cast<SignalModel>().Count());
         }
+
+        [TestMethod]
+        public async Task SignalValueEdit_WhenEngineInPassThroughMode_DoesNotCrashAndSavesOverride()
+        {
+            var driver = new MockHardwareService();
+            var discovery = await driver.DiscoverInterfacesAsync();
+            var iface = discovery.Value![0];
+            var options = CanGatewayOptions.CreateClassic(iface.Channels[0], iface.Channels[1], 500000);
+            var sessionResult = await driver.OpenGatewaySessionAsync(options);
+            await using ICanGatewaySession session = sessionResult.Value!;
+
+            const string documentText = """
+                BO_ 291 EngineData: 8 Gateway
+                 SG_ EngineSpeed : 0|16@1+ (0.25,0) [0|8000] "rpm" Gateway
+                """;
+            DbcDocument document = DbcParser.Parse(documentText).Document!;
+
+            // Engine in baseline pass-through mode
+            var plan = new SimulationPlan(document, [
+                new SimulationMessageRule(291, false, true, GatewayMode.PassThrough, SimulationSendType.Cyclic,
+                    new SimulationTiming(TimeSpan.Zero, TimeSpan.FromMilliseconds(100), 0), [], new E2eProtectionConfiguration(false))
+            ]);
+            await using var engine = new SimulationEngine(session, plan);
+            await engine.StartAsync();
+
+            using var vm = new SimulationViewModel(plan, engine);
+
+            // User edits signal in Panel 6 while engine is running in Pass-Through mode
+            var signal = vm.Signals.First(s => s.Name == "EngineSpeed");
+
+            // Must not throw ArgumentException!
+            signal.Value = 2500;
+            signal.IsOverridden = true;
+
+            Assert.AreEqual(2500d, signal.Value);
+            Assert.IsTrue(signal.IsOverridden);
+
+            // Turn off override -> Must not throw
+            signal.IsOverridden = false;
+            Assert.IsFalse(signal.IsOverridden);
+
+            await engine.StopAsync();
+        }
     }
 }

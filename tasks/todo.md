@@ -1445,3 +1445,103 @@ read-only projection; panel 10 không sở hữu hardware, parser hay engine.
   - `dotnet test Simulate.sln`: **1,255 / 1,255 tests PASS (100%)**.
   - `git diff --check`: 0 lỗi format / EOF whitespace.
 - [x] Trạng thái hiện tại: `USER_ACCEPTED_UI-07` (Đã nghiệm thu hoàn tất UI-07 & Gateway độc lập DBC, sẵn sàng chuyển giao UI-08 Log / Output).
+
+## Work log — 2026-09-21 (UI-06 Bug Fix: Unhandled Exception Crash When Editing Signal Values While CAN is Connected)
+
+- [x] **Nguyên nhân gốc của lỗi Crash**:
+  - Khi CAN chưa `Connect`: `_engine == null`, phương thức `SyncSignalOverrides` return sớm $\implies$ Không phát sinh lỗi.
+  - Khi CAN đã `Connect`: Gateway tự động chạy tiếp nối ở chế độ Baseline Pass-Through (`_engine != null`, nhưng rule của message là `GatewayMode.PassThrough` vì chưa bấm `▶ Start Injection`).
+  - Khi người dùng nhập giá trị mới hoặc tick/untick `Override` tại Bảng 6, sự kiện `SignalModel.PropertyChanged` kích hoạt `SyncSignalOverrides` $\rightarrow$ gọi `_engine.ReplaceSignalOverrides`.
+  - Trong `SimulationEngine.cs`, hàm `ReplaceSignalOverrides` kiểm tra rule không phải `Inject` nên ném ngoại lệ:
+    `System.ArgumentException: 'Runtime signal overrides require a configured, enabled inject rule. (Parameter 'canIdentifier')'`.
+  - Do được gọi trực tiếp trên UI Thread từ sự kiện DataGrid mà không có khối `try-catch`, ngoại lệ này trở thành Unhandled Exception và làm ứng dụng crash ngay lập tức.
+- [x] **Giải pháp xử lý triệt để 2 giai đoạn (Drafting vs Live Injection)**:
+  - **`Simulate/Services/SimulationEngine.cs`**:
+    * Trong `ReplaceSignalOverrides`: Nếu rule không phải là `Inject` nhưng `replacement.Length == 0` (hành động xóa / tắt override), xử lý an toàn (safe no-op) bằng cách return thay vì ném `ArgumentException`.
+  - **`Simulate/ViewModels/SimulationViewModel.cs`**:
+    * Trong `SyncSignalOverrides`:
+      1. *Khi đang trong phiên tiêm lỗi hoạt động (`QueueStatusText == "Running" && _engine.IsRunning`)*: Tự động gọi `_engine.UpdatePlan(BuildSimulationPlan())` để cập nhật nóng toàn bộ plan trên bus. Bất kỳ message nào mới được tick override sẽ được nâng cấp tức thời sang `GatewayMode.Inject` trên bus (Live Tuning) mà không gây gián đoạn luồng tiếp nối.
+      2. *Khi đang ở chế độ Gateway Baseline Pass-Through (chưa bấm `Start Injection`)*: Bọc lời gọi `_engine.ReplaceSignalOverrides` trong khối `try-catch (ArgumentException)`. Giá trị override được lưu trữ và duy trì an toàn trong ViewModel state (sẽ được nạp tự động khi bấm `▶ Start Injection`), bảo đảm tuyệt đối không bao giờ làm sập luồng UI.
+- [x] **Kiểm thử tự động (Unit Test)**:
+  - Bổ sung test mới trong `Simulate.Tests/SignalValueConfigurationTests.cs`:
+    * `SignalValueEdit_WhenEngineInPassThroughMode_DoesNotCrashAndSavesOverride`: Khởi tạo session thật, nạp DBC, chạy engine ở chế độ Pass-Through, thực hiện sửa đổi giá trị tín hiệu và bật/tắt checkbox Override; xác nhận không có bất kỳ ngoại lệ nào xảy ra, giá trị lưu trữ chính xác 100%.
+- [x] **Verification**:
+  - `dotnet build Simulate.sln`: **0 warning / 0 error**.
+  - `dotnet test Simulate.sln`: **1,256 / 1,256 tests PASS (100%)** trong 6 giây.
+  - `git diff --check`: 0 lỗi format / EOF whitespace.
+  - UI XAML: Bảo vệ 100%, không thay đổi bất kỳ thuộc tính layout hay giao diện nào.
+
+## Work log — 2026-09-21 (UI-04 Realtime Signal Monitor: Fix Bidirectional Reception & Decoupled 30fps Dispatcher Flush)
+
+- [x] **Khắc phục lỗi chặn chiều nhận Frame (Bidirectional CAN Monitoring)**:
+  - **Nguyên nhân gốc**: `OnEngineFrameRouted` lọc cứng `if (routedFrame.Source != CanGatewaySide.Rx) return;`. Nếu tool test hoặc ECU phát vào đường TX (`Virtual Bus 1`), toàn bộ frame bị drop ngay lập tức.
+  - **Giải pháp**: Gỡ bỏ điều kiện lọc 1 chiều, mở rộng cho phép Bảng 4 bắt trọn frame từ cả hai nhánh `CanGatewaySide.Rx` và `CanGatewaySide.Tx`.
+- [x] **Kiến trúc Decoupled Periodic Flush Timer (Chống kẹt frame cuối & tối ưu 30fps)**:
+  - Bổ sung `System.Threading.Timer _liveFlushTimer` chu kỳ 33ms (~30fps) tự động quét và xả `_liveFrameBuffer` lên luồng UI qua `FlushLiveBufferToSignals`.
+  - Loại bỏ hoàn toàn hiện tượng kẹt frame cuối (trailing frame) khi lưu lượng frame ngắt quãng.
+  - `OnEngineFrameRouted` chỉ nạp frame nhanh vào dictionary dưới lock nhẹ ($O(1)$), không gây tải hay nghẽn luồng nhận.
+  - Quản lý vòng đời timer chặt chẽ: tự động khởi động khi start gateway/injection và dispose an toàn khi stop gateway hoặc dispose ViewModel.
+- [x] **Tối ưu hóa tra cứu số nguyên $O(1)$**:
+  - Bổ sung `RawIdentifier` và `IsExtendedIdentifier` vào `SignalModel`.
+  - Trong `ProcessIncomingFrame`, so khớp trực tiếp theo số nguyên nguyên bản kết hợp fallback chuỗi `FormatIdentifier`, tăng tốc độ giải mã và triệt tiêu phân bổ bộ nhớ rác.
+- [x] **Đồng bộ Plan tự động khi thay đổi danh sách Messages**:
+  - Trong `AddMessage`, `DeleteMessage`, `DeleteAllMessages`: nếu `_engine.IsRunning == true`, tự động gọi `_engine.UpdatePlan(BuildBaselineSimulationPlan())` để cập nhật đồng bộ các message được cấu hình.
+- [x] **Đăng ký lắng nghe FrameRouted trong Constructor**:
+  - Đảm bảo `_engine.FrameRouted += OnEngineFrameRouted;` và `EnsureLiveFlushTimerStarted();` được đăng ký ngay trong constructor nhận engine có sẵn.
+- [x] **Unit Tests**:
+  - Bổ sung 3 bài test tự động trong `Simulate.Tests/LiveSignalMonitorTests.cs`:
+    * `LiveSignalMonitor_WhenFrameReceivedFromTxSide_UpdatesSignalsCorrectly`: Xác nhận nhận frame từ nhánh TX, cập nhật `HasReceivedData = true`, `StatusText = "● Active"`, giá trị `RawValue` và `PhysicalValueDisplay`.
+    * `LiveSignalMonitor_WhenFrameReceivedFromRxSide_UpdatesSignalsCorrectly`: Xác nhận nhận frame từ nhánh RX.
+    * `LiveSignalMonitor_FlushTimer_FlushesTrailingFramesAutomatically`: Xác nhận timer tự động xả cạn frame lên UI mà không cần gọi flush thủ công.
+- [x] **Verification**:
+  - `dotnet build Simulate.sln`: **0 warning / 0 error**.
+  - `dotnet test Simulate.sln`: **1,259 / 1,259 tests PASS (100%)** trong 9 giây.
+  - `git diff --check`: 0 lỗi format / EOF whitespace.
+  - UI XAML: Bảo vệ 100%, không thay đổi bất kỳ thuộc tính layout hay giao diện nào.
+
+## Work log — 2026-09-21 (UI-04 Live Signal Monitor: Reflect Post-Gateway Injected Values and Injected Status)
+
+- [x] **Khắc phục hiện tượng Bảng 4 (Live Signal Monitor) không cập nhật giá trị đã simulate/tiêm lỗi**:
+  - **Phát hiện nguyên nhân gốc rễ**:
+    1. Khi frame đến từ ECU nguồn (mang giá trị gốc `44`), `SimulationEngine` gọi `FrameRouted` TRƯỚC KHI thực hiện tiêm lỗi; sau đó mới sửa thành `100` và gửi ra bus đối diện (TSMaster nhận được `100`), nhưng frame sau khi tiêm này không hề được thông báo cho `FrameRouted`.
+    2. Trong `SignalModel.UpdateValue`, hàm luôn gán `PhysicalValueDisplay = FormatDisplayValue(physical)` (`44`), `RawValue = 0x2C` và `StatusText = "● Active"` (xanh lá). Khi ECU nguồn gửi frame chu kỳ, Bảng 4 liên tục bị đè lại về giá trị gốc `44` và màu xanh lá, bất chấp người dùng đã cấu hình tiêm `100`.
+    3. Các frame tự phát do scheduler (Cyclic/One-Shot/Event) phát trực tiếp ra bus mà không kích hoạt `FrameRouted`, làm Live Monitor không quan sát được các frame do scheduler sinh ra.
+- [x] **SignalModel (MainViewModel.cs)**:
+  - Bổ sung `RefreshOverriddenDisplay()`: tính toán chính xác giá trị hiển thị `FormatDisplayValue(Value)`, giá trị `RawValue` từ `Value`, và đặt `StatusText = "● Injected"`, `StatusColor = "#EF4444"`.
+  - Trong `OnIsOverriddenChanged`: khi tick override và đã có dữ liệu (`HasReceivedData == true`), ngay lập tức cập nhật sang `● Injected` và hiển thị `Value`. Khi bỏ tick, đưa về `● Active` (nếu có data) hoặc `● No Data`.
+  - Trong `OnValueChanged`: khi đang override, việc thay đổi giá trị lập tức phản chiếu lên Bảng 4 thời gian thực.
+  - Trong `UpdateValue`: khi `IsOverridden == true`, duy trì gọi `RefreshOverriddenDisplay()` và cập nhật `LastUpdated`, tuyệt đối không bị frame gốc từ bus nguồn đè mất giá trị tiêm.
+- [x] **SimulationEngine (SimulationEngine.cs)**:
+  - Trong `RunReceiveLoopAsync`: khi `wasModified == true` (frame đã được can thiệp tiêm lỗi), kích hoạt `FrameRouted?.Invoke(new RoutedCanFrame(destination, outboundFrame, _timeProvider.GetUtcNow()))` để Live Monitor nhận diện được frame đã tiêm.
+  - Trong `TransmitScheduledFrameAsync`: kích hoạt `FrameRouted?.Invoke(new RoutedCanFrame(CanGatewaySide.Tx, outboundFrame, _timeProvider.GetUtcNow()))` khi scheduler phát frame ra bus.
+- [x] **SimulationViewModel (SimulationViewModel.cs)**:
+  - Trong `StartInjectionAsync`: làm mới toàn bộ các tín hiệu đang override qua `RefreshOverriddenDisplay()` ngay khi bắt đầu phiên tiêm lỗi.
+- [x] **Unit Tests (LiveSignalMonitorTests.cs)**:
+  - Bổ sung 2 bài kiểm thử tự động mới:
+    * `LiveSignalMonitor_WhenSignalIsOverridden_DisplaysInjectedValueAndRedStatus`: Xác nhận Bảng 4 cập nhật tức thời khi override (`500 rpm`, `0xFA0`, `● Injected`, `#EF4444`), không bị frame gốc tiếp theo đè lại, và tự động khôi phục về `● Active` khi bỏ tick override.
+    * `SimulationEngine_WhenInjectingFrame_TransmitsModifiedPayloadToDestination`: Xác nhận `SimulationEngine` phát frame đã tiêm sang phía `Tx` với payload đã được sửa đổi và tín hiệu còn lại được bảo toàn nguyên vẹn.
+- [x] **Verification**:
+  - `dotnet build Simulate.sln`: **0 warning / 0 error**.
+  - `dotnet test Simulate.sln`: **1,261 / 1,261 tests PASS (100%)** trong 7 giây.
+  - `git diff --check`: 0 lỗi format / EOF whitespace.
+  - UI XAML: Bảo vệ 100%, 0% thay đổi layout/styles.
+
+## Work log — 2026-09-21 (Fix Signal Jitter on Unrelated Signals & Eliminate Multi-Source Event Collision)
+
+- [x] **Khắc phục triệt để lỗi nhảy loạn xạ tín hiệu còn lại (`VCU_CBV`) khi tiêm đè `VCU_SourceAddress` (Value = 100)**:
+  - **Phân tích nguyên nhân cốt lõi**:
+    1. *Multi-Source Event Collision*: Hai lệnh `FrameRouted?.Invoke(...)` mới thêm ở dòng 625 (sau khi inject) và 769 (sau khi scheduler phát) trong `SimulationEngine.cs` đã bắn nhiều sự kiện cho cùng 1 chu kỳ CAN với các payload khác nhau (payload Rx thật vs payload Tx tiêm vs payload scheduler), gây xung đột dữ liệu đè lên nhau.
+    2. *Feedback Loop trong ViewModel*: `OnSignalItemPropertyChanged` trong `SimulationViewModel.cs` bắt mọi sự kiện thay đổi thuộc tính `Value` của mọi tín hiệu (kể cả tín hiệu không override). Khi frame CAN thật đến làm `Value` của `VCU_CBV` thay đổi, nó kích hoạt `SyncSignalOverrides` -> `UpdatePlan(plan)` lặp đi lặp lại hàng chục lần/giây, làm gián đoạn luồng engine.
+  - **Giải pháp xử lý chính xác (Surgical Fix)**:
+    1. **Khôi phục `SimulationEngine.cs` về nguyên bản**:
+       - Gỡ bỏ hoàn toàn 2 lệnh `FrameRouted?.Invoke(...)` ở dòng 625 và 769. `FrameRouted` chỉ phát đúng 1 lần duy nhất tại cửa ngõ tiếp nhận frame vào gateway (dòng 578), bảo vệ kiến trúc đơn luồng sự kiện nguyên thủy của engine.
+    2. **Chặn triệt để Feedback Loop trong `SimulationViewModel.cs`**:
+       - Cập nhật dòng 413: `if (e.PropertyName == nameof(SignalModel.IsOverridden) || (signal.IsOverridden && e.PropertyName == nameof(SignalModel.Value)))`.
+       - Chỉ khi nào tín hiệu thực sự đang được đánh dấu override (`IsOverridden == true`) thì việc đổi giá trị mới đồng bộ xuống engine. Tín hiệu bình thường nhận dữ liệu từ bus không bao giờ kích hoạt `SyncSignalOverrides`.
+    3. **Hiển thị ổn định tại `SignalModel` (MainViewModel.cs)**:
+       - Khi `IsOverridden == true`: Bảng 4 giữ vững trạng thái `● Injected`, màu đỏ `#EF4444`, hiển thị giá trị tiêm `Value`.
+       - Khi `!IsOverridden`: Hiển thị ổn định giá trị nhận từ bus thật (`Value = physical`, `● Active`, màu xanh `#10B981`), không bị nhảy loạn hoặc bị payload khác đè lên.
+  - **Verification**:
+    - `dotnet build Simulate.sln`: **0 warning / 0 error**.
+    - `dotnet test Simulate.sln`: **1,261 / 1,261 tests PASS (100%)**.
+    - UI XAML: 0% thay đổi, giữ nguyên vẹn toàn bộ giao diện và thư mục tham chiếu.

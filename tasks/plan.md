@@ -299,6 +299,15 @@ Sau UI-10, **Sol ultra** thực hiện final lifecycle/race review; người dù
   - Baudrate: TX 500k, RX 500k, CAN FD Enabled.
 - **Yêu cầu hành vi cốt lõi**: Khi simulator phát dữ liệu PCAN qua TX (`Virtual Bus 1 - Channel 1`), bất kỳ can thiệp thay đổi tín hiệu nào (qua Bảng 5 & 6) khi TX phát ra thì phía RX (`Virtual Bus 2 - Channel 1`) bắt buộc phải nhận được chính xác giá trị đã can thiệp đó.
 
+**UI-04 / UI-06 Remediation (2026-09-21) — Signal Jitter & Multi-Source Collision Fix:**
+- **Sự cố**: Khi tiêm lỗi đè tín hiệu `VCU_SourceAddress` (Value = 100), tín hiệu không override trong cùng message (`VCU_CBV`) bị nhảy số liên tục.
+- **Nguyên nhân gốc rễ**: Multi-Source Event Collision từ 2 lệnh `FrameRouted?.Invoke(...)` mới thêm trong `SimulationEngine.cs` (gây xung đột payload) kết hợp Feedback Loop trong `SimulationViewModel.OnSignalItemPropertyChanged` (mọi thay đổi `Value` kích hoạt `SyncSignalOverrides` -> `UpdatePlan`).
+- **Khắc phục**:
+  1. Khôi phục `SimulationEngine.cs` về nguyên bản (duy nhất 1 sự kiện `FrameRouted` tại cửa ngõ gateway khi frame đến).
+  2. Chặn feedback loop trong `SimulationViewModel.cs` (chỉ đồng bộ xuống engine khi `IsOverridden == true`).
+  3. `SignalModel` hiển thị ổn định `● Injected` (#EF4444) cho signal tiêm và `● Active` (#10B981) cho signal từ bus thật.
+- **Kết quả**: Build 0/0, 1,261/1,261 tests PASS, UI XAML 0% diff.
+
 **UI-01 DEBUG_RETURN — baudrate contract (2026-08-15):** User reported three related defects: TX/RX baudrate
 controls bind to one `Connection.Baudrate`; selecting TX implicitly overwrites the user's baudrate from
 `HardwareChannel.DefaultBaudrate`; and CAN FD data bitrate is forced to `nominal * 4`. This is one cross-layer

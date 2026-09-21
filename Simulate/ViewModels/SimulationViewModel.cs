@@ -195,6 +195,9 @@ namespace Simulate.ViewModels
             NotifyToolbarCommands();
             UpdateAvailableSignalMessageFilters();
             NotifyExecutionCommands();
+
+            _engine.FrameRouted += OnEngineFrameRouted;
+            EnsureLiveFlushTimerStarted();
         }
 
         /// <summary>
@@ -407,7 +410,7 @@ namespace Simulate.ViewModels
                 return;
             }
 
-            if (e.PropertyName == nameof(SignalModel.IsOverridden) || e.PropertyName == nameof(SignalModel.Value))
+            if (e.PropertyName == nameof(SignalModel.IsOverridden) || (signal.IsOverridden && e.PropertyName == nameof(SignalModel.Value)))
             {
                 if (ShowOnlyOverridden && e.PropertyName == nameof(SignalModel.IsOverridden))
                 {
@@ -436,10 +439,34 @@ namespace Simulate.ViewModels
                 .Select(s => new SignalOverride(s.Name, s.Value))
                 .ToList();
 
-            _engine.ReplaceSignalOverrides(
-                message.RawIdentifier,
-                message.IsExtendedIdentifier,
-                activeOverrides);
+            // When injection is actively running, dynamically update the plan so any newly overridden
+            // messages are promoted to Inject and applied immediately on the bus.
+            if (QueueStatusText == "Running" && _engine.IsRunning && _currentDocument is not null)
+            {
+                try
+                {
+                    SimulationPlan plan = BuildSimulationPlan();
+                    _engine.UpdatePlan(plan);
+                    return;
+                }
+                catch
+                {
+                    // Fall back to ReplaceSignalOverrides if plan cannot be dynamically updated
+                }
+            }
+
+            try
+            {
+                _engine.ReplaceSignalOverrides(
+                    message.RawIdentifier,
+                    message.IsExtendedIdentifier,
+                    activeOverrides);
+            }
+            catch (ArgumentException)
+            {
+                // The engine is running in baseline pass-through mode without an inject rule for this message.
+                // Overrides are safely maintained in the ViewModel and will be applied when Start Injection is triggered.
+            }
         }
 
         private bool FilterValueSignal(object item)
@@ -489,7 +516,10 @@ namespace Simulate.ViewModels
 
             foreach (var signal in Signals)
             {
-                if (string.Equals(signal.MessageId, messageId, StringComparison.OrdinalIgnoreCase) && signal.DbcSource is not null)
+                bool matches = (signal.RawIdentifier != 0 && signal.RawIdentifier == identifier && signal.IsExtendedIdentifier == isExtended)
+                    || string.Equals(signal.MessageId, messageId, StringComparison.OrdinalIgnoreCase);
+
+                if (matches && signal.DbcSource is not null)
                 {
                     try
                     {
@@ -506,11 +536,50 @@ namespace Simulate.ViewModels
 
         private readonly object _liveBufferLock = new();
         private readonly Dictionary<(uint Id, bool IsExtended), byte[]> _liveFrameBuffer = new();
-        private DateTime _lastUiRefresh = DateTime.MinValue;
+        private System.Threading.Timer? _liveFlushTimer;
+
+        public void EnsureLiveFlushTimerStarted()
+        {
+            if (_liveFlushTimer is null)
+            {
+                _liveFlushTimer = new System.Threading.Timer(OnLiveFlushTimerTick, null, 33, 33);
+            }
+        }
+
+        public void StopLiveFlushTimer()
+        {
+            _liveFlushTimer?.Dispose();
+            _liveFlushTimer = null;
+        }
+
+        private void OnLiveFlushTimerTick(object? state)
+        {
+            if (IsSignalMonitorPaused)
+            {
+                return;
+            }
+
+            lock (_liveBufferLock)
+            {
+                if (_liveFrameBuffer.Count == 0)
+                {
+                    return;
+                }
+            }
+
+            if (System.Windows.Application.Current?.Dispatcher is { } dispatcher && !dispatcher.CheckAccess())
+            {
+                dispatcher.BeginInvoke(FlushLiveBufferToSignals);
+            }
+            else
+            {
+                FlushLiveBufferToSignals();
+            }
+        }
 
         private void OnEngineFrameRouted(RoutedCanFrame routedFrame)
         {
-            if (IsSignalMonitorPaused || routedFrame.Source != CanGatewaySide.Rx)
+            if (IsSignalMonitorPaused)
             {
                 return;
             }
@@ -521,21 +590,7 @@ namespace Simulate.ViewModels
                     routedFrame.Frame.Data.ToArray();
             }
 
-            DateTime now = DateTime.UtcNow;
-            if ((now - _lastUiRefresh).TotalMilliseconds < 33)
-            {
-                return;
-            }
-            _lastUiRefresh = now;
-
-            if (System.Windows.Application.Current?.Dispatcher is { } dispatcher && !dispatcher.CheckAccess())
-            {
-                dispatcher.BeginInvoke(FlushLiveBufferToSignals);
-            }
-            else
-            {
-                FlushLiveBufferToSignals();
-            }
+            EnsureLiveFlushTimerStarted();
         }
 
         public void FlushLiveBufferToSignals()
@@ -648,6 +703,8 @@ namespace Simulate.ViewModels
                     PhysicalValueDisplay = "—",
                     MessageId = messageId,
                     MessageName = message.Name,
+                    RawIdentifier = message.Identifier,
+                    IsExtendedIdentifier = message.IsExtendedIdentifier,
                     IsOverridden = false,
                     Cycle = model.Cycle,
                     HasReceivedData = false,
@@ -656,6 +713,11 @@ namespace Simulate.ViewModels
                     LastUpdated = "—",
                     DbcSource = signal
                 });
+            }
+
+            if (_engine is { IsRunning: true })
+            {
+                _engine.UpdatePlan(BuildBaselineSimulationPlan());
             }
 
             UpdateAvailableSignalMessageFilters();
@@ -712,6 +774,11 @@ namespace Simulate.ViewModels
                 SelectedMessage = null;
             }
 
+            if (_engine is { IsRunning: true })
+            {
+                _engine.UpdatePlan(BuildBaselineSimulationPlan());
+            }
+
             UpdateAvailableSignalMessageFilters();
             FilteredSignals?.Refresh();
             NotifyToolbarCommands();
@@ -723,6 +790,12 @@ namespace Simulate.ViewModels
             Messages.Clear();
             Signals.Clear();
             SelectedMessage = null;
+
+            if (_engine is { IsRunning: true })
+            {
+                _engine.UpdatePlan(BuildBaselineSimulationPlan());
+            }
+
             UpdateAvailableSignalMessageFilters();
             FilteredSignals?.Refresh();
             NotifyToolbarCommands();
@@ -1142,6 +1215,7 @@ namespace Simulate.ViewModels
 
                 _engine = new SimulationEngine(session, baselinePlan);
                 _engine.FrameRouted += OnEngineFrameRouted;
+                EnsureLiveFlushTimerStarted();
                 await _engine.StartAsync();
             }
             finally
@@ -1174,6 +1248,8 @@ namespace Simulate.ViewModels
                     await _engine.DisposeAsync();
                     _engine = null;
                 }
+
+                StopLiveFlushTimer();
 
                 RestoreAllOverrides();
 
@@ -1215,6 +1291,7 @@ namespace Simulate.ViewModels
                         ?? throw new InvalidOperationException("No active CAN gateway session is available.");
                     _engine = new SimulationEngine(session, plan);
                     _engine.FrameRouted += OnEngineFrameRouted;
+                    EnsureLiveFlushTimerStarted();
                 }
                 else
                 {
@@ -1240,6 +1317,11 @@ namespace Simulate.ViewModels
 
                 QueueStatusText = "Running";
                 PauseInjectionButtonContent = "Ⅱ  Pause";
+
+                foreach (var signal in Signals.Where(s => s.IsOverridden))
+                {
+                    signal.RefreshOverriddenDisplay();
+                }
 
                 if (FaultQueue.Count > 0 && FaultConfig.SelectedInjectionMode == "Sequence")
                 {
@@ -1510,6 +1592,7 @@ namespace Simulate.ViewModels
 
         public void Dispose()
         {
+            StopLiveFlushTimer();
             _executionCts?.Cancel();
             _executionCts?.Dispose();
             _executionCts = null;
@@ -1524,6 +1607,7 @@ namespace Simulate.ViewModels
 
         public async ValueTask DisposeAsync()
         {
+            StopLiveFlushTimer();
             _executionCts?.Cancel();
             _executionCts?.Dispose();
             _executionCts = null;
@@ -1596,6 +1680,8 @@ namespace Simulate.ViewModels
                         Value = isOverridden ? overrideValue : signal.Offset,
                         MessageId = messageId,
                         MessageName = message.Name,
+                        RawIdentifier = message.Identifier,
+                        IsExtendedIdentifier = message.IsExtendedIdentifier,
                         IsOverridden = isOverridden,
                         Cycle = FormatCycle(rule),
                         DbcSource = signal

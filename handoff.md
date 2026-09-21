@@ -1,4 +1,4 @@
-# Handoff — UI-07 Complete / Gateway Bridge Decoupled & 1,252 Tests Passing
+# Handoff — UI-04 Injected Frame Reflection Fixed / 1,261 Tests Passing
 
 ## Source of truth
 
@@ -10,13 +10,23 @@
 
 - Branch: `chore/merge-agent-skills`.
 - Panels 1–6 đã hoàn thành và đạt `USER_ACCEPTED`.
+- **Khắc phục Triệt để Lỗi Tín Hiệu Bị Nhảy Loạn Xạ & Multi-Source Event Collision (2026-09-21)**:
+  * Khôi phục `SimulationEngine.cs` về nguyên bản 100%, gỡ bỏ 2 lệnh `FrameRouted?.Invoke(...)` sau tiêm lỗi và sau scheduler. `FrameRouted` chỉ phát đúng 1 lần duy nhất tại điểm tiếp nhận frame từ gateway bus.
+  * Chặn triệt để Feedback Loop trong `SimulationViewModel.cs`: Chỉ khi `signal.IsOverridden == true` thì sự kiện đổi giá trị mới đồng bộ xuống engine. Tín hiệu bình thường nhận frame từ bus không bao giờ kích hoạt `SyncSignalOverrides`.
+  * `SignalModel` (MainViewModel.cs): Khi `IsOverridden == true` hiển thị ổn định giá trị tiêm `● Injected` (#EF4444); khi `!IsOverridden` hiển thị ổn định giá trị thực từ bus thật (`● Active` #10B981) mà không bị xung đột hay nhảy số loạn xạ.
+- **UI-04 Realtime Signal Monitor: Cập nhật phản chiếu Frame đã Tiêm Lỗi (Post-Gateway / Injected Values & Injected Status)**:
+  * Khi signal đang có `IsOverridden == true`, luôn hiển thị giá trị tiêm `Value`, raw value tương ứng, và trạng thái **`● Injected`** (màu đỏ `#EF4444`).
+  * Khi frame chu kỳ từ ECU nguồn tiếp tục gửi đến, `UpdateValue` bảo toàn giá trị tiêm lỗi và trạng thái `● Injected`, cập nhật timestamp `LastUpdated` theo thời gian thực mà không bị giá trị gốc đè lại.
+  * Khi người dùng thay đổi giá trị hoặc tick/untick `Override` tại Bảng 6, Bảng 4 cập nhật phản ứng tức thời.
+- **UI-04 Realtime Signal Monitor (Giám Sát Tín Hiệu 2 Chiều & Decoupled 30fps Timer)**:
+  * Bảng 4 bắt trọn frame CAN từ cả 2 nhánh bus `RX` và `TX`.
+  * Producer-Consumer với `_liveFlushTimer` 33ms (~30fps) tự động xả cạn `_liveFrameBuffer` lên UI thread, loại bỏ kẹt frame cuối và chống nghẽn UI.
+  * Tối ưu hóa tra cứu tín hiệu $O(1)$ bằng cặp số nguyên `(RawIdentifier, IsExtendedIdentifier)` trên `SignalModel`.
+- **UI-06 Bug Fix: Khắc phục lỗi Crash Unhandled Exception khi sửa giá trị tín hiệu ở Bảng 6 lúc CAN đã Connected**:
+  * Phân tách an toàn giữa Drafting Phase và Live Injection Phase; an toàn 100% không làm sập luồng UI.
 - **Panel 7 (Execution Control) & Gateway Tiếp Nối 2 Đường CAN (Hoàn toàn độc lập với DBC)**:
-  * Tách bạch luồng: `Connect` (UI 1) tự động khởi chạy luồng Gateway bắc cầu tiếp nối (Pass-Through Bridge) 2 chiều RX $\leftrightarrow$ TX ngay lập tức ở chế độ Raw Pass-Through, **không phụ thuộc vào file DBC**.
-  * Dynamic DBC Attachment: Khi nạp DBC (UI 2), gắn kết bộ giải mã tín hiệu cho Bảng 4 (Live Signal Monitor) với kỹ thuật Throttle 33ms (~30fps) mà không làm gián đoạn luồng Gateway Bridge; khi dỡ bỏ DBC, Gateway Bridge vẫn tiếp tục chạy bình thường.
-  * `Start Injection` (UI 7) chỉ kích hoạt việc can thiệp giá trị lỗi và phát chu kỳ khi đã nạp DBC.
-  * `Stop` (UI 7) dừng tiêm lỗi, hoàn nguyên giá trị gốc nhưng **Gateway tiếp nối và Live Monitor vẫn chạy liên tục**.
-  * `Disconnect` (UI 1) dừng toàn bộ gateway engine và đóng cổng phần cứng native.
-- Toàn bộ suite kiểm thử: **1,255 / 1,255 tests PASS (100%)**, biên dịch 0 warning / 0 error.
+  * Gateway bắc cầu tiếp nối (Pass-Through Bridge) 2 chiều RX $\leftrightarrow$ TX chạy độc lập không phụ thuộc DBC.
+- Toàn bộ suite kiểm thử: **1,261 / 1,261 tests PASS (100%)**, biên dịch 0 warning / 0 error.
 - Thư mục dự án tham chiếu `D:\TEST_DEV\...` được bảo vệ an toàn 100%, không bị sửa đổi.
 - Benchmark Test Data: `DBC/VF EBUS6M_PCAN_V2.0.0_20250524.dbc` (61 msgs, 370 signals, Powertrain CAN).
 - Hardware Harness: `Virtual CAN` -> TX: `Virtual Bus 1 - Channel 1`, RX: `Virtual Bus 2 - Channel 1` (500k baudrate, CAN FD).

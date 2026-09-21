@@ -87,6 +87,12 @@ namespace Simulate.ViewModels
         private string _messageId = string.Empty;
 
         [ObservableProperty]
+        private uint _rawIdentifier;
+
+        [ObservableProperty]
+        private bool _isExtendedIdentifier;
+
+        [ObservableProperty]
         private string _messageName = string.Empty;
 
         [ObservableProperty]
@@ -243,30 +249,67 @@ namespace Simulate.ViewModels
                 : $"{physical.ToString("0.##", CultureInfo.InvariantCulture)} {Unit}";
         }
 
+        public void RefreshOverriddenDisplay()
+        {
+            if (IsOverridden)
+            {
+                PhysicalValueDisplay = FormatDisplayValue(Value);
+                if (Factor != 0)
+                {
+                    double rawCalc = (Value - Offset) / Factor;
+                    RawValue = rawCalc >= 0
+                        ? $"0x{(ulong)Math.Round(rawCalc):X}"
+                        : $"0x{(long)Math.Round(rawCalc):X}";
+                }
+                StatusText = "● Injected";
+                StatusColor = "#EF4444";
+            }
+        }
+
         partial void OnIsOverriddenChanged(bool value)
         {
-            // UI 6 triggers on IsOverridden to highlight modified signals with white background and black text.
-            // UI 4 (Live Signal Monitor) reflects live bus traffic and is not prematurely set to Injected during setup.
+            if (value)
+            {
+                if (HasReceivedData)
+                {
+                    RefreshOverriddenDisplay();
+                }
+            }
+            else
+            {
+                StatusText = HasReceivedData ? "● Active" : "● No Data";
+                StatusColor = HasReceivedData ? "#10B981" : "#64748B";
+                PhysicalValueDisplay = HasReceivedData ? FormatDisplayValue(Value) : "—";
+            }
         }
 
         partial void OnValueChanged(double value)
         {
             ValidateRange(value);
             OnPropertyChanged(nameof(PhysicalValueInput));
+            if (IsOverridden && HasReceivedData)
+            {
+                RefreshOverriddenDisplay();
+            }
         }
 
         public void UpdateValue(ulong raw, double physical, DateTime timestamp)
         {
-            RawValue = $"0x{raw:X}";
-            if (!IsOverridden)
+            HasReceivedData = true;
+            LastUpdated = timestamp.ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture);
+
+            if (IsOverridden)
+            {
+                RefreshOverriddenDisplay();
+            }
+            else
             {
                 Value = physical;
+                RawValue = $"0x{raw:X}";
+                PhysicalValueDisplay = FormatDisplayValue(physical);
+                StatusText = "● Active";
+                StatusColor = "#10B981";
             }
-            PhysicalValueDisplay = FormatDisplayValue(physical);
-            HasReceivedData = true;
-            StatusText = "● Active";
-            StatusColor = "#10B981";
-            LastUpdated = timestamp.ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture);
         }
 
         public void ResetData()

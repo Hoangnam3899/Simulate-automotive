@@ -189,6 +189,11 @@ namespace Simulate.Services
             if (!_enabledRules.TryGetValue(key, out SimulationMessageRule? rule)
                 || rule.GatewayMode != GatewayMode.Inject)
             {
+                if (replacement.Length == 0)
+                {
+                    return;
+                }
+
                 throw new ArgumentException(
                     "Runtime signal overrides require a configured, enabled inject rule.",
                     nameof(canIdentifier));
