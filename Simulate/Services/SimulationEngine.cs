@@ -23,10 +23,12 @@ namespace Simulate.Services
         private readonly List<PendingEcho> _pendingEchoes = new();
         private readonly AsyncManualResetGate _scheduleGate = new(isSet: true);
         private readonly SemaphoreSlim _transmitGate = new(1, 1);
-        private readonly Dictionary<
+        public event Action<RoutedCanFrame>? FrameRouted;
+
+        private Dictionary<
             (uint CanIdentifier, bool IsExtendedIdentifier),
             SimulationMessageRule> _enabledRules;
-        private readonly Dictionary<
+        private Dictionary<
             (uint CanIdentifier, bool IsExtendedIdentifier),
             DbcMessage> _messages;
         private Dictionary<
@@ -97,18 +99,25 @@ namespace Simulate.Services
                 .Where(rule => rule.IsEnabled)
                 .ToDictionary(
                     rule => (rule.CanIdentifier, rule.IsExtendedIdentifier));
-            _messages = plan.Document.Messages.ToDictionary(
-                message => (message.Identifier, message.IsExtendedIdentifier));
-            foreach (KeyValuePair<
-                (uint CanIdentifier, bool IsExtendedIdentifier),
-                SimulationMessageRule> entry in _enabledRules)
+            if (plan.Document is not null)
             {
-                if (entry.Value.GatewayMode == GatewayMode.Inject)
+                _messages = plan.Document.Messages.ToDictionary(
+                    message => (message.Identifier, message.IsExtendedIdentifier));
+                foreach (KeyValuePair<
+                    (uint CanIdentifier, bool IsExtendedIdentifier),
+                    SimulationMessageRule> entry in _enabledRules)
                 {
-                    ValidateSignalOverrides(
-                        _messages[entry.Key],
-                        entry.Value.SignalOverrides);
+                    if (entry.Value.GatewayMode == GatewayMode.Inject && _messages.TryGetValue(entry.Key, out DbcMessage? msg))
+                    {
+                        ValidateSignalOverrides(
+                            msg,
+                            entry.Value.SignalOverrides);
+                    }
                 }
+            }
+            else
+            {
+                _messages = new Dictionary<(uint CanIdentifier, bool IsExtendedIdentifier), DbcMessage>();
             }
 
             _overrideSnapshot = _enabledRules
@@ -197,6 +206,53 @@ namespace Simulate.Services
                     [key] = replacement
                 };
                 Volatile.Write(ref _overrideSnapshot, nextSnapshot);
+            }
+        }
+
+        /// <inheritdoc />
+        public void UpdatePlan(SimulationPlan plan)
+        {
+            ArgumentNullException.ThrowIfNull(plan);
+
+            lock (_overrideSync)
+            {
+                var newRules = plan.MessageRules
+                    .Where(rule => rule.IsEnabled)
+                    .ToDictionary(
+                        rule => (rule.CanIdentifier, rule.IsExtendedIdentifier));
+
+                Dictionary<(uint CanIdentifier, bool IsExtendedIdentifier), DbcMessage> newMessages;
+                if (plan.Document is not null)
+                {
+                    newMessages = plan.Document.Messages.ToDictionary(
+                        message => (message.Identifier, message.IsExtendedIdentifier));
+
+                    foreach (KeyValuePair<
+                        (uint CanIdentifier, bool IsExtendedIdentifier),
+                        SimulationMessageRule> entry in newRules)
+                    {
+                        if (entry.Value.GatewayMode == GatewayMode.Inject && newMessages.TryGetValue(entry.Key, out DbcMessage? msg))
+                        {
+                            ValidateSignalOverrides(
+                                msg,
+                                entry.Value.SignalOverrides);
+                        }
+                    }
+                }
+                else
+                {
+                    newMessages = new Dictionary<(uint CanIdentifier, bool IsExtendedIdentifier), DbcMessage>();
+                }
+
+                Volatile.Write(ref _enabledRules, newRules);
+                Volatile.Write(ref _messages, newMessages);
+
+                var newOverrideSnapshot = newRules
+                    .Where(entry => entry.Value.GatewayMode == GatewayMode.Inject)
+                    .ToDictionary(
+                        entry => entry.Key,
+                        entry => entry.Value.SignalOverrides.ToArray());
+                Volatile.Write(ref _overrideSnapshot, newOverrideSnapshot);
             }
         }
 
@@ -513,6 +569,8 @@ namespace Simulate.Services
                                     routedFrame.Frame.IsExtendedIdentifier)] = routedFrame.Frame;
                         }
                     }
+
+                    FrameRouted?.Invoke(routedFrame);
 
                     if (_enabledRules.TryGetValue(
                             (routedFrame.Frame.Identifier, routedFrame.Frame.IsExtendedIdentifier),

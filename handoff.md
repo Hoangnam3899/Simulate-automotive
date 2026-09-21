@@ -1,4 +1,4 @@
-# Handoff — UI-06 In Progress (Signal Value Configuration)
+# Handoff — UI-07 Complete / Gateway Bridge Decoupled & 1,252 Tests Passing
 
 ## Source of truth
 
@@ -9,11 +9,18 @@
 ## Current repository state
 
 - Branch: `chore/merge-agent-skills`.
-- Panels 1–5 đã hoàn thành và đạt `USER_ACCEPTED`.
-- Panel 6 (Signal Value Configuration) đang tiếp tục được phát triển và hoàn thiện tính năng (`IN_PROGRESS`).
-- Phần tối ưu layout (mở rộng Bảng 6, thu gọn Bảng 8 & 9) đã được tích hợp tại commit `7350ba1`.
-- Toàn bộ suite kiểm thử: 233/233 tests PASS (100%), biên dịch 0 warning / 0 error.
-- Do not commit or push without a new user instruction.
+- Panels 1–6 đã hoàn thành và đạt `USER_ACCEPTED`.
+- **Panel 7 (Execution Control) & Gateway Tiếp Nối 2 Đường CAN (Hoàn toàn độc lập với DBC)**:
+  * Tách bạch luồng: `Connect` (UI 1) tự động khởi chạy luồng Gateway bắc cầu tiếp nối (Pass-Through Bridge) 2 chiều RX $\leftrightarrow$ TX ngay lập tức ở chế độ Raw Pass-Through, **không phụ thuộc vào file DBC**.
+  * Dynamic DBC Attachment: Khi nạp DBC (UI 2), gắn kết bộ giải mã tín hiệu cho Bảng 4 (Live Signal Monitor) với kỹ thuật Throttle 33ms (~30fps) mà không làm gián đoạn luồng Gateway Bridge; khi dỡ bỏ DBC, Gateway Bridge vẫn tiếp tục chạy bình thường.
+  * `Start Injection` (UI 7) chỉ kích hoạt việc can thiệp giá trị lỗi và phát chu kỳ khi đã nạp DBC.
+  * `Stop` (UI 7) dừng tiêm lỗi, hoàn nguyên giá trị gốc nhưng **Gateway tiếp nối và Live Monitor vẫn chạy liên tục**.
+  * `Disconnect` (UI 1) dừng toàn bộ gateway engine và đóng cổng phần cứng native.
+- Toàn bộ suite kiểm thử: **1,255 / 1,255 tests PASS (100%)**, biên dịch 0 warning / 0 error.
+- Thư mục dự án tham chiếu `D:\TEST_DEV\...` được bảo vệ an toàn 100%, không bị sửa đổi.
+- Benchmark Test Data: `DBC/VF EBUS6M_PCAN_V2.0.0_20250524.dbc` (61 msgs, 370 signals, Powertrain CAN).
+- Hardware Harness: `Virtual CAN` -> TX: `Virtual Bus 1 - Channel 1`, RX: `Virtual Bus 2 - Channel 1` (500k baudrate, CAN FD).
+- Next Target: Chuyển giao sang Bảng 8 (UI-08: Log / Output).
 
 ## UI binding contract — source of truth
 
@@ -203,16 +210,36 @@ Luna xhigh independent Spec/Standards/security review: PASS, no Critical/Require
 - Bộ unit tests `SignalValueConfigurationTests.cs` (7 tests toàn diện).
 - Verification: `dotnet build Simulate.sln` PASS 0 warning/0 error; `dotnet test Simulate.sln` PASS 233/233 tests (100% PASS).
 
-## Next Panel: UI-07 (Execution Control)
-- Trạng thái: `READY_FOR_IMPLEMENTATION` (Đã mở khóa sau khi UI-06 đạt `USER_ACCEPTED`).
+## UI-07 Execution Control completed — WAITING_USER_VERIFICATION (2026-08-20 / 2026-09-18)
+
+- Trạng thái: `WAITING_USER_VERIFICATION` (Đã hoàn thành toàn diện code & test, chờ người dùng chạy thử trên phần cứng Vector Virtual CAN).
 - Lead: **Sol ultra** | Reviewer: **Terra xhigh**.
-- Nhiệm vụ: Gắn command thật cho Start Injection, Stop, Pause, Clear Queue và hiển thị Queue Status/Items/Running.
+- Các hạng mục đã hoàn thành:
+  * **FaultConfigurationViewModel**: Thêm các helper method an toàn trích xuất tham số chu kỳ (`CycleTime`), độ trễ (`StartDelay`), thời lượng (`Duration`), số lần lặp (`RepeatCount`) và giá trị lỗi (`FaultValue`).
+  * **SimulationViewModel**:
+    - Bổ sung 4 Relay Commands: `StartInjectionCommand`, `StopInjectionCommand`, `TogglePauseInjectionCommand`, `ClearQueueCommand`.
+    - Bổ sung 4 Observable Properties: `QueueStatusText` (`"Idle"`/`"Running"`/`"Paused"`), `RunningFaultDisplay`, `QueueItemsDisplay`, `PauseInjectionButtonContent` (`"Ⅱ  Pause"`/`"▶  Resume"`).
+    - Kết nối engine lifecycle: mượn session an toàn qua `SetSessionProvider`, khởi tạo `SimulationPlan` từ cấu hình UI, kích hoạt receive routing (`StartAsync`) và scheduler (`StartSchedulingAsync`).
+    - Hỗ trợ cả 2 chế độ: Direct Injection (theo chu kỳ và thời lượng) và Sequence Queue Runner (thực thi tuần tự từng bước trong hàng đợi).
+    - Hỗ trợ tự động hoàn nguyên: Khi dừng tiêm lỗi, nếu `IsRestoreAfterStop == true` thì tự động xóa mọi override và khôi phục giá trị gốc.
+    - Triển khai `IDisposable` và `IAsyncDisposable` dọn dẹp sạch sẽ tài nguyên.
+  * **MainViewModel**:
+    - Thiết lập kết nối `Simulation.SetSessionProvider(() => Connection.ActiveGatewaySession)`.
+    - Lắng nghe `Connection.PropertyChanged` để tự động bật/tắt khả dụng của `StartInjectionCommand`.
+  * **MainWindow.xaml (Panel 7 Binding-Only)**:
+    - Gắn `Command` cho 4 nút bấm và `Binding` cho 3 nhãn trạng thái của Bảng 7, bảo vệ 100% cấu trúc giao diện và layout.
+  * **Bộ unit tests ExecutionControlTests.cs**: 9 bài test bao phủ toàn bộ các kịch bản của Bảng 7.
+- Verification: `dotnet build Simulate.sln` PASS 0 warning / 0 error; `dotnet test Simulate.sln` PASS 249/249 tests (100% PASS).
+
+## Next Panel: UI-08 (Log / Output)
+- Trạng thái: `LOCKED_BY_UI-07_USER_ACCEPTANCE` (Sẽ mở khóa sau khi người dùng xác nhận đạt yêu cầu UI-07).
+- Nhiệm vụ: Thay log demo bằng bounded observable log thật; bind level filter, Clear và Export vào control hiện hữu.
 
 ## Suggested skills
 
-1. `domain-modeling` for signal override types and `VAL_` mapping contracts.
-2. `codebase-design` for signal collection filtering and editability seams.
+1. `domain-modeling` for simulation engine and session lifecycle.
+2. `codebase-design` for session borrowing and execution runners.
 3. `incremental-implementation` for step-by-step panel delivery.
-4. `test-driven-development` for override validation and filter logic.
+4. `test-driven-development` for execution commands and queue logic.
 5. `code-review` for verification quality gates.
 6. `git-workflow-and-versioning` when committing or pushing changes.

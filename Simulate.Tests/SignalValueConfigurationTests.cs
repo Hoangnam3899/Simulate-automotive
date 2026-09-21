@@ -37,6 +37,12 @@ namespace Simulate.Tests
                 ReplaceOverridesCallCount++;
             }
 
+#pragma warning disable CS0067
+            public event Action<RoutedCanFrame>? FrameRouted;
+#pragma warning restore CS0067
+
+            public void UpdatePlan(SimulationPlan plan) { }
+
             public ValueTask StartAsync(CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
             public ValueTask StartSchedulingAsync(CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
             public void PauseScheduling() { }

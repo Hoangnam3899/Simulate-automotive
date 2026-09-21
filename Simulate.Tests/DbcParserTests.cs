@@ -275,7 +275,7 @@ namespace Simulate.Tests
                 "*.dbc",
                 SearchOption.AllDirectories);
 
-            Assert.AreEqual(8, filePaths.Length);
+            Assert.AreEqual(9, filePaths.Length);
 
             foreach (string filePath in filePaths)
             {
@@ -298,6 +298,30 @@ namespace Simulate.Tests
                         message.Signals.Sum(signal => signal.ValueDescriptions.Count)) > 0,
                     $"Expected '{filePath}' to expose typed VAL_ metadata.");
             }
+        }
+
+        [TestMethod]
+        public void Parse_VF_EBUS6M_PCAN_LoadsExpectedMessagesAndSignals()
+        {
+            string repositoryRoot = FindRepositoryRoot();
+            string dbcPath = Path.Combine(repositoryRoot, "DBC", "VF EBUS6M_PCAN_V2.0.0_20250524.dbc");
+
+            Assert.IsTrue(File.Exists(dbcPath), "Target benchmark PCAN DBC must exist in DBC folder.");
+
+            DbcParseResult result = DbcParser.Parse(File.ReadAllText(dbcPath));
+            Assert.IsTrue(result.IsSuccess, "PCAN DBC must parse without fatal errors.");
+
+            DbcDocument doc = result.Document!;
+            Assert.AreEqual(61, doc.Messages.Count, "Must have 61 messages.");
+            Assert.AreEqual(370, doc.Messages.Sum(m => m.Signals.Count), "Must have 370 signals.");
+
+            // Verify specific PCAN messages and signals used in simulation
+            DbcMessage? vcuNm = doc.Messages.FirstOrDefault(m => m.Name == "VCU_NM");
+            Assert.IsNotNull(vcuNm, "VCU_NM message must be present.");
+            Assert.IsTrue(vcuNm.Signals.Any(s => s.Name == "VCU_SourceAddress"), "VCU_SourceAddress signal must be present.");
+
+            DbcMessage? vcuAsr = doc.Messages.FirstOrDefault(m => m.Name == "VCU_ASR_Ctrl");
+            Assert.IsNotNull(vcuAsr, "VCU_ASR_Ctrl message must be present.");
         }
 
         private static string FindRepositoryRoot()

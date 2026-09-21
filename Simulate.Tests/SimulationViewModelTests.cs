@@ -362,6 +362,14 @@ namespace Simulate.Tests
             {
             }
 
+#pragma warning disable CS0067
+            public event Action<RoutedCanFrame>? FrameRouted;
+#pragma warning restore CS0067
+
+            public void UpdatePlan(SimulationPlan plan)
+            {
+            }
+
             public ValueTask StartAsync(CancellationToken cancellationToken = default)
             {
                 StartCallCount++;
@@ -461,6 +469,14 @@ namespace Simulate.Tests
                 uint canIdentifier,
                 bool isExtendedIdentifier,
                 IEnumerable<SignalOverride> signalOverrides)
+            {
+            }
+
+#pragma warning disable CS0067
+            public event Action<RoutedCanFrame>? FrameRouted;
+#pragma warning restore CS0067
+
+            public void UpdatePlan(SimulationPlan plan)
             {
             }
 

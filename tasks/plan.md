@@ -283,13 +283,21 @@ Không dùng câu chung chung như “tiếp tục UI”; phải ghi tên panel 
 | 3 | TX Message List | DBC projection và editable simulation draft | **Terra xhigh** | **Luna xhigh** | `USER_ACCEPTED` |
 | 4 | Live Signal Monitor | bounded live-frame/signal telemetry, Dispatcher projection | **Sol ultra** | **Terra xhigh** | `USER_ACCEPTED` |
 | 5 | Fault Configuration | selected signal, direct fault (Cyclic/One-Shot), sequence queue, conditional Add to Queue | **Terra xhigh** | **Luna high** | `USER_ACCEPTED` |
-| 6 | Signal Value Configuration | physical value/`VAL_` selection và override replacement | **Terra xhigh** | **Sol xhigh** | `IN_PROGRESS` |
-| 7 | Execution Control | engine/session start-stop-pause lifecycle | **Sol ultra** | **Terra xhigh** | `READY_FOR_IMPLEMENTATION` |
-| 8 | Log / Output | bounded observable application log, filter/clear/export | **Terra high** | **Luna high** | `LOCKED_BY_UI-07` |
+| 6 | Signal Value Configuration | physical value/`VAL_` selection, Min/Max validation, message-filtered isolation | **Terra xhigh** | **Sol xhigh** | `USER_ACCEPTED` |
+| 7 | Execution Control | engine/session start-stop-pause lifecycle, injection runner, DBC-independent raw gateway bridge | **Sol ultra** | **Terra xhigh** | `USER_ACCEPTED` |
+| 8 | Log / Output | bounded observable application log, filter/clear/export | **Terra high** | **Luna high** | `READY_FOR_SPEC` |
 | 9 | Bus Monitor / Health | typed runtime/native health telemetry + bounded history | **Sol ultra** | **Terra xhigh** | `LOCKED_BY_UI-08` |
 | 10 | Status Overview | aggregate connection/DBC/engine/health + footer projection | **Terra xhigh** | **Luna high** | `LOCKED_BY_UI-09` |
 
 Sau UI-10, **Sol ultra** thực hiện final lifecycle/race review; người dùng vẫn là final runtime gate.
+
+**UI-07 Benchmark Test Data & Hardware Setup (2026-08-20):**
+- **DBC Test Database**: `DBC/VF EBUS6M_PCAN_V2.0.0_20250524.dbc` (61 messages, 370 signals, Powertrain CAN).
+- **Phần cứng Virtual CAN**:
+  - TX Channel: `Virtual CAN Bus 1 (000100) - Channel 1` (`Virtual Bus 1 - Channel 1`).
+  - RX Channel: `Virtual CAN Bus 2 (000101) - Channel 1` (`Virtual Bus 2 - Channel 1`).
+  - Baudrate: TX 500k, RX 500k, CAN FD Enabled.
+- **Yêu cầu hành vi cốt lõi**: Khi simulator phát dữ liệu PCAN qua TX (`Virtual Bus 1 - Channel 1`), bất kỳ can thiệp thay đổi tín hiệu nào (qua Bảng 5 & 6) khi TX phát ra thì phía RX (`Virtual Bus 2 - Channel 1`) bắt buộc phải nhận được chính xác giá trị đã can thiệp đó.
 
 **UI-01 DEBUG_RETURN — baudrate contract (2026-08-15):** User reported three related defects: TX/RX baudrate
 controls bind to one `Connection.Baudrate`; selecting TX implicitly overwrites the user's baudrate from

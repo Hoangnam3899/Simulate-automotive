@@ -166,5 +166,66 @@ namespace Simulate.ViewModels
 
             _faultQueue.Add(item);
         }
+
+        public TimeSpan GetCycleInterval() => ParseTimeSpan(CycleTimeText, TimeSpan.FromMilliseconds(100));
+
+        public TimeSpan GetStartDelay() => ParseTimeSpan(StartDelayText, TimeSpan.Zero);
+
+        public TimeSpan GetDuration() => ParseTimeSpan(DurationText, TimeSpan.Zero);
+
+        public int GetRepeatCount()
+        {
+            if (int.TryParse(RepeatCountText?.Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int count) && count >= 0)
+            {
+                return count;
+            }
+            return SelectedInjectionMode == "One-Shot" ? 1 : 0;
+        }
+
+        public double GetFaultValue(double fallback = 0.0)
+        {
+            if (string.IsNullOrWhiteSpace(FaultValueText)) return fallback;
+            string s = FaultValueText.Trim();
+            if (s.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            {
+                if (ulong.TryParse(s[2..], System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out ulong hexVal))
+                {
+                    return hexVal;
+                }
+            }
+            if (double.TryParse(s, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double val))
+            {
+                return val;
+            }
+            return fallback;
+        }
+
+        public static TimeSpan ParseTimeSpan(string? input, TimeSpan defaultVal)
+        {
+            if (string.IsNullOrWhiteSpace(input)) return defaultVal;
+            string s = input.Trim();
+            try
+            {
+                if (s.EndsWith("ms", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (double.TryParse(s[..^2].Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double ms) && double.IsFinite(ms) && ms >= 0)
+                        return TimeSpan.FromMilliseconds(ms);
+                }
+                else if (s.EndsWith('s') || s.EndsWith('S'))
+                {
+                    if (double.TryParse(s[..^1].Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double sec) && double.IsFinite(sec) && sec >= 0)
+                        return TimeSpan.FromSeconds(sec);
+                }
+                else if (double.TryParse(s, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double rawVal) && double.IsFinite(rawVal) && rawVal >= 0)
+                {
+                    return TimeSpan.FromMilliseconds(rawVal);
+                }
+            }
+            catch (OverflowException)
+            {
+                return defaultVal;
+            }
+            return defaultVal;
+        }
     }
 }

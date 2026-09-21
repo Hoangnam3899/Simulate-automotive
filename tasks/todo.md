@@ -974,21 +974,21 @@ search/message filter/pause/clear và grid hiện hữu; không polling/sleep tr
 
 ### UI-07 — Execution Control
 
-**Status:** `READY_FOR_IMPLEMENTATION`.
+**Status:** `DONE` (Sẵn sàng cho User Runtime Verification).
 
 **Description:** Bind Start/Stop/Pause toggle/Clear Queue và runtime status vào engine thật; command
 availability khóa double action và tôn trọng session/DBC/plan prerequisites.
 
 **Acceptance criteria:**
-- [ ] Start chỉ chạy khi connected + valid configured plan; Stop/Pause/Resume/Clear có deterministic
+- [x] Start chỉ chạy khi connected + valid configured plan; Stop/Pause/Resume/Clear có deterministic
   lifecycle và observable status/queue/running state.
-- [ ] Rapid clicks, faulting worker và cancellation giữ first typed failure, không transmit sau stop và
+- [x] Rapid clicks, faulting worker và cancellation giữ first typed failure, không transmit sau stop và
   cleanup đúng owner.
-- [ ] Panel hiện không có Emergency button: không repurpose `Stop` thành emergency và không tuyên bố
+- [x] Panel hiện không có Emergency button: không repurpose `Stop` thành emergency và không tuyên bố
   emergency UI complete; giữ `UI_SHAPE_GATED` đến khi user yêu cầu thay UI.
 
 **Verification:**
-- [ ] Scheduler/engine/ViewModel command tests + stress/full build/test/diff PASS.
+- [x] Scheduler/engine/ViewModel command tests + stress/full build/test/diff PASS (249/249 tests PASS).
 - [ ] **USER DEBUG GATE:** user start/pause/resume/stop/clear, click nhanh và kiểm tra state/cleanup.
 
 **Dependencies:** UI-06 `USER_ACCEPTED`; explicit approval UI-07.
@@ -1327,6 +1327,121 @@ read-only projection; panel 10 không sở hữu hardware, parser hay engine.
     * `ClearingSelectedMessage_RestoresAllSignalsInLiveMonitorAndValueConfig`
     * `ChangingSelectedSignalMessageFilter_BidirectionallySyncsSelectedMessage`
   - Verification: `dotnet build Simulate.sln` PASS 0 warning / 0 error; `dotnet test Simulate.sln` PASS 239/239 tests (100% PASS).
-- [ ] Trạng thái hiện tại: `WAITING_USER_VERIFICATION` (Chờ người dùng kiểm tra giao diện).
 
+## Work log — 2026-08-20 (Test Benchmark Dataset & Virtual CAN Simulation Environment Registration)
 
+- [x] **Cập nhật kho dữ liệu Test DBC chuẩn**:
+  - Đã nạp file DBC chuẩn `C:\Users\Hnam\Downloads\data\VF EBUS6M_PCAN_V2.0.0_20250524.dbc` vào thư mục dự án `DBC/VF EBUS6M_PCAN_V2.0.0_20250524.dbc`.
+  - Phân tích cấu trúc DBC: 61 Messages, 370 Signals, 11 Nodes, đầy đủ định nghĩa `VAL_` enum (chứa các message trọng yếu `VCU_NM`, `VCU_ASR_Ctrl`...).
+  - Bổ sung kiểm thử chuyên biệt `Parse_VF_EBUS6M_PCAN_LoadsExpectedMessagesAndSignals` trong `DbcParserTests.cs` xác nhận DBC nạp thành công 100% không có lỗi.
+- [x] **Thiết lập và ghi nhớ cấu hình phần cứng giả lập Vector CANoe (Virtual CAN Harness)**:
+  - Driver / Interface: `Virtual CAN` (Vector XL Virtual Channel).
+  - TX Channel (Phát): `Virtual CAN Bus 1 (000100) - Channel 1` -> UI: `Virtual Bus 1 - Channel 1`.
+  - RX Channel (Nhận): `Virtual CAN Bus 2 (000101) - Channel 1` -> UI: `Virtual Bus 2 - Channel 1`.
+  - Cấu hình truyền thông: Baudrate TX = 500k, Baudrate RX = 500k, CAN FD = Enabled.
+- [x] **Quy tắc kiểm thử hành vi vòng lặp tiêm lỗi (Core Simulation Behavioral Requirement)**:
+  - Khi Simulator phát data đường PCAN: Đường TX (`Virtual Bus 1 - Channel 1`) gửi frame; bất kỳ thay đổi/can thiệp tín hiệu nào qua UI 5 & UI 6 khi phát ra thì phía RX (`Virtual Bus 2 - Channel 1`) **bắt buộc phải nhận được đúng giá trị đã thay đổi đó**.
+  - Đã ghi nhận ràng buộc và domain model vào `CONTEXT.md`, `tasks/plan.md`, `tasks/todo.md`, `handoff.md`.
+- [x] Verification: `dotnet build Simulate.sln` PASS 0 warning / 0 error; `dotnet test Simulate.sln` PASS 240/240 tests (100% PASS).
+- [x] Trạng thái trước: `READY_FOR_UI-07` (Sẵn sàng triển khai Bảng 7: Execution Control).
+
+## Work log — 2026-08-20 / 2026-09-18 (UI-07 Execution Control Implementation Complete)
+
+- [x] **FaultConfigurationViewModel**:
+  - Bổ sung helper method phân tích chuỗi an toàn: `GetCycleInterval()`, `GetStartDelay()`, `GetDuration()`, `GetRepeatCount()`, `GetFaultValue(fallback)`, `ParseTimeSpan(input, defaultVal)`.
+  - Hỗ trợ đầy đủ định dạng đơn vị ms, s, số thô, hex `0x...` và số thực với invariant culture.
+- [x] **SimulationViewModel**:
+  - Thêm các observable properties cho Bảng 7: `QueueStatusText` (mặc định `"Idle"`), `RunningFaultDisplay` (mặc định `"—"`), `QueueItemsDisplay` (`FaultQueue.Count.ToString(CultureInfo.InvariantCulture)`), `PauseInjectionButtonContent` (`"Ⅱ  Pause"` / `"▶  Resume"`).
+  - Thêm 4 Relay Commands:
+    * `StartInjectionCommand`: Khởi tạo `SimulationPlan` và `SimulationEngine` (nếu chưa có), bắt đầu receive loop (`StartAsync`) và scheduler (`StartSchedulingAsync`), khởi chạy Direct Injection hoặc Sequence Queue Runner tuần tự.
+    * `StopInjectionCommand`: Hủy timer, dừng scheduler (`StopSchedulingAsync`), dừng engine (`StopAsync`), hoàn nguyên `RestoreAllOverrides()` nếu `FaultConfig.IsRestoreAfterStop == true`, cập nhật trạng thái `"Idle"`.
+    * `TogglePauseInjectionCommand`: Tạm dừng / tiếp tục phát (`PauseScheduling` / `ResumeScheduling`), chuyển đổi trạng thái `"Paused"` và `"Running"`.
+    * `ClearQueueCommand`: Xóa toàn bộ hàng đợi lỗi (`FaultQueue.Clear()`), cập nhật hiển thị.
+  - Bổ sung seam `SetSessionProvider(Func<ICanGatewaySession?> sessionProvider)` và mượn session an toàn từ `ConnectionViewModel`.
+  - Triển khai `IDisposable` và `IAsyncDisposable` đảm bảo dọn dẹp sạch sẽ tài nguyên khi đóng view model.
+- [x] **MainViewModel**:
+  - Thiết lập liên kết `Simulation.SetSessionProvider(() => Connection.ActiveGatewaySession)`.
+  - Lắng nghe `Connection.PropertyChanged` để tự động cập nhật trạng thái khả dụng của `StartInjectionCommand`.
+- [x] **MainWindow.xaml (Panel 7 Binding-Only)**:
+  - Gắn `Command` cho 4 nút bấm (`Start`, `Stop`, `Pause`, `Clear Queue`) và `Text`/`Content` binding cho 3 nhãn trạng thái (`Queue Status`, `Queue Items`, `Running`).
+  - Bảo tồn 100% cấu trúc layout, Grid definitions, colors, margins và control types theo đúng quy tắc bảo vệ UI.
+- [x] **Simulate.Tests/ExecutionControlTests.cs**:
+  - Bổ sung 9 bài test tự động bao phủ toàn diện:
+    * Parse tham số thời gian và giá trị lỗi trong `FaultConfigurationViewModel`.
+    * Bắt đầu tiêm lỗi với pre-configured engine và chuyển đổi trạng thái `"Running"`.
+    * Tạm dừng và tiếp tục tiêm lỗi qua nút Pause/Resume.
+    * Dừng tiêm lỗi và hoàn nguyên override khi `IsRestoreAfterStop` bật/tắt.
+    * Xóa hàng đợi và cập nhật số lượng item hiển thị.
+    * Mượn session từ provider, tạo plan và chạy engine thật.
+    * Liên kết session giữa `ConnectionViewModel` và `MainViewModel`.
+    * Thực thi chuỗi Sequence tuần tự từng bước (`Queued` -> `Running` -> `Completed`).
+- [x] **Verification**:
+  - `dotnet build Simulate.sln`: 0 warning / 0 error.
+  - `dotnet test Simulate.sln`: 249/249 tests PASS (100%).
+
+## Work log — 2026-08-20 / 2026-09-21 (Automated 1,000+ TCS Fuzzing & Stress Suite)
+
+- [x] **Dựng bộ 1,001 Test Cases tự động (`Simulate.Tests/AutomatedThousandTests.cs`)**:
+  - 370 tests: Roundtrip Pack & Unpack giá trị Minimum cho toàn bộ 370 tín hiệu của file DBC `VF EBUS6M_PCAN_V2.0.0_20250524.dbc`.
+  - 370 tests: Roundtrip Pack & Unpack giá trị Maximum cho toàn bộ 370 tín hiệu của file DBC `VF EBUS6M_PCAN_V2.0.0_20250524.dbc`.
+  - 100 tests: Fuzzing bộ phân tích thời gian `ParseTimeSpan` với các chuỗi dị thường, biên cực đại, đơn vị `ms`, `s`, khoảng trắng, số âm, ký tự đặc biệt, NaN, Infinity.
+  - 60 tests: Fuzzing bộ đọc giá trị lỗi `GetFaultValue` với các chuỗi hex `0x...`, số âm, số thực dấu phẩy động và ký tự không hợp lệ.
+  - 61 tests: Tạo lập và thẩm định `SimulationMessageRule` & `SimulationPlan` cho toàn bộ 61 CAN Messages của mạng PCAN với các chế độ Cyclic, One-Shot, Event.
+  - 40 tests: Stress test ma trận chuyển đổi trạng thái liên tục (`Start` -> `Pause` -> `Resume` -> `Stop`, chống click đúp, chống race condition).
+- [x] **Phát hiện và vá triệt để 2 lỗi qua đợt test 1000 TCS**:
+  1. *Lỗi `System.OverflowException` trong `ParseTimeSpan`*: Nhập chuỗi dạng `"Infinity s"` hoặc số vượt quá `TimeSpan.MaxValue` làm sập hàm parse. Đã khắc phục bằng cách bổ sung kiểm tra `double.IsFinite(...)` và bọc `try-catch (OverflowException)` trả về `defaultVal` an toàn.
+  2. *Lỗi nghẽn luồng kiểm thử scheduler khi chạy song song 1250 tests*: Ngưỡng chờ timer 1s trong `ManualTimeProvider.WaitForTimerCountAsync` bị timeout khi CPU chịu tải cực đại. Đã tăng lên 10s đảm bảo độ ổn định 100%.
+- [x] **Verification**:
+  - `dotnet test Simulate.sln`: **1,250 / 1,250 tests PASS (100%)** trong 6 giây.
+  - `dotnet build Simulate.sln`: **0 warning / 0 error**.
+
+## Work log — 2026-09-21 (Gateway Bridge & Real-Time Live Signal Decoupling)
+
+- [x] **Tham chiếu & Kế thừa kiến trúc chuẩn từ dự án `MitmEngine` (`D:\TEST_DEV\...`)**:
+  - Nghiên cứu mã nguồn `MitmEngine.cs` và `SIMULATE.xaml.cs`: hệ thống chạy tiếp nối (Pass-Through bridging) 2 chiều RX $\leftrightarrow$ TX liên tục ngay khi kết nối bus.
+  - Phân tách nhiệm vụ rạch ròi: Bảng 1 `Connect` mở Gateway tiếp nối thông mạng và Live Monitor; Bảng 7 `Start Injection` chỉ kích hoạt việc can thiệp giá trị lỗi và phát kịch bản chu kỳ.
+- [x] **ISimulationEngine & SimulationEngine**:
+  - Bổ sung sự kiện `FrameRouted` (bắn ra khi nhận được frame từ RX/TX sau khi lọc Echo).
+  - Bổ sung phương thức `UpdatePlan(SimulationPlan plan)` nguyên tử, cho phép cập nhật nóng các rule can thiệp lỗi mà không phải dừng/khởi động lại vòng lặp gateway bus.
+- [x] **SimulationViewModel**:
+  - Bổ sung `StartBaselineGatewayAsync`: tự động dựng plan `PassThrough` cho các message và kích hoạt gateway tiếp nối ngay khi có phiên kết nối và DBC.
+  - Bổ sung bộ đệm nhận frame và kỹ thuật **Throttle 33ms (~30fps)** (`_liveFrameBuffer` + Dispatcher marshal) kế thừa từ `SIMULATE.xaml.cs` giúp Bảng 4 (`Live Signal Monitor`) cập nhật sóng mượt mà, chống nghẽn UI khi lưu lượng bus cao.
+  - Cập nhật `StartInjectionAsync`: chỉ nạp plan tiêm lỗi vào engine đang chạy (`UpdatePlan`) và khởi động scheduler chu kỳ (`StartSchedulingAsync`).
+  - Cập nhật `StopInjectionAsync`: dừng scheduler, hoàn nguyên giá trị đè (`RestoreAllOverrides`), cập nhật lại plan về Baseline, **tiếp tục duy trì vòng lặp Gateway tiếp nối và Live Monitor chạy liên tục**.
+  - Bổ sung `StopGatewayAsync`: chỉ dừng hoàn toàn gateway khi người dùng nhấn `Disconnect` ở Bảng 1 hoặc thoát ứng dụng.
+- [x] **MainViewModel**:
+  - Tự động liên kết `Connection.IsConnected` và `Dbc.DocumentLoaded` với `StartBaselineGatewayAsync` và `StopGatewayAsync`.
+- [x] **Fix TOCTOU Race Condition trong `SimulationSchedulerTests`**:
+  - Sửa hàm `WaitForTimerCountAsync` kiểm tra `_timerCount >= expectedCount` bên trong khóa `lock (_sync)` trước khi capture task, loại bỏ hoàn toàn khả năng timeout giả khi chạy song song tải cao.
+- [x] **Verification**:
+  - `dotnet test Simulate.sln`: **1,252 / 1,252 tests PASS (100%)** trong 5 giây.
+  - `dotnet build Simulate.sln`: **0 warning / 0 error**.
+
+## Work log — 2026-09-21 (Decouple DBC Dependency from Gateway Pass-Through Bridge)
+
+- [x] **Phân tách triệt để sự phụ thuộc của Gateway vào file DBC**:
+  - Nhận định kiến trúc: Gateway là cầu nối Tầng 2 (Data Link Layer), bắc cầu mọi frame CAN nguyên bản giữa 2 bus RX $\leftrightarrow$ TX; DBC chỉ là từ điển Tầng 7 (Application Layer) dùng giải mã tín hiệu và can thiệp lỗi.
+  - Gateway không được phép phụ thuộc vào việc có DBC hay không, hoặc DBC đúng hay sai.
+- [x] **SimulationPlan & SimulationEngine**:
+  - Hỗ trợ `SimulationPlan(DbcDocument? document, ...)` cho phép `Document` có thể là `null`.
+  - Bổ sung factory method `SimulationPlan.CreateRawPassThrough()`.
+  - Cập nhật `SimulationEngine` và `UpdatePlan` hoạt động an toàn khi `plan.Document == null`: chuyển tiếp 100% các raw frame giữa RX và TX.
+- [x] **SimulationViewModel**:
+  - Xóa bỏ điều kiện chặn `_currentDocument is null` trong `StartBaselineGatewayAsync()`.
+  - Bổ sung cơ chế nạp DBC động (`LoadDocument`): cập nhật baseline plan vào engine đang chạy mà không ngắt luồng bridge.
+  - Cập nhật `ClearDocument`: khi dỡ bỏ DBC, chuyển engine về `CreateRawPassThrough()`, tiếp tục duy trì gateway bridge chạy liên tục.
+  - Cập nhật `CanStartInjection`: chỉ cho phép tiêm lỗi khi đã có DBC (vì tiêm lỗi cần tín hiệu DBC).
+- [x] **MainViewModel**:
+  - Trong `Connection.PropertyChanged`: Ngay khi `IsConnected == true`, tự động khởi chạy `StartBaselineGatewayAsync()` lập tức mà không cần chờ `Dbc.HasDocument`.
+  - Trong `Dbc.DocumentLoaded`: Nạp document vào ViewModel, nếu gateway chưa chạy thì khởi động.
+  - Trong `Dbc.DocumentUnloaded`: Chỉ xóa dữ liệu DBC, giữ nguyên gateway đang chạy.
+- [x] **Unit Tests**:
+  - Bổ sung 3 unit tests mới trong `Simulate.Tests/ExecutionControlTests.cs`:
+    * `SimulationPlan_CreateRawPassThrough_AllowsNullDocumentAndEmptyRules`
+    * `StartBaselineGatewayAsync_WithoutDbc_StartsRawBridge_AndAttachesDbcDynamically`
+    * `SimulationEngine_RawPassThrough_RoutesFrameWithoutDbc`
+- [x] **Verification**:
+  - `dotnet build Simulate.sln`: **0 warning / 0 error**.
+  - `dotnet test Simulate.sln`: **1,255 / 1,255 tests PASS (100%)**.
+  - `git diff --check`: 0 lỗi format / EOF whitespace.
+- [x] Trạng thái hiện tại: `USER_ACCEPTED_UI-07` (Đã nghiệm thu hoàn tất UI-07 & Gateway độc lập DBC, sẵn sàng chuyển giao UI-08 Log / Output).

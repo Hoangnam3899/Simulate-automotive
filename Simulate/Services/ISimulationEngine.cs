@@ -48,6 +48,17 @@ namespace Simulate.Services
             IEnumerable<SignalOverride> signalOverrides);
 
         /// <summary>
+        /// Fires when a frame has been received on either gateway side and accepted for processing.
+        /// </summary>
+        event Action<RoutedCanFrame>? FrameRouted;
+
+        /// <summary>
+        /// Atomically updates the active simulation plan and rules without stopping the gateway receive loop.
+        /// </summary>
+        /// <param name="plan">The updated simulation plan.</param>
+        void UpdatePlan(SimulationPlan plan);
+
+        /// <summary>
         /// Starts processing frames until cancellation or an explicit stop.
         /// </summary>
         /// <param name="cancellationToken">Cancels the active receive loop.</param>

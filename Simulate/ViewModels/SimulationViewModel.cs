@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
@@ -17,11 +18,50 @@ namespace Simulate.ViewModels
     /// <summary>
     /// Projects one immutable simulation plan and its caller-owned runtime engine into typed binding data.
     /// </summary>
-    public partial class SimulationViewModel : ObservableObject
+    public partial class SimulationViewModel : ObservableObject, IDisposable, IAsyncDisposable
     {
-        private readonly ISimulationEngine? _engine;
+        private ISimulationEngine? _engine;
+        private bool _ownsEngine;
         private readonly IMessageDialogService _messageDialogService;
         private DbcDocument? _currentDocument;
+        private Func<ICanGatewaySession?>? _sessionProvider;
+        private CancellationTokenSource? _executionCts;
+
+        [ObservableProperty]
+        private string _queueStatusText = "Idle";
+
+        [ObservableProperty]
+        private string _runningFaultDisplay = "—";
+
+        [ObservableProperty]
+        private string _pauseInjectionButtonContent = "Ⅱ  Pause";
+
+        public string QueueItemsDisplay => FaultQueue.Count.ToString(CultureInfo.InvariantCulture);
+
+        public ISimulationEngine? CurrentEngine => _engine;
+
+        public void SetSessionProvider(Func<ICanGatewaySession?> sessionProvider)
+        {
+            _sessionProvider = sessionProvider;
+            NotifyExecutionCommands();
+        }
+
+        public ICanGatewaySession? ActiveSession => _sessionProvider?.Invoke();
+
+        public bool HasDocument => _currentDocument is not null;
+        public DbcDocument? CurrentDocument => _currentDocument;
+
+        public bool CanStartInjection => QueueStatusText == "Idle" &&
+            (_engine is not null || ActiveSession is { IsOpen: true }) &&
+            _currentDocument is not null;
+
+        public bool CanStopInjection => QueueStatusText is "Running" or "Paused" || IsRunning || IsScheduling;
+
+        public bool CanTogglePauseInjection => QueueStatusText is "Running" or "Paused";
+
+        public bool CanClearQueue => FaultQueue.Count > 0 && QueueStatusText != "Running";
+
+        partial void OnQueueStatusTextChanged(string value) => NotifyExecutionCommands();
 
         [ObservableProperty]
         private bool _isRunning;
@@ -100,6 +140,15 @@ namespace Simulate.ViewModels
             Signals.CollectionChanged += OnSignalsCollectionChanged;
 
             FaultConfig = new FaultConfigurationViewModel(FaultQueue);
+
+            _ownsEngine = true;
+
+            FaultQueue.CollectionChanged += (s, e) =>
+            {
+                OnPropertyChanged(nameof(QueueItemsDisplay));
+                NotifyExecutionCommands();
+            };
+            NotifyExecutionCommands();
         }
 
         /// <summary>
@@ -134,11 +183,18 @@ namespace Simulate.ViewModels
 
             FaultConfig = new FaultConfigurationViewModel(FaultQueue);
 
+            FaultQueue.CollectionChanged += (s, e) =>
+            {
+                OnPropertyChanged(nameof(QueueItemsDisplay));
+                NotifyExecutionCommands();
+            };
+
             _currentDocument = plan.Document;
             ProjectPlan(plan);
             RefreshRuntimeState();
             NotifyToolbarCommands();
             UpdateAvailableSignalMessageFilters();
+            NotifyExecutionCommands();
         }
 
         /// <summary>
@@ -448,6 +504,60 @@ namespace Simulate.ViewModels
             }
         }
 
+        private readonly object _liveBufferLock = new();
+        private readonly Dictionary<(uint Id, bool IsExtended), byte[]> _liveFrameBuffer = new();
+        private DateTime _lastUiRefresh = DateTime.MinValue;
+
+        private void OnEngineFrameRouted(RoutedCanFrame routedFrame)
+        {
+            if (IsSignalMonitorPaused || routedFrame.Source != CanGatewaySide.Rx)
+            {
+                return;
+            }
+
+            lock (_liveBufferLock)
+            {
+                _liveFrameBuffer[(routedFrame.Frame.Identifier, routedFrame.Frame.IsExtendedIdentifier)] =
+                    routedFrame.Frame.Data.ToArray();
+            }
+
+            DateTime now = DateTime.UtcNow;
+            if ((now - _lastUiRefresh).TotalMilliseconds < 33)
+            {
+                return;
+            }
+            _lastUiRefresh = now;
+
+            if (System.Windows.Application.Current?.Dispatcher is { } dispatcher && !dispatcher.CheckAccess())
+            {
+                dispatcher.BeginInvoke(FlushLiveBufferToSignals);
+            }
+            else
+            {
+                FlushLiveBufferToSignals();
+            }
+        }
+
+        public void FlushLiveBufferToSignals()
+        {
+            Dictionary<(uint Id, bool IsExtended), byte[]> snapshot;
+            lock (_liveBufferLock)
+            {
+                if (_liveFrameBuffer.Count == 0)
+                {
+                    return;
+                }
+                snapshot = new Dictionary<(uint Id, bool IsExtended), byte[]>(_liveFrameBuffer);
+                _liveFrameBuffer.Clear();
+            }
+
+            DateTime now = DateTime.Now;
+            foreach (var kvp in snapshot)
+            {
+                ProcessIncomingFrame(kvp.Key.Id, kvp.Key.IsExtended, kvp.Value, now);
+            }
+        }
+
         private void UpdateAvailableSignalMessageFilters()
         {
             var distinctMessages = Signals
@@ -687,9 +797,16 @@ namespace Simulate.ViewModels
             FaultQueue.Clear();
             SelectedMessage = null;
 
+            if (_engine is not null && _engine.IsRunning)
+            {
+                SimulationPlan baselinePlan = BuildBaselineSimulationPlan();
+                _engine.UpdatePlan(baselinePlan);
+            }
+
             UpdateAvailableSignalMessageFilters();
             FilteredSignals?.Refresh();
             NotifyToolbarCommands();
+            NotifyExecutionCommands();
         }
 
         /// <summary>
@@ -703,9 +820,16 @@ namespace Simulate.ViewModels
             FaultQueue.Clear();
             SelectedMessage = null;
 
+            if (_engine is not null && _engine.IsRunning)
+            {
+                SimulationPlan rawPlan = SimulationPlan.CreateRawPassThrough();
+                _engine.UpdatePlan(rawPlan);
+            }
+
             UpdateAvailableSignalMessageFilters();
             FilteredSignals?.Refresh();
             NotifyToolbarCommands();
+            NotifyExecutionCommands();
         }
 
         /// <summary>
@@ -843,8 +967,582 @@ namespace Simulate.ViewModels
             }
         }
 
+        public SimulationPlan BuildSimulationPlan()
+        {
+            if (_currentDocument is null)
+            {
+                throw new InvalidOperationException("A DBC document must be loaded to build a simulation plan.");
+            }
+
+            var rules = new List<SimulationMessageRule>();
+            var messageKeysAdded = new HashSet<(uint, bool)>();
+
+            if (Messages.Count > 0)
+            {
+                foreach (MessageModel msg in Messages)
+                {
+                    if (messageKeysAdded.Contains((msg.RawIdentifier, msg.IsExtendedIdentifier)))
+                    {
+                        continue;
+                    }
+
+                    DbcMessage? docMsg = _currentDocument.Messages.FirstOrDefault(m =>
+                        m.Identifier == msg.RawIdentifier && m.IsExtendedIdentifier == msg.IsExtendedIdentifier);
+                    if (docMsg is null)
+                    {
+                        continue;
+                    }
+
+                    var overrides = Signals
+                        .Where(s => (s.MessageId == msg.Id || string.Equals(s.MessageName, msg.Name, StringComparison.OrdinalIgnoreCase)) && s.IsOverridden)
+                        .Select(s =>
+                        {
+                            double safeVal = (s.Min < s.Max) ? Math.Clamp(s.Value, s.Min, s.Max) : s.Value;
+                            return new SignalOverride(s.Name, safeVal);
+                        })
+                        .ToList();
+
+                    bool isInject = overrides.Count > 0 || string.Equals(msg.GatewayMode, "Inject", StringComparison.OrdinalIgnoreCase);
+                    GatewayMode gatewayMode = isInject
+                        ? GatewayMode.Inject
+                        : (string.Equals(msg.GatewayMode, "Block", StringComparison.OrdinalIgnoreCase) ? GatewayMode.Block : GatewayMode.PassThrough);
+
+                    SimulationSendType sendType = SimulationSendType.Cyclic;
+                    if (string.Equals(msg.SendType, "OneShot", StringComparison.OrdinalIgnoreCase) || string.Equals(msg.SendType, "One-Shot", StringComparison.OrdinalIgnoreCase))
+                    {
+                        sendType = SimulationSendType.OneShot;
+                    }
+                    else if (string.Equals(msg.SendType, "Event", StringComparison.OrdinalIgnoreCase))
+                    {
+                        sendType = SimulationSendType.Event;
+                    }
+
+                    TimeSpan cycle = FaultConfigurationViewModel.ParseTimeSpan(msg.Cycle, TimeSpan.FromMilliseconds(100));
+                    if (cycle <= TimeSpan.Zero) cycle = TimeSpan.FromMilliseconds(100);
+
+                    SimulationTiming timing = sendType switch
+                    {
+                        SimulationSendType.Cyclic => new SimulationTiming(TimeSpan.Zero, cycle, 0),
+                        SimulationSendType.OneShot => new SimulationTiming(TimeSpan.Zero, null, 1),
+                        SimulationSendType.Event => new SimulationTiming(TimeSpan.Zero, null, 0),
+                        _ => new SimulationTiming(TimeSpan.Zero, cycle, 0)
+                    };
+
+                    rules.Add(new SimulationMessageRule(
+                        msg.RawIdentifier,
+                        msg.IsExtendedIdentifier,
+                        msg.IsEnabled,
+                        gatewayMode,
+                        sendType,
+                        timing,
+                        overrides,
+                        new E2eProtectionConfiguration(false)));
+
+                    messageKeysAdded.Add((msg.RawIdentifier, msg.IsExtendedIdentifier));
+                }
+            }
+
+            return new SimulationPlan(_currentDocument, rules);
+        }
+
+        public SimulationPlan BuildBaselineSimulationPlan()
+        {
+            if (_currentDocument is null)
+            {
+                return SimulationPlan.CreateRawPassThrough();
+            }
+
+            var rules = new List<SimulationMessageRule>();
+            var messageKeysAdded = new HashSet<(uint, bool)>();
+
+            if (Messages.Count > 0)
+            {
+                foreach (MessageModel msg in Messages)
+                {
+                    if (messageKeysAdded.Contains((msg.RawIdentifier, msg.IsExtendedIdentifier)))
+                    {
+                        continue;
+                    }
+
+                    DbcMessage? docMsg = _currentDocument.Messages.FirstOrDefault(m =>
+                        m.Identifier == msg.RawIdentifier && m.IsExtendedIdentifier == msg.IsExtendedIdentifier);
+                    if (docMsg is null)
+                    {
+                        continue;
+                    }
+
+                    TimeSpan cycle = FaultConfigurationViewModel.ParseTimeSpan(msg.Cycle, TimeSpan.FromMilliseconds(100));
+                    if (cycle <= TimeSpan.Zero) cycle = TimeSpan.FromMilliseconds(100);
+
+                    SimulationTiming timing = new SimulationTiming(TimeSpan.Zero, cycle, 0);
+
+                    rules.Add(new SimulationMessageRule(
+                        msg.RawIdentifier,
+                        msg.IsExtendedIdentifier,
+                        msg.IsEnabled,
+                        GatewayMode.PassThrough,
+                        SimulationSendType.Cyclic,
+                        timing,
+                        [],
+                        new E2eProtectionConfiguration(false)));
+
+                    messageKeysAdded.Add((msg.RawIdentifier, msg.IsExtendedIdentifier));
+                }
+            }
+            else
+            {
+                foreach (DbcMessage msg in _currentDocument.Messages)
+                {
+                    if (messageKeysAdded.Contains((msg.Identifier, msg.IsExtendedIdentifier)))
+                    {
+                        continue;
+                    }
+
+                    TimeSpan cycle = TimeSpan.FromMilliseconds(100);
+                    SimulationTiming timing = new SimulationTiming(TimeSpan.Zero, cycle, 0);
+
+                    rules.Add(new SimulationMessageRule(
+                        msg.Identifier,
+                        msg.IsExtendedIdentifier,
+                        true,
+                        GatewayMode.PassThrough,
+                        SimulationSendType.Cyclic,
+                        timing,
+                        [],
+                        new E2eProtectionConfiguration(false)));
+
+                    messageKeysAdded.Add((msg.Identifier, msg.IsExtendedIdentifier));
+                }
+            }
+
+            return new SimulationPlan(_currentDocument, rules);
+        }
+
+        public async Task StartBaselineGatewayAsync()
+        {
+            if (_engine is { IsRunning: true })
+            {
+                return;
+            }
+
+            ICanGatewaySession? session = ActiveSession;
+            if (session is not { IsOpen: true })
+            {
+                return;
+            }
+
+            try
+            {
+                SimulationPlan baselinePlan = BuildBaselineSimulationPlan();
+                if (_engine is not null)
+                {
+                    _engine.FrameRouted -= OnEngineFrameRouted;
+                    await _engine.DisposeAsync();
+                }
+
+                _engine = new SimulationEngine(session, baselinePlan);
+                _engine.FrameRouted += OnEngineFrameRouted;
+                await _engine.StartAsync();
+            }
+            finally
+            {
+                RefreshRuntimeState();
+                NotifyExecutionCommands();
+            }
+        }
+
+        public async Task StopGatewayAsync()
+        {
+            try
+            {
+                _executionCts?.Cancel();
+
+                if (_engine is not null)
+                {
+                    _engine.FrameRouted -= OnEngineFrameRouted;
+
+                    if (_engine.IsScheduling)
+                    {
+                        await _engine.StopSchedulingAsync();
+                    }
+
+                    if (_engine.IsRunning)
+                    {
+                        await _engine.StopAsync();
+                    }
+
+                    await _engine.DisposeAsync();
+                    _engine = null;
+                }
+
+                RestoreAllOverrides();
+
+                foreach (var signal in Signals)
+                {
+                    signal.ResetData();
+                }
+
+                QueueStatusText = "Idle";
+                RunningFaultDisplay = "—";
+                PauseInjectionButtonContent = "Ⅱ  Pause";
+            }
+            finally
+            {
+                RefreshRuntimeState();
+                NotifyExecutionCommands();
+            }
+        }
+
+        [RelayCommand(CanExecute = nameof(CanStartInjection))]
+        public async Task StartInjectionAsync()
+        {
+            if (!CanStartInjection)
+            {
+                return;
+            }
+
+            try
+            {
+                _executionCts?.Dispose();
+                _executionCts = new CancellationTokenSource();
+                CancellationToken token = _executionCts.Token;
+
+                SimulationPlan plan = BuildSimulationPlan();
+
+                if (_engine is null)
+                {
+                    ICanGatewaySession session = ActiveSession
+                        ?? throw new InvalidOperationException("No active CAN gateway session is available.");
+                    _engine = new SimulationEngine(session, plan);
+                    _engine.FrameRouted += OnEngineFrameRouted;
+                }
+                else
+                {
+                    _engine.UpdatePlan(plan);
+                }
+
+                if (!_engine.IsRunning)
+                {
+                    await _engine.StartAsync(token);
+                }
+
+                if (!_engine.IsScheduling)
+                {
+                    try
+                    {
+                        await _engine.StartSchedulingAsync(token);
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Engine may not have scheduled rules or may already be scheduling
+                    }
+                }
+
+                QueueStatusText = "Running";
+                PauseInjectionButtonContent = "Ⅱ  Pause";
+
+                if (FaultQueue.Count > 0 && FaultConfig.SelectedInjectionMode == "Sequence")
+                {
+                    _ = RunSequenceQueueAsync(token);
+                }
+                else
+                {
+                    if (FaultConfig.TargetSignal is not null)
+                    {
+                        RunningFaultDisplay = $"{FaultConfig.TargetSignal.MessageName}.{FaultConfig.TargetSignal.Name}";
+                    }
+                    else
+                    {
+                        SignalModel? firstOverridden = Signals.FirstOrDefault(s => s.IsOverridden);
+                        RunningFaultDisplay = firstOverridden is not null
+                            ? $"{firstOverridden.MessageName}.{firstOverridden.Name}"
+                            : "Active";
+                    }
+
+                    TimeSpan duration = FaultConfig.GetDuration();
+                    if (duration > TimeSpan.Zero)
+                    {
+                        _ = RunDirectDurationAsync(duration, token);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                QueueStatusText = "Idle";
+                RunningFaultDisplay = "—";
+                if (ex is HardwareOperationException hwEx)
+                {
+                    LastFailure = hwEx.Failure;
+                }
+                throw;
+            }
+            finally
+            {
+                RefreshRuntimeState();
+                NotifyExecutionCommands();
+            }
+        }
+
+        [RelayCommand(CanExecute = nameof(CanStopInjection))]
+        public async Task StopInjectionAsync()
+        {
+            try
+            {
+                _executionCts?.Cancel();
+
+                if (_engine is not null)
+                {
+                    if (_engine.IsScheduling)
+                    {
+                        await _engine.StopSchedulingAsync();
+                    }
+
+                    if (FaultConfig.IsRestoreAfterStop)
+                    {
+                        RestoreAllOverrides();
+                    }
+
+                    if (_currentDocument is not null)
+                    {
+                        SimulationPlan baselinePlan = BuildBaselineSimulationPlan();
+                        _engine.UpdatePlan(baselinePlan);
+                    }
+                }
+                else if (FaultConfig.IsRestoreAfterStop)
+                {
+                    RestoreAllOverrides();
+                }
+
+                foreach (FaultQueueModel item in FaultQueue)
+                {
+                    if (item.Status == "Running")
+                    {
+                        item.Status = "Stopped";
+                        item.StatusColor = "#EF4444";
+                        item.StatusBg = "#7F1D1D";
+                    }
+                }
+
+                QueueStatusText = "Idle";
+                RunningFaultDisplay = "—";
+                PauseInjectionButtonContent = "Ⅱ  Pause";
+            }
+            finally
+            {
+                RefreshRuntimeState();
+                NotifyExecutionCommands();
+            }
+        }
+
+        [RelayCommand(CanExecute = nameof(CanTogglePauseInjection))]
+        public void TogglePauseInjection()
+        {
+            if (QueueStatusText == "Running")
+            {
+                if (_engine is not null && _engine.IsScheduling)
+                {
+                    _engine.PauseScheduling();
+                }
+
+                QueueStatusText = "Paused";
+                PauseInjectionButtonContent = "▶  Resume";
+            }
+            else if (QueueStatusText == "Paused")
+            {
+                if (_engine is not null && _engine.IsSchedulingPaused)
+                {
+                    _engine.ResumeScheduling();
+                }
+
+                QueueStatusText = "Running";
+                PauseInjectionButtonContent = "Ⅱ  Pause";
+            }
+
+            RefreshRuntimeState();
+            NotifyExecutionCommands();
+        }
+
+        [RelayCommand(CanExecute = nameof(CanClearQueue))]
+        public void ClearQueue()
+        {
+            FaultQueue.Clear();
+            OnPropertyChanged(nameof(QueueItemsDisplay));
+            NotifyExecutionCommands();
+        }
+
+        private void RestoreAllOverrides()
+        {
+            List<SignalModel> overriddenSignals = Signals.Where(s => s.IsOverridden).ToList();
+            foreach (SignalModel sig in overriddenSignals)
+            {
+                sig.IsOverridden = false;
+            }
+
+            foreach (string msgId in overriddenSignals.Select(s => s.MessageId).Distinct())
+            {
+                SyncSignalOverrides(msgId);
+            }
+        }
+
+        private async Task RunSequenceQueueAsync(CancellationToken token)
+        {
+            try
+            {
+                foreach (FaultQueueModel item in FaultQueue)
+                {
+                    if (token.IsCancellationRequested) break;
+
+                    while (QueueStatusText == "Paused" && !token.IsCancellationRequested)
+                    {
+                        await Task.Delay(50, token);
+                    }
+                    if (token.IsCancellationRequested) break;
+
+                    item.Status = "Running";
+                    item.StatusColor = "#10B981";
+                    item.StatusBg = "#064E3B";
+                    RunningFaultDisplay = $"{item.MsgName}.{item.Signal}";
+
+                    SignalModel? signal = Signals.FirstOrDefault(s =>
+                        (s.MessageId == item.MsgId || string.Equals(s.MessageName, item.MsgName, StringComparison.OrdinalIgnoreCase)) &&
+                        string.Equals(s.Name, item.Signal, StringComparison.OrdinalIgnoreCase));
+
+                    if (signal is not null)
+                    {
+                        signal.IsOverridden = true;
+                        if (item.FaultValue.StartsWith("0x", StringComparison.OrdinalIgnoreCase) &&
+                            ulong.TryParse(item.FaultValue[2..], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out ulong hexVal))
+                        {
+                            signal.Value = hexVal;
+                        }
+                        else if (double.TryParse(item.FaultValue, NumberStyles.Float, CultureInfo.InvariantCulture, out double parsedVal))
+                        {
+                            signal.Value = parsedVal;
+                        }
+                        SyncSignalOverrides(signal.MessageId);
+                    }
+
+                    TimeSpan duration = FaultConfigurationViewModel.ParseTimeSpan(item.Duration, TimeSpan.FromSeconds(1));
+                    if (duration > TimeSpan.Zero)
+                    {
+                        int elapsedMs = 0;
+                        int totalMs = (int)duration.TotalMilliseconds;
+                        while (elapsedMs < totalMs && !token.IsCancellationRequested)
+                        {
+                            if (QueueStatusText != "Paused")
+                            {
+                                int slice = Math.Min(50, totalMs - elapsedMs);
+                                await Task.Delay(slice, token);
+                                elapsedMs += slice;
+                            }
+                            else
+                            {
+                                await Task.Delay(50, token);
+                            }
+                        }
+                    }
+
+                    item.Status = "Completed";
+                    item.StatusColor = "#94A3B8";
+                    item.StatusBg = "#1E2C3A";
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected on stop
+            }
+            catch (Exception)
+            {
+                // Sequence step error
+            }
+            finally
+            {
+                if (!token.IsCancellationRequested && QueueStatusText == "Running")
+                {
+                    await StopInjectionAsync();
+                }
+            }
+        }
+
+        private async Task RunDirectDurationAsync(TimeSpan duration, CancellationToken token)
+        {
+            try
+            {
+                int elapsedMs = 0;
+                int totalMs = (int)duration.TotalMilliseconds;
+                while (elapsedMs < totalMs && !token.IsCancellationRequested)
+                {
+                    if (QueueStatusText != "Paused")
+                    {
+                        int slice = Math.Min(50, totalMs - elapsedMs);
+                        await Task.Delay(slice, token);
+                        elapsedMs += slice;
+                    }
+                    else
+                    {
+                        await Task.Delay(50, token);
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            finally
+            {
+                if (!token.IsCancellationRequested && QueueStatusText == "Running")
+                {
+                    await StopInjectionAsync();
+                }
+            }
+        }
+
+        public void NotifyExecutionCommands()
+        {
+            OnPropertyChanged(nameof(CanStartInjection));
+            OnPropertyChanged(nameof(CanStopInjection));
+            OnPropertyChanged(nameof(CanTogglePauseInjection));
+            OnPropertyChanged(nameof(CanClearQueue));
+            StartInjectionCommand.NotifyCanExecuteChanged();
+            StopInjectionCommand.NotifyCanExecuteChanged();
+            TogglePauseInjectionCommand.NotifyCanExecuteChanged();
+            ClearQueueCommand.NotifyCanExecuteChanged();
+        }
+
+        public void Dispose()
+        {
+            _executionCts?.Cancel();
+            _executionCts?.Dispose();
+            _executionCts = null;
+
+            if (_ownsEngine && _engine is not null)
+            {
+                _ = _engine.DisposeAsync().AsTask();
+            }
+
+            GC.SuppressFinalize(this);
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            _executionCts?.Cancel();
+            _executionCts?.Dispose();
+            _executionCts = null;
+
+            if (_ownsEngine && _engine is not null)
+            {
+                await _engine.DisposeAsync();
+            }
+
+            GC.SuppressFinalize(this);
+        }
+
         private void ProjectPlan(SimulationPlan plan)
         {
+            if (plan.Document is null)
+            {
+                return;
+            }
+
             var rulesByMessage = plan.MessageRules.ToDictionary(
                 rule => (rule.CanIdentifier, rule.IsExtendedIdentifier));
             var overridesBySignal = plan.MessageRules

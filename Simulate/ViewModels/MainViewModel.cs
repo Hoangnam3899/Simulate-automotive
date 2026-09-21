@@ -339,8 +339,37 @@ namespace Simulate.ViewModels
             Dbc = dbc ?? throw new ArgumentNullException(nameof(dbc));
             Simulation = simulation ?? throw new ArgumentNullException(nameof(simulation));
 
-            Dbc.DocumentLoaded += (sender, document) => Simulation.LoadDocument(document);
-            Dbc.DocumentUnloaded += (sender, args) => Simulation.ClearDocument();
+            Simulation.SetSessionProvider(() => Connection.ActiveGatewaySession);
+            Connection.PropertyChanged += async (sender, args) =>
+            {
+                if (args.PropertyName is nameof(Connection.IsConnected) or nameof(Connection.ActiveGatewaySession))
+                {
+                    Simulation.NotifyExecutionCommands();
+
+                    if (Connection.IsConnected && Connection.ActiveGatewaySession is { IsOpen: true })
+                    {
+                        await Simulation.StartBaselineGatewayAsync();
+                    }
+                    else if (!Connection.IsConnected)
+                    {
+                        await Simulation.StopGatewayAsync();
+                    }
+                }
+            };
+
+            Dbc.DocumentLoaded += async (sender, document) =>
+            {
+                Simulation.LoadDocument(document);
+                if (!Simulation.IsRunning && Connection.IsConnected && Connection.ActiveGatewaySession is { IsOpen: true })
+                {
+                    await Simulation.StartBaselineGatewayAsync();
+                }
+            };
+
+            Dbc.DocumentUnloaded += (sender, args) =>
+            {
+                Simulation.ClearDocument();
+            };
         }
 
         /// <summary>
@@ -370,10 +399,7 @@ namespace Simulate.ViewModels
         {
             try
             {
-                if (Simulation.IsConfigured)
-                {
-                    await Simulation.StopAsync();
-                }
+                await Simulation.StopGatewayAsync();
             }
             finally
             {

@@ -310,9 +310,8 @@ namespace Simulate.Models
         /// <summary>
         /// Initializes a new instance of the <see cref="SimulationPlan"/> class.
         /// </summary>
-        public SimulationPlan(DbcDocument document, IEnumerable<SimulationMessageRule> messageRules)
+        public SimulationPlan(DbcDocument? document, IEnumerable<SimulationMessageRule> messageRules)
         {
-            ArgumentNullException.ThrowIfNull(document);
             ArgumentNullException.ThrowIfNull(messageRules);
 
             SimulationMessageRule[] materializedRules = messageRules.ToArray();
@@ -331,23 +330,32 @@ namespace Simulate.Models
                     nameof(messageRules));
             }
 
-            var documentMessageKeys = document.Messages
-                .Select(message => (message.Identifier, message.IsExtendedIdentifier))
-                .ToHashSet();
-            if (materializedRules.Any(rule => !documentMessageKeys.Contains(
-                    (rule.CanIdentifier, rule.IsExtendedIdentifier))))
+            if (document is not null)
+            {
+                var documentMessageKeys = document.Messages
+                    .Select(message => (message.Identifier, message.IsExtendedIdentifier))
+                    .ToHashSet();
+                if (materializedRules.Any(rule => !documentMessageKeys.Contains(
+                        (rule.CanIdentifier, rule.IsExtendedIdentifier))))
+                {
+                    throw new ArgumentException(
+                        "Every simulation message rule must reference a message in the DBC document.",
+                        nameof(messageRules));
+                }
+
+                foreach (SimulationMessageRule rule in materializedRules)
+                {
+                    DbcMessage message = document.Messages.First(message =>
+                        message.Identifier == rule.CanIdentifier
+                        && message.IsExtendedIdentifier == rule.IsExtendedIdentifier);
+                    ValidateSignalOverrides(message, rule);
+                }
+            }
+            else if (materializedRules.Any(rule => rule.GatewayMode == GatewayMode.Inject && rule.SignalOverrides.Count > 0))
             {
                 throw new ArgumentException(
-                    "Every simulation message rule must reference a message in the DBC document.",
+                    "Signal override injection requires a DBC document to resolve signals.",
                     nameof(messageRules));
-            }
-
-            foreach (SimulationMessageRule rule in materializedRules)
-            {
-                DbcMessage message = document.Messages.First(message =>
-                    message.Identifier == rule.CanIdentifier
-                    && message.IsExtendedIdentifier == rule.IsExtendedIdentifier);
-                ValidateSignalOverrides(message, rule);
             }
 
             Document = document;
@@ -355,9 +363,14 @@ namespace Simulate.Models
         }
 
         /// <summary>
-        /// Gets the parsed DBC document that resolves message and signal references.
+        /// Creates a baseline simulation plan for raw pass-through gateway operation without a DBC document.
         /// </summary>
-        public DbcDocument Document { get; }
+        public static SimulationPlan CreateRawPassThrough() => new(null, []);
+
+        /// <summary>
+        /// Gets the parsed DBC document that resolves message and signal references, or null if operating in raw mode.
+        /// </summary>
+        public DbcDocument? Document { get; }
 
         /// <summary>
         /// Gets the immutable message rule set.

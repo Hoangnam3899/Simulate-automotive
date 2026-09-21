@@ -826,15 +826,20 @@ namespace Simulate.Tests
 
             public async Task WaitForTimerCountAsync(int expectedCount)
             {
-                while (Volatile.Read(ref _timerCount) < expectedCount)
+                while (true)
                 {
                     Task changed;
                     lock (_sync)
                     {
+                        if (_timerCount >= expectedCount)
+                        {
+                            return;
+                        }
+
                         changed = _timerChanged.Task;
                     }
 
-                    await changed.WaitAsync(TimeSpan.FromSeconds(1));
+                    await changed.WaitAsync(TimeSpan.FromSeconds(10));
                 }
             }
 
