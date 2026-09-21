@@ -225,6 +225,11 @@ BO_ 512 VehicleSpeed: 4 NodeA
             {
                 return _returnPath;
             }
+
+            public string? SaveFileDialog(string filter, string title, string? defaultFileName = null)
+            {
+                return _returnPath;
+            }
         }
     }
 }

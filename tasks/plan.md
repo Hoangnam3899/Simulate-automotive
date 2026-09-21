@@ -285,7 +285,7 @@ Không dùng câu chung chung như “tiếp tục UI”; phải ghi tên panel 
 | 5 | Fault Configuration | selected signal, direct fault (Cyclic/One-Shot), sequence queue, conditional Add to Queue | **Terra xhigh** | **Luna high** | `USER_ACCEPTED` |
 | 6 | Signal Value Configuration | physical value/`VAL_` selection, Min/Max validation, message-filtered isolation | **Terra xhigh** | **Sol xhigh** | `USER_ACCEPTED` |
 | 7 | Execution Control | engine/session start-stop-pause lifecycle, injection runner, DBC-independent raw gateway bridge | **Sol ultra** | **Terra xhigh** | `USER_ACCEPTED` |
-| 8 | Log / Output | bounded observable application log, filter/clear/export | **Terra high** | **Luna high** | `READY_FOR_SPEC` |
+| 8 | Log / Output | user action audit & system diagnostic log, filter/clear/export | **Terra high** | **Luna high** | `IMPLEMENTING` |
 | 9 | Bus Monitor / Health | typed runtime/native health telemetry + bounded history | **Sol ultra** | **Terra xhigh** | `LOCKED_BY_UI-08` |
 | 10 | Status Overview | aggregate connection/DBC/engine/health + footer projection | **Terra xhigh** | **Luna high** | `LOCKED_BY_UI-09` |
 
@@ -307,6 +307,36 @@ Sau UI-10, **Sol ultra** thực hiện final lifecycle/race review; người dù
   2. Chặn feedback loop trong `SimulationViewModel.cs` (chỉ đồng bộ xuống engine khi `IsOverridden == true`).
   3. `SignalModel` hiển thị ổn định `● Injected` (#EF4444) cho signal tiêm và `● Active` (#10B981) cho signal từ bus thật.
 - **Kết quả**: Build 0/0, 1,261/1,261 tests PASS, UI XAML 0% diff.
+
+**UI-08 Spec & Implementation Architecture (2026-09-21) — User Action & System Diagnostic Log:**
+- **Lead model**: `Terra high`; **Reviewer model**: `Luna high`.
+- **Trạng thái**: `PLANNING_ESTABLISHED` (Đã tái phân tích và chuẩn hóa theo đúng bản chất: Nhật ký thao tác người dùng & Báo cáo sự cố/lỗi hệ thống).
+- **Phạm vi & Nguyên tắc cốt lõi**:
+  1. **TUYỆT ĐỐI KHÔNG GHI SIGNAL/FRAME CAN CHẠY NGẦM**: Tránh rác log (log spam) và lãng phí tài nguyên; việc hiển thị trạng thái frame/signal đã do Bảng 4 (Live Signal Monitor) và công cụ chuyên dụng (CANoe/TSMaster) đảm nhiệm.
+  2. **CHỈ GHI LẠI 3 NHÓM SỰ KIỆN CỐT LÕI**:
+     - **Nhóm 1 - Thao tác người dùng (User Actions / Operations)**:
+       * *Connection*: Nhấn Connect (kèm thông tin Interface, TX/RX, Baudrate, FD), Disconnect.
+       * *DBC*: Chọn file nạp DBC, kết quả nạp (tên file, số lượng message/signal), Unload DBC.
+       * *Fault / Overrides*: Thao tác tick/untick Override trên từng tín hiệu (kèm tên và giá trị), nhập giá trị mới, thêm lỗi vào hàng đợi (Add to Queue), xóa hàng đợi (Clear Queue).
+       * *Execution Control*: Nhấn Start Injection (kèm mode), Pause, Resume, Stop Injection.
+       * *Log Controls*: Nhấn Clear Log, Export Log thành công ra file đĩa.
+     - **Nhóm 2 - Cảnh báo vận hành (Operational Warnings)**:
+       * Nhập giá trị vượt dải Min/Max của tín hiệu.
+       * Nhấn Start Injection khi hàng đợi rỗng hoặc chưa chọn cấu hình lỗi hợp lệ.
+       * Cảnh báo cấu hình phần cứng không tối ưu.
+     - **Nhóm 3 - Sự cố & Lỗi hệ thống (System Errors & Failures)**:
+       * Lỗi kết nối phần cứng CAN (không tìm thấy thiết bị, mở kênh thất bại, lỗi baudrate).
+       * Lỗi nạp hoặc parse file DBC không hợp lệ.
+       * Lỗi ngắt kết nối đột ngột hoặc Bus-Off, Transmit Error trong quá trình chạy.
+       * Ngoại lệ hệ thống chưa bắt được (Unhandled Exceptions) được ghi nhận chi tiết để chẩn đoán sự cố.
+  3. **Định dạng Log chuẩn**:
+     `[HH:mm:ss.fff]  [LEVEL]  [Module]  Nội dung thông điệp`
+  4. **Tương tác**:
+     - *Level Filter ComboBox*: `All Levels`, `Info`, `Warning`, `Error` (lọc nhanh để cô lập sự cố).
+     - *Clear Button*: Xóa sạch log hiện có.
+     - *Export Button*: Mở `SaveFileDialog` lưu snapshot log ra file `.log` hoặc `.txt` an toàn.
+  5. **Bảo vệ ranh giới UI**: 0% thay đổi layout, controls hay styles trong `MainWindow.xaml`; chỉ thêm data binding biểu thức.
+
 
 **UI-01 DEBUG_RETURN — baudrate contract (2026-08-15):** User reported three related defects: TX/RX baudrate
 controls bind to one `Connection.Baudrate`; selecting TX implicitly overwrites the user's baudrate from

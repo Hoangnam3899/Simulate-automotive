@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
@@ -355,36 +356,68 @@ namespace Simulate.ViewModels
 
         public SimulationViewModel Simulation { get; }
 
+        public LoggingViewModel Logging { get; }
+
         public ObservableCollection<MessageModel> Messages => Simulation.Messages;
         public ObservableCollection<SignalModel> Signals => Simulation.Signals;
         public ObservableCollection<FaultQueueModel> FaultQueue => Simulation.FaultQueue;
         public FaultConfigurationViewModel FaultConfig => Simulation.FaultConfig;
 
         public MainViewModel()
-            : this(ApplicationComposition.CreateConnectionViewModel(), new DbcManagementViewModel(), new SimulationViewModel())
+            : this(ApplicationComposition.CreateConnectionViewModel(), new DbcManagementViewModel(), new SimulationViewModel(), new LoggingViewModel())
         {
         }
 
         public MainViewModel(ConnectionViewModel connection, SimulationViewModel simulation)
-            : this(connection, new DbcManagementViewModel(), simulation)
+            : this(connection, new DbcManagementViewModel(), simulation, new LoggingViewModel())
+        {
+        }
+
+        public MainViewModel(ConnectionViewModel connection, DbcManagementViewModel dbc, SimulationViewModel simulation)
+            : this(connection, dbc, simulation, new LoggingViewModel())
         {
         }
 
         /// <summary>
-        /// Initializes a view model with caller-composed connection, dbc, and simulation dependencies.
+        /// Initializes a view model with caller-composed connection, dbc, simulation, and logging dependencies.
         /// </summary>
         /// <param name="connection">The connection state exposed to existing bindings.</param>
         /// <param name="dbc">The DBC management state exposed to existing bindings.</param>
         /// <param name="simulation">The simulation projection exposed to existing bindings.</param>
-        public MainViewModel(ConnectionViewModel connection, DbcManagementViewModel dbc, SimulationViewModel simulation)
+        /// <param name="logging">The logging projection exposed to existing bindings.</param>
+        public MainViewModel(ConnectionViewModel connection, DbcManagementViewModel dbc, SimulationViewModel simulation, LoggingViewModel logging)
         {
             Connection = connection ?? throw new ArgumentNullException(nameof(connection));
             Dbc = dbc ?? throw new ArgumentNullException(nameof(dbc));
             Simulation = simulation ?? throw new ArgumentNullException(nameof(simulation));
+            Logging = logging ?? throw new ArgumentNullException(nameof(logging));
+
+            Logging.LogService.LogInfo("System", "AFI - Automotive Fault Injector initialized.");
 
             Simulation.SetSessionProvider(() => Connection.ActiveGatewaySession);
             Connection.PropertyChanged += async (sender, args) =>
             {
+                if (args.PropertyName == nameof(Connection.IsConnected))
+                {
+                    if (Connection.IsConnected)
+                    {
+                        string iface = Connection.SelectedInterface?.Name ?? "CAN Interface";
+                        string tx = Connection.SelectedTx?.Name ?? "TX";
+                        string rx = Connection.SelectedRx?.Name ?? "RX";
+                        string baud = $"{Connection.BaudrateTx}/{Connection.BaudrateRx} kbps";
+                        string fd = Connection.IsCanFdEnabled ? "FD Enabled" : "Classic";
+                        Logging.LogService.LogInfo("Connection", $"Connected to {iface} (TX: {tx}, RX: {rx}, {baud}, {fd}).");
+                    }
+                    else
+                    {
+                        Logging.LogService.LogInfo("Connection", "CAN gateway session disconnected.");
+                    }
+                }
+                else if (args.PropertyName == nameof(Connection.LastFailure) && Connection.LastFailure is { } failure)
+                {
+                    Logging.LogService.LogError("Connection", $"Hardware failure: {failure.Operation} ({failure.Code}) - {failure.Message}");
+                }
+
                 if (args.PropertyName is nameof(Connection.IsConnected) or nameof(Connection.ActiveGatewaySession))
                 {
                     Simulation.NotifyExecutionCommands();
@@ -402,7 +435,15 @@ namespace Simulate.ViewModels
 
             Dbc.DocumentLoaded += async (sender, document) =>
             {
+                string fileName = Dbc.LoadedFileName ?? "DBC";
+                Logging.LogService.LogInfo("DBC", $"Loaded DBC file '{fileName}': {document.Messages.Count} messages, {document.Messages.Sum(m => m.Signals.Count)} signals.");
                 Simulation.LoadDocument(document);
+
+                foreach (SignalModel signal in Simulation.Signals)
+                {
+                    HookSignalEvents(signal);
+                }
+
                 if (!Simulation.IsRunning && Connection.IsConnected && Connection.ActiveGatewaySession is { IsOpen: true })
                 {
                     await Simulation.StartBaselineGatewayAsync();
@@ -411,7 +452,73 @@ namespace Simulate.ViewModels
 
             Dbc.DocumentUnloaded += (sender, args) =>
             {
+                Logging.LogService.LogInfo("DBC", "DBC document unloaded.");
                 Simulation.ClearDocument();
+            };
+
+            Simulation.PropertyChanged += (sender, args) =>
+            {
+                if (args.PropertyName == nameof(Simulation.QueueStatusText))
+                {
+                    if (Simulation.QueueStatusText == "Running")
+                    {
+                        string mode = Simulation.FaultConfig.SelectedInjectionMode ?? "Direct";
+                        Logging.LogService.LogInfo("Execution", $"Fault injection running (Mode: {mode}).");
+                    }
+                    else if (Simulation.QueueStatusText == "Paused")
+                    {
+                        Logging.LogService.LogInfo("Execution", "Fault injection paused.");
+                    }
+                    else if (Simulation.QueueStatusText == "Idle")
+                    {
+                        Logging.LogService.LogInfo("Execution", "Fault injection stopped / idle.");
+                    }
+                }
+            };
+
+            Simulation.FaultQueue.CollectionChanged += (sender, args) =>
+            {
+                if (args.Action == NotifyCollectionChangedAction.Add && args.NewItems is not null)
+                {
+                    foreach (FaultQueueModel item in args.NewItems)
+                    {
+                        Logging.LogService.LogInfo("Fault", $"Added fault rule to queue: {item.Signal} | {item.FaultType}: {item.FaultValue} | Mode: {item.Mode}.");
+                    }
+                }
+                else if (args.Action == NotifyCollectionChangedAction.Reset || (args.Action == NotifyCollectionChangedAction.Remove && Simulation.FaultQueue.Count == 0))
+                {
+                    Logging.LogService.LogInfo("Fault", "Fault queue cleared.");
+                }
+            };
+
+            Simulation.Signals.CollectionChanged += (sender, args) =>
+            {
+                if (args.NewItems is not null)
+                {
+                    foreach (SignalModel signal in args.NewItems)
+                    {
+                        HookSignalEvents(signal);
+                    }
+                }
+            };
+        }
+
+        private void HookSignalEvents(SignalModel signal)
+        {
+            signal.PropertyChanged += (s, e) =>
+            {
+                if (e.PropertyName == nameof(SignalModel.IsOverridden))
+                {
+                    Logging.LogService.LogInfo("Fault", $"Signal '{signal.Name}' override {(signal.IsOverridden ? "enabled" : "disabled")} (Value: {signal.Value} {signal.Unit}).");
+                }
+                else if (signal.IsOverridden && e.PropertyName == nameof(SignalModel.Value))
+                {
+                    Logging.LogService.LogInfo("Fault", $"Signal '{signal.Name}' value set to {signal.Value} {signal.Unit}.");
+                }
+                else if (e.PropertyName == nameof(SignalModel.IsValueValid) && !signal.IsValueValid)
+                {
+                    Logging.LogService.LogWarning("Fault", $"Value {signal.Value} for signal '{signal.Name}' is outside defined range [{signal.Min} .. {signal.Max}].");
+                }
             };
         }
 

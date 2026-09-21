@@ -68,6 +68,10 @@ _Avoid_: wall-clock timestamp, hardware latency
 A finite physical value selected to replace one named DBC signal during injection.
 _Avoid_: raw payload replacement, live signal value
 
+**Application audit log**:
+The timestamped operational record capturing user interactions, configuration updates, operational warnings, and runtime system errors.
+_Avoid_: CAN trace, frame sniffer, raw bus log
+
 ## Benchmark Test Data & Simulation Hardware Environment
 
 > **BẮT BUỘC TUÂN THỦ TRONG QUÁ TRÌNH KIỂM THỬ VÀ VẬN HÀNH SIMULATOR (UI-07 VÀ TOÀN HỆ THỐNG):**

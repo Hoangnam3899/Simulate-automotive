@@ -30,7 +30,7 @@
 - Thư mục dự án tham chiếu `D:\TEST_DEV\...` được bảo vệ an toàn 100%, không bị sửa đổi.
 - Benchmark Test Data: `DBC/VF EBUS6M_PCAN_V2.0.0_20250524.dbc` (61 msgs, 370 signals, Powertrain CAN).
 - Hardware Harness: `Virtual CAN` -> TX: `Virtual Bus 1 - Channel 1`, RX: `Virtual Bus 2 - Channel 1` (500k baudrate, CAN FD).
-- Next Target: Chuyển giao sang Bảng 8 (UI-08: Log / Output).
+- Next Target: Triển khai Bảng 8 (UI-08: User Action & System Diagnostic Log — Thay thế demo log bằng hệ thống nhật ký thao tác người dùng và báo cáo sự cố phần mềm).
 
 ## UI binding contract — source of truth
 

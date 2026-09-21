@@ -997,25 +997,59 @@ availability khóa double action và tôn trọng session/DBC/plan prerequisites
 
 ### UI-08 — Log / Output
 
-**Status:** `LOCKED_BY_UI-07_USER_ACCEPTANCE`.
+**Status:** `WAITING_USER_DEBUG` (Đã hoàn thành triển khai và kiểm thử tự động, chờ người dùng debug nghiệm thu).
 
-**Description:** Thay demo log bằng bounded observable log thật; bind level filter, Clear và Export vào
-control hiện hữu, không log payload/credential nhạy cảm ngoài nhu cầu chẩn đoán.
+**Description:** Xây dựng hệ thống Nhật ký Hoạt động Người dùng & Báo cáo Sự cố Hệ thống (`User Action & System Diagnostic Log`). Tuyệt đối KHÔNG ghi các frame/signal CAN chạy ngầm để tránh rác log. Chỉ tập trung ghi nhận thao tác của người dùng (kết nối, nạp DBC, cấu hình tiêm lỗi, điều khiển thực thi) và các cảnh báo / sự cố lỗi phần mềm.
 
 **Acceptance criteria:**
-- [ ] Connect/DBC/config/run/stop/failure tạo timestamped typed log; collection/text projection có hard
-  cap và thread-safe UI dispatch.
-- [ ] Level filter và Clear deterministic; Export dùng explicit user-selected path, finite snapshot và
-  typed failure khi I/O lỗi.
-- [ ] Không còn chuỗi log demo là runtime truth, không thêm panel/control/style.
+- [x] **Contract & Service (`ILogService`, `LogService`, `LogEntry`)**:
+  - `LogEntry` chứa `Timestamp` (`HH:mm:ss.fff`), `Level` (`Info`, `Warning`, `Error`), `SourceModule` (`Connection`, `DBC`, `Fault`, `Execution`, `System`), `Message`, `FormattedLine`.
+  - `LogService` lưu trữ thread-safe bằng `BoundedQueue` (Hard Cap = 1,000 dòng log), chống rò rỉ bộ nhớ 100%.
+  - Tuyệt đối không hook vào luồng nhận/truyền frame CAN định kỳ của engine để tránh spam log.
+- [x] **Các nhóm sự kiện được ghi nhận (Scoped Audit Events)**:
+  - **Thao tác người dùng (User Actions)**:
+    * Nhấn Connect (Interface, Channels, Baudrate, FD), Disconnect.
+    * Mở file DBC, nạp thành công (số lượng msg/sig), Unload DBC.
+    * Bật/tắt override tín hiệu (tên tín hiệu, giá trị), thay đổi giá trị nhập tay.
+    * Nhấn "Add to Queue", "Clear Queue".
+    * Nhấn "Start Injection" (chế độ tiêm), "Pause", "Resume", "Stop".
+    * Thao tác Clear Log và Export Log.
+  - **Cảnh báo vận hành (Warnings)**:
+    * Giá trị nhập ngoài dải Min/Max của tín hiệu.
+    * Bắt đầu tiêm lỗi khi hàng đợi rỗng hoặc chưa chọn cấu hình hợp lệ.
+  - **Sự cố & Lỗi hệ thống (Errors & Failures)**:
+    * Lỗi kết nối phần cứng (mở cổng thất bại, mất kết nối thiết bị).
+    * Lỗi cú pháp nạp DBC.
+    * Lỗi ngắt kết nối CAN đột ngột hoặc lỗi truyền phần cứng.
+    * Bắt các ngoại lệ chưa xử lý (Unhandled Exceptions) của ứng dụng để phục vụ chẩn đoán.
+- [x] **Dialog Service (`IFileDialogService`)**:
+  - Bổ sung `SaveFileDialog(string filter, string title, string? defaultFileName = null)` để phục vụ Export.
+- [x] **ViewModel (`LoggingViewModel`)**:
+  - Quản lý danh sách log, bộ lọc mức độ (`All Levels`, `Info`, `Warning`, `Error`).
+  - `ClearCommand`: Xóa sạch nội dung log hiện tại.
+  - `ExportCommand`: Xuất snapshot log ra file `.log` hoặc `.txt` an toàn (UTF-8, try-catch lỗi I/O).
+- [x] **Tích hợp sự kiện qua `MainViewModel`**:
+  - Đăng ký lắng nghe các hành động từ `ConnectionViewModel`, `DbcManagementViewModel`, `SimulationViewModel`, và bắt lỗi toàn cục.
+- [x] **UI XAML Binding-Only (`MainWindow.xaml`)**:
+  - Giữ nguyên 100% layout, controls, styles hiện hữu của Bảng 8.
+  - Bind ComboBox: `ItemsSource="{Binding Logging.AvailableLevels}"`, `SelectedItem="{Binding Logging.SelectedLevel}"`.
+  - Bind Buttons: `Command="{Binding Logging.ClearCommand}"`, `Command="{Binding Logging.ExportCommand}"`.
+  - Bind TextBlock: `Text="{Binding Logging.FormattedLogText}"`.
+- [x] **Unit Tests (`Simulate.Tests`)**:
+  - Test ghi nhận đầy đủ các thao tác người dùng và lỗi hệ thống.
+  - Test bộ lọc Level (`All`, `Info`, `Warning`, `Error`).
+  - Test Clear và Export với mock file dialog.
 
 **Verification:**
-- [ ] Log bound/filter/export tests, full build/test/secret/diff PASS.
-- [ ] **USER DEBUG GATE:** user tạo events, filter/clear/export và đối chiếu file output.
+- [x] Build `dotnet build Simulate.sln` đạt 0 warning / 0 error.
+- [x] Toàn bộ unit tests pass 100% (1,271 / 1,271 tests).
+- [x] `git diff --check` và UI diff sạch 100%.
+- [ ] **USER DEBUG GATE:** Người dùng thao tác các nút trên UI, quan sát log ghi lại đúng hành động của mình, thử gây lỗi hoặc nhập dải sai để xem cảnh báo, thử nghiệm Filter/Clear/Export.
 
-**Dependencies:** UI-07 `USER_ACCEPTED`; explicit approval UI-08.
-**Likely files:** `MainWindow.xaml` binding-only, bounded log ViewModel/service, `MainViewModel.cs`, focused tests.
+**Dependencies:** UI-07 `USER_ACCEPTED`; explicit user approval UI-08 implementation plan.
+**Likely files:** `Simulate/Models/LogEntry.cs`, `Simulate/Services/ILogService.cs`, `Simulate/Services/LogService.cs`, `Simulate/Services/IFileDialogService.cs`, `Simulate/ViewModels/LoggingViewModel.cs`, `Simulate/ViewModels/MainViewModel.cs`, `Simulate/MainWindow.xaml` (binding-only), `Simulate.Tests/LoggingTests.cs`.
 **Models:** lead **Terra high**; review **Luna high**.
+
 
 ### UI-09 — Bus Monitor / Health
 
@@ -1545,3 +1579,24 @@ read-only projection; panel 10 không sở hữu hardware, parser hay engine.
     - `dotnet build Simulate.sln`: **0 warning / 0 error**.
     - `dotnet test Simulate.sln`: **1,261 / 1,261 tests PASS (100%)**.
     - UI XAML: 0% thay đổi, giữ nguyên vẹn toàn bộ giao diện và thư mục tham chiếu.
+
+## Work log — 2026-09-21 (UI-08: User Action Audit & System Diagnostic Log)
+
+- [x] **Triển khai hoàn tất Bảng 8 (8. LOG / OUTPUT)**:
+  - **Định hướng chính xác**: Tuyệt đối không hook vào CAN bus frame/signal chatter để tránh ngập rác log; 100% tập trung vào kiểm toán thao tác người dùng (User Action Audit Trail), cảnh báo vận hành và chẩn đoán sự cố phần mềm.
+  - **Core Domain & Service**:
+    * Tạo `Simulate/Models/LogEntry.cs`: Struct lưu `Timestamp`, `Level` (`Info`, `Warning`, `Error`), `SourceModule` và `FormattedLine`.
+    * Tạo `Simulate/Services/ILogService.cs` và `LogService.cs`: Vòng đệm an toàn `BoundedQueue` với `MaxCapacity = 1,000` dòng, thread-safe, tự động giải phóng bản ghi cũ nhất (FIFO eviction), chống tràn RAM 100%.
+    * Mở rộng `IFileDialogService.cs` và `DefaultFileDialogService.cs` với phương thức `SaveFileDialog`.
+  - **ViewModel & Event Wiring**:
+    * Tạo `Simulate/ViewModels/LoggingViewModel.cs`: Quản lý danh sách log, bộ lọc `AvailableLevels` (`All Levels`, `Info`, `Warning`, `Error`), lệnh `ClearCommand` và lệnh `ExportCommand` xuất file UTF-8 an toàn.
+    * Tích hợp vào `MainViewModel.cs`: Tự động hook các sự kiện Connect/Disconnect CAN, nạp/gỡ bỏ file DBC, bật/tắt override và sửa giá trị tín hiệu, thêm/xóa hàng đợi lỗi, điều khiển Start/Pause/Resume/Stop Injection.
+  - **UI (MainWindow.xaml) — 100% Strict UI Boundary**:
+    * Giữ nguyên 100% layout, style, controls hiện có; chỉ gán data binding cho ComboBox, 2 Buttons, và TextBlock hiển thị log.
+  - **Unit Tests**:
+    * Thêm 10 bài kiểm thử mới trong `Simulate.Tests/LoggingTests.cs`.
+  - **Verification**:
+    * `dotnet build Simulate.sln`: 0 warning / 0 error.
+    * `dotnet test Simulate.sln`: 1,271 / 1,271 tests PASS (100%).
+    * `git diff --check`: 0 lỗi format / EOF whitespace.
+    * UI XAML: 0% thay đổi layout, chỉ thuần túy data binding.
