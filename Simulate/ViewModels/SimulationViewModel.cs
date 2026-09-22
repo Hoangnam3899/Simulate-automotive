@@ -40,6 +40,8 @@ namespace Simulate.ViewModels
 
         public ISimulationEngine? CurrentEngine => _engine;
 
+        public event Action<HardwareFailure>? EngineFaulted;
+
         public void SetSessionProvider(Func<ICanGatewaySession?> sessionProvider)
         {
             _sessionProvider = sessionProvider;
@@ -165,6 +167,7 @@ namespace Simulate.ViewModels
         {
             ArgumentNullException.ThrowIfNull(plan);
             _engine = engine ?? throw new ArgumentNullException(nameof(engine));
+            _engine.EngineFaulted += OnEngineFaulted;
             _messageDialogService = messageDialogService ?? throw new ArgumentNullException(nameof(messageDialogService));
 
             FilteredSignals = CollectionViewSource.GetDefaultView(Signals);
@@ -591,6 +594,13 @@ namespace Simulate.ViewModels
             }
 
             EnsureLiveFlushTimerStarted();
+        }
+
+        private void OnEngineFaulted(HardwareFailure failure)
+        {
+            RefreshRuntimeState();
+            NotifyExecutionCommands();
+            EngineFaulted?.Invoke(failure);
         }
 
         public void FlushLiveBufferToSignals()
@@ -1210,11 +1220,13 @@ namespace Simulate.ViewModels
                 if (_engine is not null)
                 {
                     _engine.FrameRouted -= OnEngineFrameRouted;
+                    _engine.EngineFaulted -= OnEngineFaulted;
                     await _engine.DisposeAsync();
                 }
 
                 _engine = new SimulationEngine(session, baselinePlan);
                 _engine.FrameRouted += OnEngineFrameRouted;
+                _engine.EngineFaulted += OnEngineFaulted;
                 EnsureLiveFlushTimerStarted();
                 await _engine.StartAsync();
             }
@@ -1234,6 +1246,7 @@ namespace Simulate.ViewModels
                 if (_engine is not null)
                 {
                     _engine.FrameRouted -= OnEngineFrameRouted;
+                    _engine.EngineFaulted -= OnEngineFaulted;
 
                     if (_engine.IsScheduling)
                     {
@@ -1291,6 +1304,7 @@ namespace Simulate.ViewModels
                         ?? throw new InvalidOperationException("No active CAN gateway session is available.");
                     _engine = new SimulationEngine(session, plan);
                     _engine.FrameRouted += OnEngineFrameRouted;
+                    _engine.EngineFaulted += OnEngineFaulted;
                     EnsureLiveFlushTimerStarted();
                 }
                 else

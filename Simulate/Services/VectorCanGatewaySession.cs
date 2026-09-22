@@ -249,6 +249,8 @@ namespace Simulate.Services
 
         public bool IsOpen => _resources.IsActive;
 
+        public event Action? FrameLossDetected;
+
         public async IAsyncEnumerable<RoutedCanFrame> ReceiveAsync(
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
@@ -300,10 +302,7 @@ namespace Simulate.Services
                 {
                     if ((nativeEvent.Flags & VectorClassicCanEventFlags.QueueOverrun) != 0)
                     {
-                        throw new HardwareOperationException(new HardwareFailure(
-                            HardwareOperation.Receive,
-                            HardwareErrorCode.ReceiveFailed,
-                            "XL_Receive reported a Classic CAN queue overrun; one or more events were lost."));
+                        FrameLossDetected?.Invoke();
                     }
 
                     if (!TryMapClassicEvent(nativeEvent, out RoutedCanFrame? routedFrame))
@@ -546,10 +545,7 @@ namespace Simulate.Services
                 VectorCanFdReceiveBatchResult receivedBatch = batch.Value;
                 if (receivedBatch.QueueOverflow)
                 {
-                    throw new HardwareOperationException(new HardwareFailure(
-                        HardwareOperation.Receive,
-                        HardwareErrorCode.ReceiveFailed,
-                        "XL_CanReceive reported a CAN FD queue overflow; one or more events were lost."));
+                    FrameLossDetected?.Invoke();
                 }
 
                 foreach (VectorCanFdEvent nativeEvent in receivedBatch.Events)

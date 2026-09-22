@@ -170,6 +170,10 @@ namespace Simulate.Services
 
         public bool IsOpen => Volatile.Read(ref _isStopped) == 0;
 
+        public event Action? FrameLossDetected;
+
+        public void TriggerFrameLoss() => FrameLossDetected?.Invoke();
+
         public ValueTask<HardwareOperationResult> EnqueueReceivedAsync(
             CanGatewaySide source,
             CanFrame frame,

@@ -759,26 +759,34 @@ namespace Simulate.Tests
         }
 
         [TestMethod]
-        public async Task CAN_FD_receive_queue_overflow_throws_a_typed_data_loss_error()
+        public async Task CAN_FD_receive_queue_overflow_does_not_throw_and_notifies_loss_while_yielding_events()
         {
             var api = new FakeVectorXlApi
             {
                 CanFdReceiveQueueOverflow = true
             };
+            api.EnqueueCanFdReceiveEvent(
+                channelIndex: 0,
+                rawIdentifier: 0x123,
+                dataLengthCode: 1,
+                isFlexibleDataRate: true,
+                isBitRateSwitchEnabled: false,
+                data: new byte[] { 0x42 });
             var service = new VectorHardwareService(() => api);
             HardwareOperationResult<ICanGatewaySession> openResult =
                 await service.OpenGatewaySessionAsync(CreateFlexibleDataRateOptions());
             Assert.IsTrue(openResult.IsSuccess);
             await using ICanGatewaySession session = openResult.Value!;
+
+            bool lossDetected = false;
+            session.FrameLossDetected += () => lossDetected = true;
+
             await using IAsyncEnumerator<RoutedCanFrame> enumerator =
                 session.ReceiveAsync().GetAsyncEnumerator();
 
-            HardwareOperationException exception =
-                await Assert.ThrowsExceptionAsync<HardwareOperationException>(
-                    async () => await enumerator.MoveNextAsync().AsTask());
-
-            Assert.AreEqual(HardwareErrorCode.ReceiveFailed, exception.Failure.Code);
-            StringAssert.Contains(exception.Failure.Message, "overflow");
+            Assert.IsTrue(await enumerator.MoveNextAsync().AsTask());
+            Assert.IsTrue(lossDetected, "FrameLossDetected must be signaled when queue overflow occurs.");
+            Assert.AreEqual(0x123u, enumerator.Current.Frame.Identifier);
         }
 
         [TestMethod]
@@ -983,7 +991,7 @@ namespace Simulate.Tests
         }
 
         [TestMethod]
-        public async Task Classic_receive_queue_overrun_throws_a_typed_data_loss_error()
+        public async Task Classic_receive_queue_overrun_does_not_throw_and_notifies_loss_while_yielding_events()
         {
             var api = new FakeVectorXlApi();
             api.ReceiveEvents.Enqueue(new VectorClassicCanEvent(
@@ -998,16 +1006,16 @@ namespace Simulate.Tests
                 await service.OpenGatewaySessionAsync(CreateClassicOptions());
             Assert.IsTrue(openResult.IsSuccess);
             await using ICanGatewaySession session = openResult.Value!;
+
+            bool lossDetected = false;
+            session.FrameLossDetected += () => lossDetected = true;
+
             await using IAsyncEnumerator<RoutedCanFrame> enumerator =
                 session.ReceiveAsync().GetAsyncEnumerator();
 
-            HardwareOperationException exception =
-                await Assert.ThrowsExceptionAsync<HardwareOperationException>(
-                    async () => await enumerator.MoveNextAsync().AsTask());
-
-            Assert.AreEqual(HardwareOperation.Receive, exception.Failure.Operation);
-            Assert.AreEqual(HardwareErrorCode.ReceiveFailed, exception.Failure.Code);
-            StringAssert.Contains(exception.Failure.Message, "overrun");
+            Assert.IsTrue(await enumerator.MoveNextAsync().AsTask());
+            Assert.IsTrue(lossDetected, "FrameLossDetected must be signaled when queue overrun occurs.");
+            Assert.AreEqual(0x123u, enumerator.Current.Frame.Identifier);
         }
 
         [TestMethod]

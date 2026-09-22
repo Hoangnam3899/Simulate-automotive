@@ -1,4 +1,4 @@
-# Handoff — UI-04 Injected Frame Reflection Fixed / 1,261 Tests Passing
+# Handoff — UI-09 Bus Monitor Health & Gateway Queue Overflow Resilience / 2,275 Tests Passing
 
 ## Source of truth
 
@@ -9,28 +9,21 @@
 ## Current repository state
 
 - Branch: `chore/merge-agent-skills`.
-- Panels 1–6 đã hoàn thành và đạt `USER_ACCEPTED`.
-- **Khắc phục Triệt để Lỗi Tín Hiệu Bị Nhảy Loạn Xạ & Multi-Source Event Collision (2026-09-21)**:
-  * Khôi phục `SimulationEngine.cs` về nguyên bản 100%, gỡ bỏ 2 lệnh `FrameRouted?.Invoke(...)` sau tiêm lỗi và sau scheduler. `FrameRouted` chỉ phát đúng 1 lần duy nhất tại điểm tiếp nhận frame từ gateway bus.
-  * Chặn triệt để Feedback Loop trong `SimulationViewModel.cs`: Chỉ khi `signal.IsOverridden == true` thì sự kiện đổi giá trị mới đồng bộ xuống engine. Tín hiệu bình thường nhận frame từ bus không bao giờ kích hoạt `SyncSignalOverrides`.
-  * `SignalModel` (MainViewModel.cs): Khi `IsOverridden == true` hiển thị ổn định giá trị tiêm `● Injected` (#EF4444); khi `!IsOverridden` hiển thị ổn định giá trị thực từ bus thật (`● Active` #10B981) mà không bị xung đột hay nhảy số loạn xạ.
-- **UI-04 Realtime Signal Monitor: Cập nhật phản chiếu Frame đã Tiêm Lỗi (Post-Gateway / Injected Values & Injected Status)**:
-  * Khi signal đang có `IsOverridden == true`, luôn hiển thị giá trị tiêm `Value`, raw value tương ứng, và trạng thái **`● Injected`** (màu đỏ `#EF4444`).
-  * Khi frame chu kỳ từ ECU nguồn tiếp tục gửi đến, `UpdateValue` bảo toàn giá trị tiêm lỗi và trạng thái `● Injected`, cập nhật timestamp `LastUpdated` theo thời gian thực mà không bị giá trị gốc đè lại.
-  * Khi người dùng thay đổi giá trị hoặc tick/untick `Override` tại Bảng 6, Bảng 4 cập nhật phản ứng tức thời.
-- **UI-04 Realtime Signal Monitor (Giám Sát Tín Hiệu 2 Chiều & Decoupled 30fps Timer)**:
-  * Bảng 4 bắt trọn frame CAN từ cả 2 nhánh bus `RX` và `TX`.
-  * Producer-Consumer với `_liveFlushTimer` 33ms (~30fps) tự động xả cạn `_liveFrameBuffer` lên UI thread, loại bỏ kẹt frame cuối và chống nghẽn UI.
-  * Tối ưu hóa tra cứu tín hiệu $O(1)$ bằng cặp số nguyên `(RawIdentifier, IsExtendedIdentifier)` trên `SignalModel`.
-- **UI-06 Bug Fix: Khắc phục lỗi Crash Unhandled Exception khi sửa giá trị tín hiệu ở Bảng 6 lúc CAN đã Connected**:
-  * Phân tách an toàn giữa Drafting Phase và Live Injection Phase; an toàn 100% không làm sập luồng UI.
-- **Panel 7 (Execution Control) & Gateway Tiếp Nối 2 Đường CAN (Hoàn toàn độc lập với DBC)**:
-  * Gateway bắc cầu tiếp nối (Pass-Through Bridge) 2 chiều RX $\leftrightarrow$ TX chạy độc lập không phụ thuộc DBC.
-- Toàn bộ suite kiểm thử: **1,261 / 1,261 tests PASS (100%)**, biên dịch 0 warning / 0 error.
+- Panels 1–9 đã hoàn thành và đạt `USER_ACCEPTED`.
+- **Khắc phục Triệt Để Lỗi Treo Luồng Nhận (Queue Overflow) & Hiện Tượng Zombie Gateway (2026-09-22)**:
+  * Tầng HAL Session (`VectorCanGatewaySession.cs` & `ICanHardwareDriver.cs`): Xóa bỏ lệnh `throw` khi gặp cờ `QueueOverflow` (CAN FD) hoặc `QueueOverrun` (Classic CAN). Kích hoạt event `FrameLossDetected` và tiếp tục duyệt các frame hợp lệ còn lại trong batch, giữ luồng nhận sống bền bỉ ngay cả dưới tải cực cao (1ms burst traffic từ TSMaster).
+  * Tầng Engine (`SimulationEngine.cs` & `ISimulationEngine.cs`): Lắng nghe `FrameLossDetected` để tăng bộ đếm `DroppedFrames` (`Lost`), và cung cấp event `EngineFaulted` khi có lỗi phần cứng chí mạng.
+  * Tầng Viễn Thám (`BusHealthViewModel.cs` & `MainViewModel.cs`): Bổ sung `isEngineRunning` vào `ComputeTelemetrySnapshot` để ngăn chặn hoàn toàn việc hiển thị xanh khi engine chưa chạy hoặc đã dừng (chuyển sang Standby `#64748B` hoặc Faulted `#EF4444`). Khi có frame loss do overflow, chỉ số `Lost` nhảy số chính xác và chuyển sang Critical `#EF4444`. Tự động ghi log cảnh báo ra UI 8.
+- **UI-09 Realtime Bus Health Monitor (Bảng 9: BUS MONITOR (HEALTH))**:
+  * Tối ưu kiến trúc đổi màu đường viền thông minh (`HealthStrokeColor`) thay vì vẽ sóng động gây giật lag: Xám (`#64748B` - Offline/Standby), Xanh (`#10B981` - Optimal), Vàng (`#F59E0B` - Warning), Đỏ (`#EF4444` - Critical).
+  * Viễn thám chu kỳ 500ms đo lường chính xác Bus Load %, Errors, Lost (Dropped), Warning.
+- **UI-08 User Action Audit & System Diagnostic Log (Bảng 8: LOG / OUTPUT)**:
+  * Vòng đệm 1,000 dòng thread-safe FIFO, lọc theo Level (All, Info, Warning, Error), xuất file và xóa log an toàn.
+- Toàn bộ suite kiểm thử: **2,275 / 2,275 tests PASS (100%)**, biên dịch 0 warning / 0 error.
 - Thư mục dự án tham chiếu `D:\TEST_DEV\...` được bảo vệ an toàn 100%, không bị sửa đổi.
 - Benchmark Test Data: `DBC/VF EBUS6M_PCAN_V2.0.0_20250524.dbc` (61 msgs, 370 signals, Powertrain CAN).
 - Hardware Harness: `Virtual CAN` -> TX: `Virtual Bus 1 - Channel 1`, RX: `Virtual Bus 2 - Channel 1` (500k baudrate, CAN FD).
-- Next Target: Triển khai Bảng 8 (UI-08: User Action & System Diagnostic Log — Thay thế demo log bằng hệ thống nhật ký thao tác người dùng và báo cáo sự cố phần mềm).
+- Next Target: Hoàn thiện Bảng 10 (UI-10: Status Overview) hoặc review tổng thể ứng dụng.
 
 ## UI binding contract — source of truth
 

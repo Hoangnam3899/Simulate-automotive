@@ -285,8 +285,8 @@ Không dùng câu chung chung như “tiếp tục UI”; phải ghi tên panel 
 | 5 | Fault Configuration | selected signal, direct fault (Cyclic/One-Shot), sequence queue, conditional Add to Queue | **Terra xhigh** | **Luna high** | `USER_ACCEPTED` |
 | 6 | Signal Value Configuration | physical value/`VAL_` selection, Min/Max validation, message-filtered isolation | **Terra xhigh** | **Sol xhigh** | `USER_ACCEPTED` |
 | 7 | Execution Control | engine/session start-stop-pause lifecycle, injection runner, DBC-independent raw gateway bridge | **Sol ultra** | **Terra xhigh** | `USER_ACCEPTED` |
-| 8 | Log / Output | user action audit & system diagnostic log, filter/clear/export | **Terra high** | **Luna high** | `IMPLEMENTING` |
-| 9 | Bus Monitor / Health | typed runtime/native health telemetry + bounded history | **Sol ultra** | **Terra xhigh** | `LOCKED_BY_UI-08` |
+| 8 | Log / Output | user action audit & system diagnostic log, filter/clear/export | **Terra high** | **Luna high** | `USER_ACCEPTED` |
+| 9 | Bus Monitor / Health | health indicators & telemetry (load/errors/lost/warn), status line color (Xanh/Vàng/Đỏ/Xám) | **Terra high** | **Luna high** | `WAITING_USER_DEBUG` |
 | 10 | Status Overview | aggregate connection/DBC/engine/health + footer projection | **Terra xhigh** | **Luna high** | `LOCKED_BY_UI-09` |
 
 Sau UI-10, **Sol ultra** thực hiện final lifecycle/race review; người dùng vẫn là final runtime gate.
@@ -397,7 +397,7 @@ cho đến khi user nói UI-01 PASS.
 | 6 | Value edit/`VAL_` map thành physical override; min/max/step và filter đúng | Đổi numeric/label value, bật/tắt override, kiểm tra payload qua Mock/hardware phù hợp |
 | 7 | Start/Stop/Pause/Resume/Clear Queue và status dùng engine thật, command state chống double action | Chạy injection, pause/resume/stop, lặp nhanh và kiểm tra cleanup; `Emergency` không được tuyên bố có UI nếu chưa có control |
 | 8 | Log thật, bounded, lọc level, clear và export an toàn | Tạo connect/load/run/error events, lọc/clear/export rồi đối chiếu file |
-| 9 | Health counters/history dùng evidence thật; metric không có nguồn phải hiện unavailable, không fake | Chạy traffic/fault/soak, đối chiếu received/dropped/error/latency và kiểm tra graph bounded |
+| 9 | Health indicators/counters dùng telemetry thật; line đổi màu trạng thái (Xanh/Vàng/Đỏ/Xám), không sóng động | Chạy traffic/fault/soak, đối chiếu bus load, dropped/lost frames, errors và kiểm tra đổi màu trạng thái |
 | 10 | Status overview/footer tổng hợp đúng 1–9, không còn chuỗi demo làm runtime truth | Chạy full flow connect→DBC→configure→inject→stop→disconnect và kiểm tra mọi trạng thái |
 
 ### 8.5. Routing model khi user báo lỗi

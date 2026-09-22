@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Simulate.Models;
 
 namespace Simulate.ViewModels
 {
@@ -358,6 +359,8 @@ namespace Simulate.ViewModels
 
         public LoggingViewModel Logging { get; }
 
+        public BusHealthViewModel BusHealth { get; }
+
         public ObservableCollection<MessageModel> Messages => Simulation.Messages;
         public ObservableCollection<SignalModel> Signals => Simulation.Signals;
         public ObservableCollection<FaultQueueModel> FaultQueue => Simulation.FaultQueue;
@@ -386,13 +389,54 @@ namespace Simulate.ViewModels
         /// <param name="simulation">The simulation projection exposed to existing bindings.</param>
         /// <param name="logging">The logging projection exposed to existing bindings.</param>
         public MainViewModel(ConnectionViewModel connection, DbcManagementViewModel dbc, SimulationViewModel simulation, LoggingViewModel logging)
+            : this(connection, dbc, simulation, logging, null)
+        {
+        }
+
+        /// <summary>
+        /// Initializes a view model with caller-composed connection, dbc, simulation, logging, and bus health dependencies.
+        /// </summary>
+        public MainViewModel(ConnectionViewModel connection, DbcManagementViewModel dbc, SimulationViewModel simulation, LoggingViewModel logging, BusHealthViewModel? busHealth)
         {
             Connection = connection ?? throw new ArgumentNullException(nameof(connection));
             Dbc = dbc ?? throw new ArgumentNullException(nameof(dbc));
             Simulation = simulation ?? throw new ArgumentNullException(nameof(simulation));
             Logging = logging ?? throw new ArgumentNullException(nameof(logging));
 
+            BusHealth = busHealth ?? new BusHealthViewModel(
+                () => Connection.IsConnected,
+                () => Simulation.IsRunning,
+                () => (uint)(Connection.BaudrateTx * 1000),
+                () => Simulation.CurrentEngine?.Statistics ?? Simulation.Statistics,
+                () => Connection.LastFailure ?? Simulation.CurrentEngine?.LastFailure ?? Simulation.LastFailure,
+                () => 0);
+
+            Logging.LogService.LogAdded += (sender, entry) =>
+            {
+                if (entry.Level == LogLevel.Warning)
+                {
+                    BusHealth.IncrementWarningCount();
+                }
+                else if (entry.Level == LogLevel.Error)
+                {
+                    BusHealth.IncrementErrorCount();
+                }
+            };
+
+            Logging.LogService.Cleared += (sender, e) =>
+            {
+                BusHealth.ClearWarnings();
+                BusHealth.ClearErrors();
+            };
+
             Logging.LogService.LogInfo("System", "AFI - Automotive Fault Injector initialized.");
+
+            Simulation.EngineFaulted += failure =>
+            {
+                Logging.LogService.LogError("Engine", $"Gateway engine fault: {failure.Operation} ({failure.Code}) - {failure.Message}");
+                BusHealth.IncrementErrorCount();
+                BusHealth.UpdateTelemetry();
+            };
 
             Simulation.SetSessionProvider(() => Connection.ActiveGatewaySession);
             Connection.PropertyChanged += async (sender, args) =>
@@ -407,20 +451,32 @@ namespace Simulate.ViewModels
                         string baud = $"{Connection.BaudrateTx}/{Connection.BaudrateRx} kbps";
                         string fd = Connection.IsCanFdEnabled ? "FD Enabled" : "Classic";
                         Logging.LogService.LogInfo("Connection", $"Connected to {iface} (TX: {tx}, RX: {rx}, {baud}, {fd}).");
+                        BusHealth.UpdateTelemetry();
                     }
                     else
                     {
                         Logging.LogService.LogInfo("Connection", "CAN gateway session disconnected.");
+                        BusHealth.Reset();
                     }
                 }
                 else if (args.PropertyName == nameof(Connection.LastFailure) && Connection.LastFailure is { } failure)
                 {
                     Logging.LogService.LogError("Connection", $"Hardware failure: {failure.Operation} ({failure.Code}) - {failure.Message}");
+                    BusHealth.IncrementErrorCount();
                 }
 
                 if (args.PropertyName is nameof(Connection.IsConnected) or nameof(Connection.ActiveGatewaySession))
                 {
                     Simulation.NotifyExecutionCommands();
+
+                    if (Connection.ActiveGatewaySession is { } activeSession)
+                    {
+                        activeSession.FrameLossDetected += () =>
+                        {
+                            Logging.LogService.LogWarning("Hardware", "Hardware CAN receive buffer overflow reported — frame(s) lost.");
+                            BusHealth.UpdateTelemetry();
+                        };
+                    }
 
                     if (Connection.IsConnected && Connection.ActiveGatewaySession is { IsOpen: true })
                     {
@@ -458,6 +514,11 @@ namespace Simulate.ViewModels
 
             Simulation.PropertyChanged += (sender, args) =>
             {
+                if (args.PropertyName is nameof(Simulation.IsRunning) or nameof(Simulation.LastFailure))
+                {
+                    BusHealth.UpdateTelemetry();
+                }
+
                 if (args.PropertyName == nameof(Simulation.QueueStatusText))
                 {
                     if (Simulation.QueueStatusText == "Running")

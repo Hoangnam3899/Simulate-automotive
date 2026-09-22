@@ -24,6 +24,7 @@ namespace Simulate.Services
         private readonly AsyncManualResetGate _scheduleGate = new(isSet: true);
         private readonly SemaphoreSlim _transmitGate = new(1, 1);
         public event Action<RoutedCanFrame>? FrameRouted;
+        public event Action<HardwareFailure>? EngineFaulted;
 
         private Dictionary<
             (uint CanIdentifier, bool IsExtendedIdentifier),
@@ -125,6 +126,13 @@ namespace Simulate.Services
                 .ToDictionary(
                     entry => entry.Key,
                     entry => entry.Value.SignalOverrides.ToArray());
+
+            _session.FrameLossDetected += OnSessionFrameLossDetected;
+        }
+
+        private void OnSessionFrameLossDetected()
+        {
+            Interlocked.Increment(ref _droppedFrames);
         }
 
         /// <inheritdoc />
@@ -546,6 +554,7 @@ namespace Simulate.Services
                 _isDisposed = true;
             }
 
+            _session.FrameLossDetected -= OnSessionFrameLossDetected;
             await StopAsync().ConfigureAwait(false);
             GC.SuppressFinalize(this);
         }
@@ -639,6 +648,7 @@ namespace Simulate.Services
             catch (HardwareOperationException exception)
             {
                 CaptureFailure(exception.Failure);
+                EngineFaulted?.Invoke(exception.Failure);
                 throw;
             }
         }

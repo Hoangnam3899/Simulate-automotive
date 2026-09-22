@@ -53,6 +53,15 @@ namespace Simulate.Services
         event Action<RoutedCanFrame>? FrameRouted;
 
         /// <summary>
+        /// Fires when an unrecoverable failure terminates the gateway receive loop.
+        /// </summary>
+        event Action<HardwareFailure>? EngineFaulted
+        {
+            add { }
+            remove { }
+        }
+
+        /// <summary>
         /// Atomically updates the active simulation plan and rules without stopping the gateway receive loop.
         /// </summary>
         /// <param name="plan">The updated simulation plan.</param>

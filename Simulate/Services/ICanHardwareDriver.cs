@@ -25,6 +25,12 @@ namespace Simulate.Services
 
         public bool IsOpen { get; }
 
+        public event Action? FrameLossDetected
+        {
+            add { }
+            remove { }
+        }
+
         // Native receive failures are surfaced as HardwareOperationException so
         // operation, error code, and native status remain available to callers.
         public IAsyncEnumerable<RoutedCanFrame> ReceiveAsync(
