@@ -299,6 +299,15 @@ Sau UI-10, **Sol ultra** thực hiện final lifecycle/race review; người dù
   - Baudrate: TX 500k, RX 500k, CAN FD Enabled.
 - **Yêu cầu hành vi cốt lõi**: Khi simulator phát dữ liệu PCAN qua TX (`Virtual Bus 1 - Channel 1`), bất kỳ can thiệp thay đổi tín hiệu nào (qua Bảng 5 & 6) khi TX phát ra thì phía RX (`Virtual Bus 2 - Channel 1`) bắt buộc phải nhận được chính xác giá trị đã can thiệp đó.
 
+**UI-01 / UI-06 / UI-09 Triage & Remediation (2026-09-22):**
+- **Sự cố 1**: Nhấn Disconnect làm Visual Studio Debugger nhảy ngoại lệ unhandled `OperationCanceledException` tại `VectorCanGatewaySession.cs:133`.
+  * *Khắc phục*: Kiểm tra channel active/cleanup trước lệnh cancellation token throw; bắt `OperationCanceledException` khi session dừng để `yield break;` êm thắm; bổ sung catch trong `SimulationEngine.RunReceiveLoopAsync`.
+- **Sự cố 2**: Lỗi nhảy data simulate tại Bảng 6 (`SIGNAL VALUE CONFIGURATION`). Dữ liệu frame CAN trên bus liên tục đè lên ComboBox/TextBox của Bảng 6.
+  * *Khắc phục*: Tách bạch `_configuredValue` trong `SignalModel`. Khi chưa override, `UpdateValue` chỉ cập nhật Bảng 4 (`PhysicalValueDisplay`, `RawValue`, `StatusText`), tuyệt đối không bắn `PropertyChanged` của `PhysicalValueInput` làm giật Bảng 6. Bảng 6 đứng yên 100% theo giá trị cấu hình của kỹ sư.
+- **Sự cố 3**: Bảng 9 (`BUS MONITOR HEALTH`) báo vàng khi đẩy tải 1ms nhưng khi khôi phục tải bình thường không chuyển về xanh.
+  * *Khắc phục*: Tách biệt giữa bộ đếm tích lũy lịch sử (`WarningCountDisplay`, `LostCountDisplay`) và trạng thái sức khỏe thời gian thực (`HealthStrokeColor`, `HealthStatusText`). Áp dụng cửa sổ cooldown (~1.5s): khi tải 1ms kết thúc và không còn lỗi mới, đường line và nhãn trạng thái tự động phục hồi về **MÀU XANH TỐI ƯU (`#10B981` - `● Optimal`)**.
+- **Kết quả xác minh**: `dotnet build` đạt 0 warning / 0 error; **2,278 / 2,278 unit tests PASS (100%)**; UI XAML 0% diff.
+
 **UI-04 / UI-06 Remediation (2026-09-21) — Signal Jitter & Multi-Source Collision Fix:**
 - **Sự cố**: Khi tiêm lỗi đè tín hiệu `VCU_SourceAddress` (Value = 100), tín hiệu không override trong cùng message (`VCU_CBV`) bị nhảy số liên tục.
 - **Nguyên nhân gốc rễ**: Multi-Source Event Collision từ 2 lệnh `FrameRouted?.Invoke(...)` mới thêm trong `SimulationEngine.cs` (gây xung đột payload) kết hợp Feedback Loop trong `SimulationViewModel.OnSignalItemPropertyChanged` (mọi thay đổi `Value` kích hoạt `SyncSignalOverrides` -> `UpdatePlan`).

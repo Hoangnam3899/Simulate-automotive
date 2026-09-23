@@ -225,7 +225,9 @@ namespace Simulate.Tests
             // Select "[1] Applied"
             brakeSignal.PhysicalValueInput = "[1] Applied";
             Assert.AreEqual(1d, brakeSignal.Value);
-            Assert.IsTrue(brakeSignal.IsOverridden);
+            Assert.AreEqual(1d, brakeSignal.ConfiguredValue);
+            Assert.AreEqual("[1] Applied", brakeSignal.PhysicalValueInput);
+            Assert.IsFalse(brakeSignal.IsOverridden, "Configuring value in UI6 does not force IsOverridden to true");
             Assert.AreEqual("—", brakeSignal.PhysicalValueDisplay);
             Assert.AreEqual("● No Data", brakeSignal.StatusText);
         }
@@ -396,6 +398,182 @@ namespace Simulate.Tests
             Assert.IsFalse(signal.IsOverridden);
 
             await engine.StopAsync();
+        }
+
+        [TestMethod]
+        public void IncomingCanStream_DoesNotCorruptOrJitterPanel6ConfigurationInput()
+        {
+            var vm = CreateConfiguredViewModel(out _);
+            var brakeSig = vm.Signals.First(s => s.Name == "BrakeApplied");
+
+            // Initial configuration state from DBC: Offset = 0, which corresponds to "[0] Released"
+            Assert.AreEqual("[0] Released", brakeSig.PhysicalValueInput);
+            Assert.IsFalse(brakeSig.IsOverridden);
+
+            // User configures an override draft value without ticking override yet
+            brakeSig.ConfiguredValue = 1.0;
+            Assert.AreEqual("[1] Applied", brakeSig.PhysicalValueInput);
+
+            // Now, simulate incoming frames on the bus with rapid state transitions (0, 1, 0, 1)
+            // Payload 0x00: BrakeApplied = 0
+            vm.ProcessIncomingFrame(419, false, new byte[] { 0x00, 0x00, 0x00, 0x00 });
+            Assert.AreEqual("[0] Released", brakeSig.PhysicalValueDisplay, "Live monitor (Panel 4) must track actual bus data.");
+            Assert.AreEqual("[1] Applied", brakeSig.PhysicalValueInput, "Panel 6 configuration draft must remain stable and not jitter with bus stream.");
+
+            // Payload 0x01: BrakeApplied = 1
+            vm.ProcessIncomingFrame(419, false, new byte[] { 0x01, 0x00, 0x00, 0x00 });
+            Assert.AreEqual("[1] Applied", brakeSig.PhysicalValueDisplay);
+            Assert.AreEqual("[1] Applied", brakeSig.PhysicalValueInput, "Panel 6 must still preserve configured draft value.");
+
+            // Ticking override activates injection
+            brakeSig.IsOverridden = true;
+            Assert.AreEqual(1.0, brakeSig.Value);
+            Assert.AreEqual("● Injected", brakeSig.StatusText);
+            Assert.AreEqual("#EF4444", brakeSig.StatusColor);
+        }
+
+        [TestMethod]
+        public void BusHealth_DynamicRecovery_WhenBurstLoadFinishes_RecoversToOptimalGreen()
+        {
+            int warnings = 0;
+            var vm = new BusHealthViewModel(
+                () => true,
+                () => true,
+                () => 500000,
+                () => null,
+                () => null,
+                () => warnings,
+                startTimer: false);
+
+            // 1. Initial state: Optimal Green
+            vm.UpdateTelemetry();
+            Assert.AreEqual("● Optimal", vm.HealthStatusText);
+            Assert.AreEqual("#10B981", vm.HealthStrokeColor);
+
+            // 2. High burst load triggers warning
+            warnings = 50;
+            vm.IncrementWarningCount();
+            Assert.AreEqual("● Warning", vm.HealthStatusText);
+            Assert.AreEqual("#F59E0B", vm.HealthStrokeColor);
+            Assert.IsTrue(int.Parse(vm.WarningCountDisplay) > 0);
+
+            // 3. Burst load finishes, bus returns to low/normal traffic
+            // Tick telemetry until cooldown window expires (4 ticks = ~2 seconds)
+            for (int i = 0; i < 5; i++)
+            {
+                vm.UpdateTelemetry();
+            }
+
+            // Must recover to Optimal Green automatically!
+            Assert.AreEqual("● Optimal", vm.HealthStatusText, "Bus health status must recover to Optimal after burst load subsides.");
+            Assert.AreEqual("#10B981", vm.HealthStrokeColor, "Bus health line must turn green (#10B981) after traffic normalizes.");
+
+            // Cumulative counters must still be preserved for diagnostics
+            Assert.IsTrue(int.Parse(vm.WarningCountDisplay) > 0, "Cumulative warning count must be preserved for history.");
+        }
+
+        [TestMethod]
+        public async Task SessionDisconnect_CancelsGracefullyWithoutUnhandledException()
+        {
+            var driver = new MockHardwareService();
+            var discovery = await driver.DiscoverInterfacesAsync();
+            var iface = discovery.Value![0];
+            var options = CanGatewayOptions.CreateFlexibleDataRate(iface.Channels[0], iface.Channels[1], 500000, 2000000);
+            var sessionResult = await driver.OpenGatewaySessionAsync(options);
+            await using ICanGatewaySession session = sessionResult.Value!;
+
+            const string documentText = """
+                BO_ 291 EngineData: 8 Gateway
+                 SG_ EngineSpeed : 0|16@1+ (0.25,0) [0|8000] "rpm" Gateway
+                """;
+            DbcDocument document = DbcParser.Parse(documentText).Document!;
+            var plan = new SimulationPlan(document, [
+                new SimulationMessageRule(291, false, true, GatewayMode.PassThrough, SimulationSendType.Cyclic,
+                    new SimulationTiming(TimeSpan.Zero, TimeSpan.FromMilliseconds(50), 0), [], new E2eProtectionConfiguration(false))
+            ]);
+
+            await using var engine = new SimulationEngine(session, plan);
+            await engine.StartAsync();
+
+            // Simulate disconnect by stopping engine and session concurrently
+            using var cts = new CancellationTokenSource();
+            cts.Cancel();
+
+            // Calling StopAsync while cancelled must complete gracefully without unhandled exception
+            await engine.StopAsync();
+            HardwareOperationResult stopResult = await session.StopAsync();
+            Assert.IsTrue(stopResult.IsSuccess);
+        }
+
+        [TestMethod]
+        public void SignalConfiguration_WhenUntickedAndBusFramesArriveAtHighSpeed_ConfiguredValueRemainsImmune()
+        {
+            var vm = CreateConfiguredViewModel(out var engine);
+            var signal = vm.Signals.First(s => s.Name == "EngineSpeed");
+
+            // 1. User configures value 4500 in UI 6
+            signal.PhysicalValueInput = "4500";
+            Assert.AreEqual(4500d, signal.ConfiguredValue);
+            Assert.AreEqual(4500d, signal.Value);
+            Assert.IsFalse(signal.IsOverridden, "Configuring value does not force override");
+
+            // 2. User prepares scenario in advance without actively injecting
+            Assert.AreEqual(4500d, signal.ConfiguredValue, "Configured value must persist");
+            Assert.AreEqual("4500 rpm", signal.PhysicalValueInput, "UI 6 input must remain 4500 rpm");
+
+            // 3. High-speed bus frames arrive from vehicle with 1200 rpm (e.g. 1ms / 10ms / 100ms rate)
+            ulong rawVeh = (ulong)Math.Round((1200.0 - signal.Offset) / signal.Factor);
+            for (int i = 0; i < 100; i++)
+            {
+                signal.UpdateValue(rawVeh, 1200.0, DateTime.Now);
+            }
+
+            // Assert: UI 4 shows live vehicle value (1200 rpm, Active, Green)
+            Assert.AreEqual("1200 rpm", signal.PhysicalValueDisplay, "UI 4 monitor must reflect live vehicle speed");
+            Assert.AreEqual("● Active", signal.StatusText);
+            Assert.AreEqual("#10B981", signal.StatusColor);
+            Assert.AreEqual(1200.0, signal.Value, "Live Value must be 1200");
+
+            // Assert: UI 6 configured value is 100% IMMUNE and did not get overwritten by vehicle frames
+            Assert.AreEqual(4500d, signal.ConfiguredValue, "ConfiguredValue must NOT be overwritten by bus frames");
+            Assert.AreEqual("4500 rpm", signal.PhysicalValueInput, "UI 6 input must remain 4500 rpm without jumping");
+
+            // 4. When user enables override again, it restores configured value 4500 immediately
+            signal.IsOverridden = true;
+            Assert.AreEqual("4500 rpm", signal.PhysicalValueDisplay, "UI 4 must now show injected value 4500 rpm");
+            Assert.AreEqual("● Injected", signal.StatusText);
+            Assert.AreEqual("#EF4444", signal.StatusColor);
+            Assert.AreEqual(4500d, signal.Value, "Injected Value must be 4500");
+        }
+
+        [TestMethod]
+        public void ComboBoxConfiguration_WhenBusFramesArrive_EnumSelectionDoesNotReset()
+        {
+            var vm = CreateConfiguredViewModel(out _);
+            var brakeSignal = vm.Signals.First(s => s.Name == "BrakeApplied");
+
+            // 1. User configures enum to "[1] Applied"
+            brakeSignal.PhysicalValueInput = "[1] Applied";
+            Assert.AreEqual(1d, brakeSignal.ConfiguredValue);
+            Assert.AreEqual("[1] Applied", brakeSignal.PhysicalValueInput);
+
+            // 2. User unticks override
+            brakeSignal.IsOverridden = false;
+            Assert.AreEqual("[1] Applied", brakeSignal.PhysicalValueInput, "ComboBox selection must stay on [1] Applied");
+
+            // 3. Vehicle transmits "[0] Released" continuously over the gateway
+            for (int i = 0; i < 50; i++)
+            {
+                brakeSignal.UpdateValue(0, 0.0, DateTime.Now);
+            }
+
+            // Assert: ComboBox selection does not flicker, jump, or reset back to [0] Released
+            Assert.AreEqual("[1] Applied", brakeSignal.PhysicalValueInput, "ComboBox selection must NOT reset to Released");
+            Assert.AreEqual(1d, brakeSignal.ConfiguredValue);
+
+            // UI 4 monitor accurately reflects live vehicle status [0] Released
+            Assert.AreEqual("[0] Released", brakeSignal.PhysicalValueDisplay);
+            Assert.AreEqual("● Active", brakeSignal.StatusText);
         }
     }
 }

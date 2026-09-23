@@ -24,6 +24,10 @@ namespace Simulate.ViewModels
         private readonly object _syncLock = new();
 
         private long _previousTotalFrames;
+        private long _previousDroppedFrames;
+        private int _previousErrors;
+        private int _previousWarnings;
+        private int _recentWarningCooldownTicks;
         private DateTime _previousSampleTime;
         private int _accumulatedErrors;
         private int _accumulatedWarnings;
@@ -185,6 +189,15 @@ namespace Simulate.ViewModels
 
             TimeSpan elapsed;
             long deltaFrames;
+            long deltaDroppedFrames;
+            int deltaErrors;
+            int deltaWarnings;
+
+            int errors = _accumulatedErrors;
+            if (lastFailure != null)
+            {
+                errors++;
+            }
 
             lock (_syncLock)
             {
@@ -197,18 +210,49 @@ namespace Simulate.ViewModels
                 deltaFrames = currentTotalFrames - _previousTotalFrames;
                 if (deltaFrames < 0) deltaFrames = 0;
 
+                deltaDroppedFrames = droppedFrames - _previousDroppedFrames;
+                if (deltaDroppedFrames < 0) deltaDroppedFrames = 0;
+
+                deltaErrors = errors - _previousErrors;
+                if (deltaErrors < 0) deltaErrors = 0;
+
+                deltaWarnings = warnings - _previousWarnings;
+                if (deltaWarnings < 0) deltaWarnings = 0;
+
+                if (deltaWarnings > 0)
+                {
+                    _recentWarningCooldownTicks = 3;
+                }
+                else if (_recentWarningCooldownTicks > 0)
+                {
+                    _recentWarningCooldownTicks--;
+                }
+
                 _previousTotalFrames = currentTotalFrames;
+                _previousDroppedFrames = droppedFrames;
+                _previousErrors = errors;
+                _previousWarnings = warnings;
                 _previousSampleTime = now;
             }
 
-            int errors = _accumulatedErrors;
-            if (lastFailure != null)
-            {
-                errors++;
-            }
+            // Sức khỏe động học tức thời (Dynamic Health State):
+            // Khi tải giảm về mức an toàn (< 60%) và không còn cảnh báo mới trong chu kỳ gần nhất,
+            // hệ thống tự động hồi phục về Optimal (Màu Xanh), trong khi số đếm tích lũy vẫn giữ nguyên để thống kê.
+            int activeWarnings = (_recentWarningCooldownTicks > 0 || deltaWarnings > 0) ? 1 : 0;
+            int activeErrors = (lastFailure != null || deltaErrors > 0) ? 1 : 0;
+            long activeDrops = (deltaDroppedFrames > 0) ? deltaDroppedFrames : 0;
 
-            var snapshot = ComputeTelemetrySnapshot(isConnected, isEngineRunning, baudrate, deltaFrames, elapsed, droppedFrames, errors, warnings);
-            ApplySnapshot(snapshot);
+            var snapshot = ComputeTelemetrySnapshot(
+                isConnected,
+                isEngineRunning,
+                baudrate,
+                deltaFrames,
+                elapsed,
+                activeDrops,
+                activeErrors,
+                activeWarnings);
+
+            ApplySnapshot(snapshot, droppedFrames, errors, warnings);
         }
 
         /// <summary>
@@ -340,6 +384,20 @@ namespace Simulate.ViewModels
                 StatusLevel: level);
         }
 
+        private void ApplySnapshot(TelemetrySnapshot snapshot, long cumulativeDrops, int cumulativeErrors, int cumulativeWarnings)
+        {
+            BusLoadDisplay = snapshot.BusLoadDisplay;
+            BusLoadColor = snapshot.BusLoadColor;
+            ErrorCountDisplay = cumulativeErrors.ToString(CultureInfo.InvariantCulture);
+            ErrorColor = cumulativeErrors > 0 ? "#EF4444" : "#F8FAFC";
+            LostCountDisplay = cumulativeDrops.ToString(CultureInfo.InvariantCulture);
+            LostColor = cumulativeDrops > 0 ? "#EF4444" : "#F8FAFC";
+            WarningCountDisplay = cumulativeWarnings.ToString(CultureInfo.InvariantCulture);
+            WarningColor = cumulativeWarnings > 0 ? "#F59E0B" : "#F8FAFC";
+            HealthStrokeColor = snapshot.HealthStrokeColor;
+            HealthStatusText = snapshot.HealthStatusText;
+        }
+
         private void ApplySnapshot(TelemetrySnapshot snapshot)
         {
             BusLoadDisplay = snapshot.BusLoadDisplay;
@@ -362,6 +420,10 @@ namespace Simulate.ViewModels
             lock (_syncLock)
             {
                 _previousTotalFrames = 0;
+                _previousDroppedFrames = 0;
+                _previousErrors = 0;
+                _previousWarnings = 0;
+                _recentWarningCooldownTicks = 0;
                 _previousSampleTime = DateTime.UtcNow;
                 _accumulatedErrors = 0;
                 _accumulatedWarnings = 0;

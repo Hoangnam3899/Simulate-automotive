@@ -1,4 +1,4 @@
-# Handoff — UI-09 Bus Monitor Health & Gateway Queue Overflow Resilience / 2,275 Tests Passing
+# Handoff — UI-06/04/09 Signal Stability, Dual-Channel State & CCU_06 ComboBox Fix / 2,283 Tests Passing
 
 ## Source of truth
 
@@ -10,20 +10,19 @@
 
 - Branch: `chore/merge-agent-skills`.
 - Panels 1–9 đã hoàn thành và đạt `USER_ACCEPTED`.
-- **Khắc phục Triệt Để Lỗi Treo Luồng Nhận (Queue Overflow) & Hiện Tượng Zombie Gateway (2026-09-22)**:
-  * Tầng HAL Session (`VectorCanGatewaySession.cs` & `ICanHardwareDriver.cs`): Xóa bỏ lệnh `throw` khi gặp cờ `QueueOverflow` (CAN FD) hoặc `QueueOverrun` (Classic CAN). Kích hoạt event `FrameLossDetected` và tiếp tục duyệt các frame hợp lệ còn lại trong batch, giữ luồng nhận sống bền bỉ ngay cả dưới tải cực cao (1ms burst traffic từ TSMaster).
-  * Tầng Engine (`SimulationEngine.cs` & `ISimulationEngine.cs`): Lắng nghe `FrameLossDetected` để tăng bộ đếm `DroppedFrames` (`Lost`), và cung cấp event `EngineFaulted` khi có lỗi phần cứng chí mạng.
-  * Tầng Viễn Thám (`BusHealthViewModel.cs` & `MainViewModel.cs`): Bổ sung `isEngineRunning` vào `ComputeTelemetrySnapshot` để ngăn chặn hoàn toàn việc hiển thị xanh khi engine chưa chạy hoặc đã dừng (chuyển sang Standby `#64748B` hoặc Faulted `#EF4444`). Khi có frame loss do overflow, chỉ số `Lost` nhảy số chính xác và chuyển sang Critical `#EF4444`. Tự động ghi log cảnh báo ra UI 8.
-- **UI-09 Realtime Bus Health Monitor (Bảng 9: BUS MONITOR (HEALTH))**:
-  * Tối ưu kiến trúc đổi màu đường viền thông minh (`HealthStrokeColor`) thay vì vẽ sóng động gây giật lag: Xám (`#64748B` - Offline/Standby), Xanh (`#10B981` - Optimal), Vàng (`#F59E0B` - Warning), Đỏ (`#EF4444` - Critical).
-  * Viễn thám chu kỳ 500ms đo lường chính xác Bus Load %, Errors, Lost (Dropped), Warning.
-- **UI-08 User Action Audit & System Diagnostic Log (Bảng 8: LOG / OUTPUT)**:
-  * Vòng đệm 1,000 dòng thread-safe FIFO, lọc theo Level (All, Info, Warning, Error), xuất file và xóa log an toàn.
-- Toàn bộ suite kiểm thử: **2,275 / 2,275 tests PASS (100%)**, biên dịch 0 warning / 0 error.
-- Thư mục dự án tham chiếu `D:\TEST_DEV\...` được bảo vệ an toàn 100%, không bị sửa đổi.
-- Benchmark Test Data: `DBC/VF EBUS6M_PCAN_V2.0.0_20250524.dbc` (61 msgs, 370 signals, Powertrain CAN).
-- Hardware Harness: `Virtual CAN` -> TX: `Virtual Bus 1 - Channel 1`, RX: `Virtual Bus 2 - Channel 1` (500k baudrate, CAN FD).
-- Next Target: Hoàn thiện Bảng 10 (UI-10: Status Overview) hoặc review tổng thể ứng dụng.
+- **Khắc phục Triệt Để Lỗi Nhảy ComboBox `CCU_TMS_OperatingSts` & `CCU_TMS_FaultLevel` (Message `CCU_06`, DBC `VF EBUS6M_PCAN-CCU.dbc`) (2026-09-23)**:
+  * Tách biệt cấu hình khỏi cờ ghi đè (`IsOverridden`): Người dùng chọn ComboBox ở Bảng 6 chỉ cập nhật giá trị cấu hình (`ConfiguredValue`), không tự động ép `IsOverridden = true`. Checkbox Override hoàn toàn do người dùng chủ động điều khiển.
+  * Triệt tiêu Selection Rollback của WPF ComboBox: Loại bỏ việc kích hoạt DataTrigger đổi style ComboBox và các vòng lặp `PropertyChanged` thừa thãi khi chọn dropdown.
+  * Khớp tham chiếu `string` chính xác từ `AvailableValueDescriptions` trong `FormatDisplayValue`.
+  * Khởi tạo `_configuredValue` ngay khi nạp signal từ DBC, ngăn chặn việc fallback về `Value` của xe khi bus frame bay vào.
+- **Khắc phục Lỗi Bảng 9 (Bus Monitor Health) kẹt màu vàng sau tải nặng 1ms (2026-09-23)**:
+  * Tách biệt số liệu thống kê tích lũy (Cumulative Counters) và trạng thái động học tức thời (Dynamic Health State).
+  * Tự động phục hồi màu viền về **Xanh Tối Ưu (`#10B981` - Optimal)** sau khi tải nặng kết thúc mà không phát sinh thêm cảnh báo mới trong cửa sổ cooldown.
+- **Kiến trúc Trạng thái Hai Kênh Độc lập (Clean Dual-Channel State)**:
+  * Kênh Đo lường Live (`Value`): Chỉ cập nhật cho Bảng 4 (`PhysicalValueDisplay`, màu xanh `● Active`).
+  * Kênh Cấu hình Kịch bản (`ConfiguredValue`): Hoàn toàn miễn nhiễm với frame bus, Bảng 6 giữ vững 100% giá trị đã chọn.
+- Toàn bộ suite kiểm thử: **2,283 / 2,283 tests PASS (100%)**, biên dịch `dotnet build` đạt 0 warning / 0 error.
+- UI XAML: **0% thay đổi XAML**, bảo vệ UI tuyệt đối theo `RULE[user_global]`.
 
 ## UI binding contract — source of truth
 

@@ -645,6 +645,10 @@ namespace Simulate.Services
                     }
                 }
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // Cancellation is an expected lifecycle shutdown when stopping the engine or disconnecting.
+            }
             catch (HardwareOperationException exception)
             {
                 CaptureFailure(exception.Failure);

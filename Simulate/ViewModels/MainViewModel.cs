@@ -129,6 +129,17 @@ namespace Simulate.ViewModels
             {
                 _dbcSource = value;
                 _availableValueDescriptions = null;
+                if (!_configuredValue.HasValue)
+                {
+                    if (HasValueDescriptions && _dbcSource != null && _dbcSource.ValueDescriptions.Count > 0)
+                    {
+                        _configuredValue = _dbcSource.ValueDescriptions[0].PhysicalValue;
+                    }
+                    else
+                    {
+                        _configuredValue = Value;
+                    }
+                }
                 OnPropertyChanged(nameof(HasValueDescriptions));
                 OnPropertyChanged(nameof(AvailableValueDescriptions));
                 OnPropertyChanged(nameof(PhysicalValueInput));
@@ -157,27 +168,31 @@ namespace Simulate.ViewModels
             }
         }
 
+        private double? _configuredValue;
+        private bool _isUpdatingFromBus;
+
+        public double ConfiguredValue
+        {
+            get => _configuredValue ?? Value;
+            set
+            {
+                if (!_configuredValue.HasValue || Math.Abs(_configuredValue.Value - value) > 1e-9)
+                {
+                    _configuredValue = value;
+                    if (IsOverridden)
+                    {
+                        Value = value;
+                    }
+                    OnPropertyChanged();
+                    OnPropertyChanged(nameof(PhysicalValueInput));
+                    ValidateRange(value);
+                }
+            }
+        }
+
         public string PhysicalValueInput
         {
-            get
-            {
-                if (HasValueDescriptions && DbcSource != null)
-                {
-                    var desc = DbcSource.ValueDescriptions.FirstOrDefault(d => Math.Abs(d.PhysicalValue - Value) < 1e-6);
-                    if (desc != null)
-                    {
-                        return $"[{desc.RawValue}] {desc.Description}";
-                    }
-                    long raw = Factor != 0 ? (long)Math.Round((Value - Offset) / Factor) : (long)Math.Round(Value);
-                    desc = DbcSource.ValueDescriptions.FirstOrDefault(d => d.RawValue == raw);
-                    if (desc != null)
-                    {
-                        return $"[{desc.RawValue}] {desc.Description}";
-                    }
-                    return $"[{raw}]";
-                }
-                return Value.ToString("0.##", CultureInfo.InvariantCulture);
-            }
+            get => FormatDisplayValue(ConfiguredValue);
             set
             {
                 if (string.IsNullOrWhiteSpace(value)) return;
@@ -192,8 +207,13 @@ namespace Simulate.ViewModels
                         if (long.TryParse(numStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out long rawVal))
                         {
                             var desc = DbcSource.ValueDescriptions.FirstOrDefault(d => d.RawValue == rawVal);
-                            Value = desc != null ? desc.PhysicalValue : (rawVal * Factor + Offset);
-                            IsOverridden = true;
+                            double chosenVal = desc != null ? desc.PhysicalValue : (rawVal * Factor + Offset);
+                            ConfiguredValue = chosenVal;
+                            Value = chosenVal;
+                            if (HasReceivedData && IsOverridden)
+                            {
+                                RefreshOverriddenDisplay();
+                            }
                         }
                     }
                 }
@@ -201,8 +221,12 @@ namespace Simulate.ViewModels
                 {
                     if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double parsed))
                     {
+                        ConfiguredValue = parsed;
                         Value = parsed;
-                        IsOverridden = true;
+                        if (HasReceivedData && IsOverridden)
+                        {
+                            RefreshOverriddenDisplay();
+                        }
                     }
                     else
                     {
@@ -211,7 +235,6 @@ namespace Simulate.ViewModels
                         OnPropertyChanged(nameof(ValidationToolTip));
                     }
                 }
-                OnPropertyChanged(nameof(PhysicalValueInput));
             }
         }
 
@@ -219,8 +242,8 @@ namespace Simulate.ViewModels
             ? $"Giá trị: {Value}"
             : $"⚠️ CẢNH BÁO: Giá trị {Value} vượt dải cho phép [{Min} .. {Max}]!";
 
-        partial void OnMinChanged(double value) => ValidateRange(Value);
-        partial void OnMaxChanged(double value) => ValidateRange(Value);
+        partial void OnMinChanged(double value) => ValidateRange(ConfiguredValue);
+        partial void OnMaxChanged(double value) => ValidateRange(ConfiguredValue);
 
         private void ValidateRange(double val)
         {
@@ -234,15 +257,17 @@ namespace Simulate.ViewModels
             if (HasValueDescriptions && DbcSource != null)
             {
                 var desc = DbcSource.ValueDescriptions.FirstOrDefault(d => Math.Abs(d.PhysicalValue - physical) < 1e-6);
-                if (desc != null)
+                if (desc == null && Factor != 0)
                 {
-                    return $"[{desc.RawValue}] {desc.Description}";
+                    long rawCalc = (long)Math.Round((physical - Offset) / Factor);
+                    desc = DbcSource.ValueDescriptions.FirstOrDefault(d => d.RawValue == rawCalc);
                 }
-                long raw = Factor != 0 ? (long)Math.Round((physical - Offset) / Factor) : (long)Math.Round(physical);
-                desc = DbcSource.ValueDescriptions.FirstOrDefault(d => d.RawValue == raw);
+
                 if (desc != null)
                 {
-                    return $"[{desc.RawValue}] {desc.Description}";
+                    string prefix = $"[{desc.RawValue}] ";
+                    string? match = AvailableValueDescriptions.FirstOrDefault(s => s.StartsWith(prefix, StringComparison.Ordinal));
+                    return match ?? $"[{desc.RawValue}] {desc.Description}";
                 }
             }
 
@@ -255,10 +280,10 @@ namespace Simulate.ViewModels
         {
             if (IsOverridden)
             {
-                PhysicalValueDisplay = FormatDisplayValue(Value);
+                PhysicalValueDisplay = FormatDisplayValue(ConfiguredValue);
                 if (Factor != 0)
                 {
-                    double rawCalc = (Value - Offset) / Factor;
+                    double rawCalc = (ConfiguredValue - Offset) / Factor;
                     RawValue = rawCalc >= 0
                         ? $"0x{(ulong)Math.Round(rawCalc):X}"
                         : $"0x{(long)Math.Round(rawCalc):X}";
@@ -272,45 +297,70 @@ namespace Simulate.ViewModels
         {
             if (value)
             {
+                Value = ConfiguredValue;
                 if (HasReceivedData)
                 {
                     RefreshOverriddenDisplay();
                 }
+                OnPropertyChanged(nameof(PhysicalValueInput));
             }
             else
             {
                 StatusText = HasReceivedData ? "● Active" : "● No Data";
                 StatusColor = HasReceivedData ? "#10B981" : "#64748B";
                 PhysicalValueDisplay = HasReceivedData ? FormatDisplayValue(Value) : "—";
+                if (HasReceivedData && Factor != 0)
+                {
+                    double rawCalc = (Value - Offset) / Factor;
+                    RawValue = rawCalc >= 0
+                        ? $"0x{(ulong)Math.Round(rawCalc):X}"
+                        : $"0x{(long)Math.Round(rawCalc):X}";
+                }
+                OnPropertyChanged(nameof(PhysicalValueInput));
             }
         }
 
         partial void OnValueChanged(double value)
         {
             ValidateRange(value);
-            OnPropertyChanged(nameof(PhysicalValueInput));
-            if (IsOverridden && HasReceivedData)
+            if (!_isUpdatingFromBus)
             {
-                RefreshOverriddenDisplay();
+                _configuredValue = value;
+            }
+            if (IsOverridden)
+            {
+                OnPropertyChanged(nameof(PhysicalValueInput));
+                if (HasReceivedData)
+                {
+                    RefreshOverriddenDisplay();
+                }
             }
         }
 
         public void UpdateValue(ulong raw, double physical, DateTime timestamp)
         {
-            HasReceivedData = true;
-            LastUpdated = timestamp.ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture);
+            _isUpdatingFromBus = true;
+            try
+            {
+                HasReceivedData = true;
+                LastUpdated = timestamp.ToString("HH:mm:ss.fff", CultureInfo.InvariantCulture);
 
-            if (IsOverridden)
-            {
-                RefreshOverriddenDisplay();
+                if (IsOverridden)
+                {
+                    RefreshOverriddenDisplay();
+                }
+                else
+                {
+                    Value = physical;
+                    RawValue = $"0x{raw:X}";
+                    PhysicalValueDisplay = FormatDisplayValue(physical);
+                    StatusText = "● Active";
+                    StatusColor = "#10B981";
+                }
             }
-            else
+            finally
             {
-                Value = physical;
-                RawValue = $"0x{raw:X}";
-                PhysicalValueDisplay = FormatDisplayValue(physical);
-                StatusText = "● Active";
-                StatusColor = "#10B981";
+                _isUpdatingFromBus = false;
             }
         }
 

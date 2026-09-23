@@ -61,11 +61,12 @@ namespace Simulate.Services
         {
             lock (_sync)
             {
-                cancellationToken.ThrowIfCancellationRequested();
                 if (!_channelsAreActive || _cleanupResult is not null)
                 {
                     return null;
                 }
+
+                cancellationToken.ThrowIfCancellationRequested();
 
                 return _api.TransmitClassicCanFrame(
                     _portHandle,
@@ -82,11 +83,12 @@ namespace Simulate.Services
         {
             lock (_sync)
             {
-                cancellationToken.ThrowIfCancellationRequested();
                 if (!_channelsAreActive || _cleanupResult is not null)
                 {
                     return null;
                 }
+
+                cancellationToken.ThrowIfCancellationRequested();
 
                 return _api.ReceiveClassicCanEvents(_portHandle, maximumEventCount);
             }
@@ -99,11 +101,12 @@ namespace Simulate.Services
         {
             lock (_sync)
             {
-                cancellationToken.ThrowIfCancellationRequested();
                 if (!_channelsAreActive || _cleanupResult is not null)
                 {
                     return null;
                 }
+
+                cancellationToken.ThrowIfCancellationRequested();
 
                 VectorCanFdEventFlags flags = frame.Format == CanFrameFormat.FlexibleDataRate
                     ? VectorCanFdEventFlags.FlexibleDataRate
@@ -130,11 +133,12 @@ namespace Simulate.Services
         {
             lock (_sync)
             {
-                cancellationToken.ThrowIfCancellationRequested();
                 if (!_channelsAreActive || _cleanupResult is not null)
                 {
                     return null;
                 }
+
+                cancellationToken.ThrowIfCancellationRequested();
 
                 return _api.ReceiveCanFdEvents(_portHandle, maximumEventCount);
             }
@@ -145,11 +149,12 @@ namespace Simulate.Services
         {
             lock (_sync)
             {
-                cancellationToken.ThrowIfCancellationRequested();
                 if (!_channelsAreActive || _cleanupResult is not null)
                 {
                     return null;
                 }
+
+                cancellationToken.ThrowIfCancellationRequested();
 
                 VectorNativeStatus receiveStatus = _api.FlushReceiveQueue(_portHandle);
                 VectorNativeStatus transmitStatus =
@@ -280,6 +285,11 @@ namespace Simulate.Services
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
+                    if (!_resources.IsActive)
+                    {
+                        yield break;
+                    }
+
                     throw;
                 }
                 catch (Exception exception)
@@ -525,6 +535,11 @@ namespace Simulate.Services
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                 {
+                    if (!_resources.IsActive)
+                    {
+                        yield break;
+                    }
+
                     throw;
                 }
                 catch (Exception exception)

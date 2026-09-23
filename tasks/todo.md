@@ -1662,3 +1662,77 @@ read-only projection; panel 10 không sở hữu hardware, parser hay engine.
     - Thêm 4 bài unit test mới trong `BusHealthThousandTests.cs` khóa chặt các trạng thái Standby, Faulted và FrameLoss.
     - `dotnet build Simulate.sln`: **0 warning / 0 error**.
     - `dotnet test Simulate.sln`: **2,275 / 2,275 tests PASS (100%)** trong 9 giây.
+
+## Work log — 2026-09-22 (Disconnect Graceful Exit, Panel 6 Signal Stability & UI 9 Dynamic Recovery)
+
+- [x] **Sự cố 1: Khắc phục triệt để `OperationCanceledException` khi nhấn Disconnect**:
+  - **Nguyên nhân**: Lệnh `cancellationToken.ThrowIfCancellationRequested()` được gọi trong `VectorCanGatewaySession.cs` trên background worker thread trong khi session đang dừng; đồng thời `SimulationEngine.RunReceiveLoopAsync` thiếu khối `catch (OperationCanceledException)`, khiến debugger Visual Studio ngắt với `Exception User-Unhandled`.
+  - **Giải pháp**:
+    1. Trong `VectorCanGatewaySession.cs`: Đảo điều kiện kiểm tra channel active/cleanup trước lệnh kiểm tra cancellation token. Khi session đang đóng hoặc đã giải phóng, trả về `null` thay vì ném exception. Trong `ReceiveClassicAsync` và `ReceiveCanFdAsync`, bắt `OperationCanceledException` khi session không còn active để `yield break` êm thắm.
+    2. Trong `SimulationEngine.cs`: Bổ sung khối `catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)` trong `RunReceiveLoopAsync`, đón bắt sạch sẽ việc dừng luồng đọc mà không để rò rỉ ngoại lệ ra ThreadPool.
+- [x] **Sự cố 2: Khắc phục triệt để lỗi nhảy data simulate tại Bảng 6 (`SIGNAL VALUE CONFIGURATION`)**:
+  - **Nguyên nhân**: Tight coupling giữa Bảng 4 và Bảng 6. Hàm `UpdateValue` nhận stream CAN từ bus và gán trực tiếp `Value = physical`, kích hoạt `OnValueChanged` $\rightarrow$ bắn event `OnPropertyChanged(nameof(PhysicalValueInput))` làm ComboBox và TextBox tại Bảng 6 bị giật/nhảy số liên tục theo simulator.
+  - **Giải pháp**:
+    1. Trong `SignalModel` (`MainViewModel.cs`): Bổ sung `_configuredValue` để bảo vệ giá trị cấu hình draft của Bảng 6.
+    2. `PhysicalValueInput`: Đọc và ghi độc lập vào `_configuredValue`. Khi chưa override, `PhysicalValueInput` giữ nguyên giá trị cấu hình của kỹ sư (hoặc giá trị khởi tạo DBC), không bị frame CAN trên bus đè lên.
+    3. `UpdateValue`: Chỉ cập nhật hiển thị dữ liệu thời gian thực cho Bảng 4 (`PhysicalValueDisplay`, `RawValue`, `StatusText`), tuyệt đối không kích hoạt `PropertyChanged` của `PhysicalValueInput` khi chưa override.
+    4. Khi tick `Override`: Tự động nạp giá trị cấu hình vào `Value` để engine tiêm đè lên bus, Bảng 4 lập tức đổi sang màu đỏ `● Injected`.
+- [x] **Sự cố 3: Khắc phục Bảng 9 (Bus Monitor Health) kẹt màu vàng sau tải nặng 1ms, không hồi phục về xanh**:
+  - **Nguyên nhân**: `_accumulatedWarnings` là bộ đếm tích lũy của toàn bộ phiên làm việc. Khi có tải 1ms làm phát sinh warning (lên đến 152 warnings), điều kiện `else if (busLoad >= 60.0 || warnings > 0)` luôn luôn thỏa mãn kể cả khi tải đã giảm về 0%, khiến đường line bị kẹt cứng ở màu vàng vĩnh viễn.
+  - **Giải pháp**:
+    1. Trong `BusHealthViewModel.cs`: Tách biệt giữa **Số liệu thống kê tích lũy (Cumulative Counters)** và **Sức khỏe động học tức thời (Dynamic Health State)**.
+    2. Theo dõi `deltaWarnings`, `deltaErrors`, `deltaDroppedFrames` và thiết lập cửa sổ hold cooldown (~1.5s).
+    3. Khi tải 1ms kết thúc và không còn warning mới phát sinh, hệ thống tự động phục hồi trạng thái sức khỏe đường line và nhãn trạng thái về **MÀU XANH TỐI ƯU (`#10B981` - `● Optimal`)**.
+    4. Các nhãn thống kê `Warning: 152` và `Lost: 76` vẫn được bảo toàn nguyên vẹn trên giao diện để kỹ sư theo dõi lịch sử.
+- [x] **Unit Tests & Verification**:
+  - Bổ sung 3 bài unit test chuyên sâu trong `Simulate.Tests/SignalValueConfigurationTests.cs`:
+    * `IncomingCanStream_DoesNotCorruptOrJitterPanel6ConfigurationInput`: Xác nhận Bảng 4 nhận frame CAN thật còn Bảng 6 giữ nguyên cấu hình không bị nhảy số.
+    * `BusHealth_DynamicRecovery_WhenBurstLoadFinishes_RecoversToOptimalGreen`: Xác nhận Bảng 9 tự động hồi phục về Xanh sau khi tải 1ms giảm về bình thường, bảo toàn số đếm tích lũy.
+    * `SessionDisconnect_CancelsGracefullyWithoutUnhandledException`: Xác nhận ngắt kết nối sạch sẽ 0 ngoại lệ chưa được xử lý.
+  - `dotnet build Simulate.sln`: **0 warning / 0 error**.
+  - `dotnet test Simulate.sln`: **2,278 / 2,278 tests PASS (100%)** trong 6 giây.
+  - UI XAML: **0% thay đổi layout/styles**, bảo vệ UI tuyệt đối theo `RULE[user_global]`.
+
+## Work log — 2026-09-23 (Clean Dual-Channel State & Gateway Immunity across 100ms, 10ms, 1ms)
+
+- [x] **Khắc phục triệt để lỗi nhảy số Bảng 6 và ảnh hưởng qua Gateway ở các dải tốc độ (100ms, 10ms, 1ms)**:
+  - **Bản chất nguyên nhân cốt lõi**:
+    1. *Sự liên đới giữa Bảng 4 và Bảng 6*: Ngay khi kết nối, Baseline Pass-Through Gateway đã chuyển tiếp các frame từ xe. Hàm `UpdateValue` nhận frame và gán trực tiếp `Value = physical`, làm kích hoạt `PhysicalValueInput.get`.
+    2. *Vòng lặp phản hồi ComboBox Enum (Bảng 6)*: ComboBox binding 2 chiều vào `PhysicalValueInput`. Khi frame của xe đến, `Value` đổi khiến ComboBox bị ép chọn mục tương ứng với giá trị xe, kích hoạt `SelectionChanged` giật ngược lại, làm người dùng không thể chọn hoặc bị nhảy số liên tục.
+    3. *Lệch pha khi tiêm lỗi*: `SimulationViewModel.BuildSimulationPlan()` và `SyncSignalOverrides()` trước đó đọc `s.Value` (giá trị live từ xe) thay vì giá trị cấu hình, khiến Gateway tiêm giá trị của xe sang TX thay vì giá trị tiêm lỗi người dùng mong muốn.
+  - **Giải pháp kiến trúc tối ưu (Clean Dual-Channel State Architecture)**:
+    1. **Tách biệt 2 kênh độc lập trong `SignalModel` (`MainViewModel.cs`)**:
+       - *Kênh Đo lường Live (`Value`)*: Lưu trữ giá trị thực tế từ xe, chỉ cập nhật cho Bảng 4 (`PhysicalValueDisplay`, màu xanh `● Active`). Có cờ bảo vệ `_isUpdatingFromBus` che chắn tuyệt đối, không động chạm đến ô cấu hình.
+       - *Kênh Cấu hình Kịch bản (`ConfiguredValue`)*: Hoàn toàn miễn nhiễm với frame bus. Người dùng thoải mái soạn thảo kịch bản, chọn Enum ComboBox, nhập số trước khi tiêm. Ô Bảng 6 (`PhysicalValueInput`) chỉ binding vào `ConfiguredValue`.
+       - *Bảo toàn cấu hình*: Khi người dùng bỏ tick Override (hoặc bấm Stop), `ConfiguredValue` vẫn lưu giữ nguyên vẹn để kích hoạt lại mà không phải nhập lại.
+    2. **Đồng bộ chuẩn xác xuống Gateway (`SimulationViewModel.cs`)**:
+       - Trong `BuildSimulationPlan()` và `SyncSignalOverrides()`: Đọc chính xác `s.ConfiguredValue` để tiêm sang TX.
+       - Trong `OnSignalItemPropertyChanged`: Chỉ đồng bộ khi `IsOverridden` đổi hoặc khi đang override mà `ConfiguredValue` đổi. Frame bus 1ms về chỉ cập nhật `Value` nên không bao giờ kích hoạt `SyncSignalOverrides` $\implies$ Triệt tiêu 100% Feedback Loop!
+       - Trong `StartInjectionAsync`: Tự động làm mới `signal.Value = signal.ConfiguredValue` và hiển thị đỏ `● Injected` cho các tín hiệu được tiêm.
+    3. **Bảo vệ UI XAML tuyệt đối**:
+       - 0% thay đổi mã XAML trong `MainWindow.xaml`, tuân thủ nghiêm ngặt `RULE[user_global]`.
+  - **Unit Tests & Verification**:
+    - Bổ sung 2 bài kiểm thử tự động chuyên biệt trong `Simulate.Tests/SignalValueConfigurationTests.cs`:
+      * `SignalConfiguration_WhenUntickedAndBusFramesArriveAtHighSpeed_ConfiguredValueRemainsImmune`: Kiểm chứng Bảng 6 giữ vững con số cấu hình kịch bản (4500 rpm) khi nhận dồn dập các frame 1ms/10ms/100ms từ xe (1200 rpm), Bảng 4 hiển thị đúng 1200 rpm xanh; khi kích hoạt tiêm, khôi phục ngay 4500 rpm đỏ.
+      * `ComboBoxConfiguration_WhenBusFramesArrive_EnumSelectionDoesNotReset`: Kiểm chứng lựa chọn Enum trên ComboBox (`[1] Applied`) không bị giật, nhảy số hay reset về `[0] Released` khi các frame của xe liên tục chạy qua gateway.
+    - `dotnet build Simulate.sln`: **0 warning / 0 error**.
+    - `dotnet test Simulate.sln`: **2,280 / 2,280 tests PASS (100%)** trong 6 giây.
+
+- [x] **Xử lý dứt điểm lỗi nhảy ComboBox `CCU_TMS_OperatingSts` và `CCU_TMS_FaultLevel` trên message `CCU_06` (DBC `VF EBUS6M_PCAN-CCU.dbc`)**:
+  - **Nguyên nhân gốc rễ**:
+    1. *Tự ý ép `IsOverridden = true` trong setter `PhysicalValueInput`*: Khi người dùng chọn ComboBox ở Bảng 6 để chuẩn bị cấu hình, setter tự ép `IsOverridden = true`. Điều này làm kích hoạt `DataTrigger` trong XAML thay đổi Style ComboBox (Background, Foreground, BorderBrush, FontWeight) ngay giữa chu trình `SelectionChanged` của WPF, dẫn đến Selection Rollback về item 0 (`[0] OFF`, `[0] No fault`).
+    2. *Re-entrancy và chu kỳ PropertyChanged đa tầng*: Trong một lần chọn ComboBox, `OnPropertyChanged(nameof(PhysicalValueInput))` bị gọi liên tiếp tới 3-4 lần do hiệu ứng domino giữa `ConfiguredValue`, `Value` và `IsOverridden`.
+    3. *String Instance Mismatch*: Chuỗi trả về từ `FormatDisplayValue` được tạo mới bằng nội suy xâu (`$"[{desc.RawValue}] {desc.Description}"`), không trùng khớp tham chiếu với danh sách item nguồn `AvailableValueDescriptions` trong ComboBox `ItemsSource`.
+  - **Giải pháp**:
+    1. *Xóa bỏ ép buộc `IsOverridden = true`*: Trong setter `PhysicalValueInput`, chỉ cập nhật `ConfiguredValue` và đồng bộ `Value` nếu đang trong trạng thái override. Checkbox cột Override hoàn toàn do người dùng làm chủ hoặc tự động bật khi tiêm lỗi kịch bản.
+    2. *Khởi tạo `_configuredValue` chuẩn xác từ DBC*: Trong setter `DbcSource`, khởi tạo ngay `_configuredValue` bằng Enum đầu tiên (PhysicalValue của item 0) hoặc `Value`, ngăn chặn hoàn toàn fallback về `Value` của xe.
+    3. *Khớp tham chiếu chuẩn xác trong `FormatDisplayValue`*: Ưu tiên tìm và trả về đúng đối tượng string instance từ `AvailableValueDescriptions` để WPF ComboBox khớp 100% cả tham chiếu lẫn giá trị.
+    4. *Triệt tiêu re-entrancy*: Loại bỏ các lần bắn `OnPropertyChanged` thừa thãi.
+  - **Unit Tests & Verification**:
+    - Bổ sung file kiểm thử chuyên sâu `Simulate.Tests/Ccu06ReproductionTests.cs` kiểm tra cả việc đóng/mở gói bit Motorola, chọn ComboBox đơn lẻ và kết hợp cả 2 ComboBox `CCU_TMS_OperatingSts` (`[3] Autocyclic`) & `CCU_TMS_FaultLevel` (`[2] Level 2`) dưới tải frame xe dồn dập (100ms, 10ms, 1ms).
+    - Cập nhật các bài test trong `SignalValueConfigurationTests.cs`.
+    - `dotnet build Simulate.sln`: **0 warning / 0 error**.
+    - `dotnet test Simulate.sln`: **2,283 / 2,283 tests PASS (100%)**.
+    - UI XAML: **0% thay đổi XAML**, tuyệt đối tuân thủ `RULE[user_global]`.
+
+

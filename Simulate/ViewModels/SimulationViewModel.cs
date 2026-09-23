@@ -413,7 +413,8 @@ namespace Simulate.ViewModels
                 return;
             }
 
-            if (e.PropertyName == nameof(SignalModel.IsOverridden) || (signal.IsOverridden && e.PropertyName == nameof(SignalModel.Value)))
+            if (e.PropertyName == nameof(SignalModel.IsOverridden) 
+                || (signal.IsOverridden && (e.PropertyName == nameof(SignalModel.ConfiguredValue) || e.PropertyName == nameof(SignalModel.Value))))
             {
                 if (ShowOnlyOverridden && e.PropertyName == nameof(SignalModel.IsOverridden))
                 {
@@ -439,7 +440,7 @@ namespace Simulate.ViewModels
 
             var activeOverrides = Signals
                 .Where(s => s.MessageId == messageId && s.IsOverridden)
-                .Select(s => new SignalOverride(s.Name, s.Value))
+                .Select(s => new SignalOverride(s.Name, s.ConfiguredValue))
                 .ToList();
 
             // When injection is actively running, dynamically update the plan so any newly overridden
@@ -1080,7 +1081,8 @@ namespace Simulate.ViewModels
                         .Where(s => (s.MessageId == msg.Id || string.Equals(s.MessageName, msg.Name, StringComparison.OrdinalIgnoreCase)) && s.IsOverridden)
                         .Select(s =>
                         {
-                            double safeVal = (s.Min < s.Max) ? Math.Clamp(s.Value, s.Min, s.Max) : s.Value;
+                            double valToInject = s.ConfiguredValue;
+                            double safeVal = (s.Min < s.Max) ? Math.Clamp(valToInject, s.Min, s.Max) : valToInject;
                             return new SignalOverride(s.Name, safeVal);
                         })
                         .ToList();
@@ -1334,6 +1336,7 @@ namespace Simulate.ViewModels
 
                 foreach (var signal in Signals.Where(s => s.IsOverridden))
                 {
+                    signal.Value = signal.ConfiguredValue;
                     signal.RefreshOverriddenDisplay();
                 }
 
