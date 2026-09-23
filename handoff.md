@@ -1,4 +1,4 @@
-# Handoff — UI-06/04/09 Signal Stability, Dual-Channel State & CCU_06 ComboBox Fix / 2,283 Tests Passing
+# Handoff — UI Live Telemetry & Simulation Control Footer Completed / 2,287 Tests Passing
 
 ## Source of truth
 
@@ -9,20 +9,23 @@
 ## Current repository state
 
 - Branch: `chore/merge-agent-skills`.
-- Panels 1–9 đã hoàn thành và đạt `USER_ACCEPTED`.
-- **Khắc phục Triệt Để Lỗi Nhảy ComboBox `CCU_TMS_OperatingSts` & `CCU_TMS_FaultLevel` (Message `CCU_06`, DBC `VF EBUS6M_PCAN-CCU.dbc`) (2026-09-23)**:
-  * Tách biệt cấu hình khỏi cờ ghi đè (`IsOverridden`): Người dùng chọn ComboBox ở Bảng 6 chỉ cập nhật giá trị cấu hình (`ConfiguredValue`), không tự động ép `IsOverridden = true`. Checkbox Override hoàn toàn do người dùng chủ động điều khiển.
-  * Triệt tiêu Selection Rollback của WPF ComboBox: Loại bỏ việc kích hoạt DataTrigger đổi style ComboBox và các vòng lặp `PropertyChanged` thừa thãi khi chọn dropdown.
-  * Khớp tham chiếu `string` chính xác từ `AvailableValueDescriptions` trong `FormatDisplayValue`.
-  * Khởi tạo `_configuredValue` ngay khi nạp signal từ DBC, ngăn chặn việc fallback về `Value` của xe khi bus frame bay vào.
-- **Khắc phục Lỗi Bảng 9 (Bus Monitor Health) kẹt màu vàng sau tải nặng 1ms (2026-09-23)**:
-  * Tách biệt số liệu thống kê tích lũy (Cumulative Counters) và trạng thái động học tức thời (Dynamic Health State).
-  * Tự động phục hồi màu viền về **Xanh Tối Ưu (`#10B981` - Optimal)** sau khi tải nặng kết thúc mà không phát sinh thêm cảnh báo mới trong cửa sổ cooldown.
-- **Kiến trúc Trạng thái Hai Kênh Độc lập (Clean Dual-Channel State)**:
-  * Kênh Đo lường Live (`Value`): Chỉ cập nhật cho Bảng 4 (`PhysicalValueDisplay`, màu xanh `● Active`).
-  * Kênh Cấu hình Kịch bản (`ConfiguredValue`): Hoàn toàn miễn nhiễm với frame bus, Bảng 6 giữ vững 100% giá trị đã chọn.
-- Toàn bộ suite kiểm thử: **2,283 / 2,283 tests PASS (100%)**, biên dịch `dotnet build` đạt 0 warning / 0 error.
-- UI XAML: **0% thay đổi XAML**, bảo vệ UI tuyệt đối theo `RULE[user_global]`.
+- Panels 1–10: Hoàn thành 100%, giữ nguyên vị trí và kích thước.
+- **Hoàn thành Tính năng Giám sát Viễn thám Trực quan (Live Telemetry & Simulation Control) tại thanh Footer (Row 5) (2026-09-23)**:
+  * **Yêu cầu & Phê duyệt của Người dùng**:
+    - Tham khảo mã nguồn dự án tham chiếu `D:\TEST_DEV\TOOL ĐỌC DTC DID EBUS\V1.5\TreeViews and Value Converters` về thanh `SIMULATION CONTROL` và các chỉ số viễn thám.
+    - Đánh giá mức độ ảnh hưởng: Phân tích 5 nhóm lỗi crash nếu cập nhật UI per-frame (Dispatcher Starvation, GC Stop-the-World, Cross-thread, Torn Read, Render Churn) và đề xuất kiến trúc an toàn tuyệt đối **Throttled Telemetry Sampling 200ms (5 Hz)** với CPU UI < 0.05%, zero-crash. Được người dùng phê duyệt trong artifact `implementation_plan.md`.
+    - Tuân thủ nghiêm ngặt chỉ thị: *"làm nhưng không được thay đổi vị trí các UI chỉ đơn giản là thay thế phần tôi đã bôi đỏ bằng phần mới , áp dụng rule và skill hãy làm điều đó thật cẩn thận"*.
+  * **Tầng ViewModel & Telemetry (`BusHealthViewModel.cs` & `SimulationViewModel.cs`)**:
+    - `BusHealthViewModel`: `TxRateDisplay`, `RxRateDisplay` tính toán thông lượng tức thời ($\Delta Tx / \Delta t$, $\Delta Rx / \Delta t$) qua snapshot delta frame.
+    - `SimulationViewModel`: Bổ sung `SentDisplay`, `RxDisplay`, `InjectedDisplay`, `LatencyDisplay`, `ElapsedDisplay`, `SimulationStatusText`, `SimulationStatusColor`, `SimulationStatusBg`, `SimulationStatusDotColor`, và lệnh `ResetCountersCommand`.
+    - Vòng lặp viễn thám `_statsTimer` (200ms / 5 Hz) an toàn qua Dispatcher.
+    - Gắn lifecycle hooks vào `SimulationViewModel` (`RefreshRuntimeState`, `Dispose`, `DisposeAsync`, `StartInjectionAsync`, `StopGatewayAsync`, và constructors).
+  * **Tầng View (`MainWindow.xaml`)**:
+    - Dòng Footer (Row 5, `Height="28"`) thay thế toàn bộ text tĩnh bằng các badges viễn thám bo góc sống động:
+      * Trái: `● Status Badge` (`STOPPED` / `RUNNING` / `PAUSED`), `⏱ Elapsed` (`hh:mm:ss`), `TX: ...` (xanh lá), `RX: ...` (xanh dương), `INJ: ...` (vàng cam), `LAT: ... µs` (trắng xám), nút `↺ Reset`.
+      * Phải: `Tx: ... msgs/s`, `Rx: ... msgs/s`, `Bus Load: ...%`, `Errors: ...`.
+    - Bảo toàn 100% vị trí, kích thước, cấu trúc của Bảng 1 đến Bảng 10 hiện có.
+  * **Toàn bộ suite kiểm thử**: **2,287 / 2,287 tests PASS (100%)**, biên dịch `dotnet build` đạt **0 warning / 0 error**.
 
 ## UI binding contract — source of truth
 

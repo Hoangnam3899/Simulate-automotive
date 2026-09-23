@@ -78,6 +78,33 @@ namespace Simulate.ViewModels
         private GatewayStatistics _statistics = GatewayStatistics.Empty;
 
         [ObservableProperty]
+        private string _sentDisplay = "0";
+
+        [ObservableProperty]
+        private string _rxDisplay = "0";
+
+        [ObservableProperty]
+        private string _injectedDisplay = "0";
+
+        [ObservableProperty]
+        private string _latencyDisplay = "0 µs";
+
+        [ObservableProperty]
+        private string _elapsedDisplay = "00:00:00";
+
+        [ObservableProperty]
+        private string _simulationStatusText = "STOPPED";
+
+        [ObservableProperty]
+        private string _simulationStatusColor = "#FF6B6B";
+
+        [ObservableProperty]
+        private string _simulationStatusBg = "#2E1A1A";
+
+        [ObservableProperty]
+        private string _simulationStatusDotColor = "#FF3D3D";
+
+        [ObservableProperty]
         private HardwareFailure? _lastFailure;
 
         [ObservableProperty]
@@ -151,6 +178,7 @@ namespace Simulate.ViewModels
                 NotifyExecutionCommands();
             };
             NotifyExecutionCommands();
+            UpdateStatsSnapshot();
         }
 
         /// <summary>
@@ -201,6 +229,8 @@ namespace Simulate.ViewModels
 
             _engine.FrameRouted += OnEngineFrameRouted;
             EnsureLiveFlushTimerStarted();
+            EnsureStatsTimerStarted();
+            UpdateStatsSnapshot();
         }
 
         /// <summary>
@@ -554,6 +584,102 @@ namespace Simulate.ViewModels
         {
             _liveFlushTimer?.Dispose();
             _liveFlushTimer = null;
+        }
+
+        private System.Threading.Timer? _statsTimer;
+        private DateTime? _simulationStartTime;
+
+        public void EnsureStatsTimerStarted()
+        {
+            if (_statsTimer is null)
+            {
+                _statsTimer = new System.Threading.Timer(OnStatsTimerTick, null, 200, 200);
+            }
+        }
+
+        public void StopStatsTimer()
+        {
+            _statsTimer?.Dispose();
+            _statsTimer = null;
+        }
+
+        private void OnStatsTimerTick(object? state)
+        {
+            if (System.Windows.Application.Current?.Dispatcher is { } dispatcher && !dispatcher.CheckAccess())
+            {
+                dispatcher.BeginInvoke(UpdateStatsSnapshot);
+            }
+            else
+            {
+                UpdateStatsSnapshot();
+            }
+        }
+
+        public void UpdateStatsSnapshot()
+        {
+            var engine = _engine;
+            GatewayStatistics stats = engine?.Statistics ?? Statistics;
+            Statistics = stats;
+
+            SentDisplay = stats.TransmittedFrames.ToString("#,##0", CultureInfo.InvariantCulture);
+            RxDisplay = stats.ReceivedFrames.ToString("#,##0", CultureInfo.InvariantCulture);
+            InjectedDisplay = stats.InjectedFrames.ToString("#,##0", CultureInfo.InvariantCulture);
+
+            if (stats.LastRoutingLatency.HasValue && stats.LastRoutingLatency.Value >= TimeSpan.Zero)
+            {
+                long latencyUs = stats.LastRoutingLatency.Value.Ticks / 10;
+                LatencyDisplay = $"{latencyUs} µs";
+            }
+            else
+            {
+                LatencyDisplay = "0 µs";
+            }
+
+            if (QueueStatusText is "Running" or "Paused" || IsRunning || (engine is not null && engine.IsRunning))
+            {
+                _simulationStartTime ??= DateTime.UtcNow;
+                TimeSpan elapsed = DateTime.UtcNow - _simulationStartTime.Value;
+                if (elapsed < TimeSpan.Zero) elapsed = TimeSpan.Zero;
+                ElapsedDisplay = elapsed.ToString(@"hh\:mm\:ss", CultureInfo.InvariantCulture);
+            }
+            else
+            {
+                _simulationStartTime = null;
+                ElapsedDisplay = "00:00:00";
+            }
+
+            if (QueueStatusText == "Running" || (engine is not null && engine.IsRunning))
+            {
+                SimulationStatusText = "RUNNING";
+                SimulationStatusColor = "#10B981";
+                SimulationStatusBg = "#064E3B";
+                SimulationStatusDotColor = "#10B981";
+            }
+            else if (QueueStatusText == "Paused")
+            {
+                SimulationStatusText = "PAUSED";
+                SimulationStatusColor = "#F59E0B";
+                SimulationStatusBg = "#451A03";
+                SimulationStatusDotColor = "#F59E0B";
+            }
+            else
+            {
+                SimulationStatusText = "STOPPED";
+                SimulationStatusColor = "#FF6B6B";
+                SimulationStatusBg = "#2E1A1A";
+                SimulationStatusDotColor = "#FF3D3D";
+            }
+        }
+
+        [RelayCommand]
+        public void ResetCounters()
+        {
+            SentDisplay = "0";
+            RxDisplay = "0";
+            InjectedDisplay = "0";
+            LatencyDisplay = "0 µs";
+            ElapsedDisplay = "00:00:00";
+            _simulationStartTime = DateTime.UtcNow;
         }
 
         private void OnLiveFlushTimerTick(object? state)
@@ -928,6 +1054,7 @@ namespace Simulate.ViewModels
                 IsSchedulingPaused = false;
                 Statistics = GatewayStatistics.Empty;
                 LastFailure = null;
+                UpdateStatsSnapshot();
                 return;
             }
 
@@ -936,6 +1063,7 @@ namespace Simulate.ViewModels
             IsSchedulingPaused = _engine.IsSchedulingPaused;
             Statistics = _engine.Statistics;
             LastFailure = _engine.LastFailure;
+            UpdateStatsSnapshot();
         }
 
         /// <summary>
@@ -1230,6 +1358,7 @@ namespace Simulate.ViewModels
                 _engine.FrameRouted += OnEngineFrameRouted;
                 _engine.EngineFaulted += OnEngineFaulted;
                 EnsureLiveFlushTimerStarted();
+                EnsureStatsTimerStarted();
                 await _engine.StartAsync();
             }
             finally
@@ -1313,6 +1442,7 @@ namespace Simulate.ViewModels
                 {
                     _engine.UpdatePlan(plan);
                 }
+                EnsureStatsTimerStarted();
 
                 if (!_engine.IsRunning)
                 {
@@ -1610,6 +1740,7 @@ namespace Simulate.ViewModels
         public void Dispose()
         {
             StopLiveFlushTimer();
+            StopStatsTimer();
             _executionCts?.Cancel();
             _executionCts?.Dispose();
             _executionCts = null;
@@ -1625,6 +1756,7 @@ namespace Simulate.ViewModels
         public async ValueTask DisposeAsync()
         {
             StopLiveFlushTimer();
+            StopStatsTimer();
             _executionCts?.Cancel();
             _executionCts?.Dispose();
             _executionCts = null;

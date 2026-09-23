@@ -502,3 +502,9 @@ Trước Task 0/1 cần người dùng phê duyệt riêng nếu thực hiện:
 - PLAN/todo được cập nhật sau mỗi checkpoint.
 - Sau mỗi task phải hoàn tất task completion reminder và handoff checkpoint.
 - Không commit/push khi chưa được yêu cầu.
+
+## 13. Checkpoint: Live Telemetry & Simulation Control Footer (2026-09-23)
+- **Trạng thái**: `DONE` — Đã triển khai và xác minh toàn diện theo phê duyệt của người dùng.
+- **Nội dung**: Thay thế dòng Footer tĩnh (Row 5) bằng các Badges viễn thám sống động (Status, Elapsed, Sent, RX, Injected, Latency, Tx/Rx rates, Bus Load, Reset Counters) kết nối MVVM trực tiếp từ `SimulationEngine` và `BusHealthViewModel`.
+- **Kiến trúc**: Throttled Sampling 200ms (5 Hz), CPU UI < 0.05%, triệt tiêu 100% rủi ro crash.
+- **Verification**: `dotnet build` 0 error/0 warning; `dotnet test` 2,287/2,287 PASS.

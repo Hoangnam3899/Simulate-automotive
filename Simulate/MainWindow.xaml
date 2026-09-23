@@ -65,7 +65,7 @@
             <RowDefinition Height="1.15*"/>
             <RowDefinition Height="1.5*"/>
             <RowDefinition Height="78"/>
-            <RowDefinition Height="26"/>
+            <RowDefinition Height="28"/>
         </Grid.RowDefinitions>
 
         <Border Grid.Row="0" Background="{StaticResource HeaderBg}" BorderBrush="{StaticResource CardBorder}" BorderThickness="0,0,0,1" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
@@ -300,6 +300,82 @@
             <Border Grid.Column="1" Style="{StaticResource Panel}" Margin="3,0,0,0" Padding="6,4"><Grid><Grid.RowDefinitions><RowDefinition Height="18"/><RowDefinition Height="*"/></Grid.RowDefinitions><TextBlock Text="9. BUS MONITOR (HEALTH)" Style="{StaticResource SectionTitle}" ToolTip="{Binding BusHealth.HealthStatusText}"/><Grid Grid.Row="1" Margin="0,2,0,0"><Grid.RowDefinitions><RowDefinition Height="18"/><RowDefinition Height="22"/></Grid.RowDefinitions><Canvas Margin="4,1"><Line X1="0" Y1="9" X2="580" Y2="9" Stroke="{StaticResource CardBorder}"/><Polyline Points="0,9 25,6 50,8 75,4 100,8 125,10 150,7 175,8 200,4 225,6 250,9 275,8 300,5 325,8 350,10 375,6 400,8 425,4 450,6 475,9 500,7 525,8 550,5" Stroke="{Binding BusHealth.HealthStrokeColor}" StrokeThickness="1.5"/></Canvas><Grid Grid.Row="1"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><StackPanel Orientation="Horizontal" VerticalAlignment="Center"><TextBlock Text="Bus Load: " Style="{StaticResource TinyLabel}"/><TextBlock Text="{Binding BusHealth.BusLoadDisplay}" Foreground="{Binding BusHealth.BusLoadColor}" FontWeight="Bold" FontSize="8.5" ToolTip="{Binding BusHealth.BusLoadToolTip}"/></StackPanel><StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"><TextBlock Text="Errors: " Style="{StaticResource TinyLabel}"/><TextBlock Text="{Binding BusHealth.ErrorCountDisplay}" Foreground="{Binding BusHealth.ErrorColor}" FontSize="8.5" ToolTip="{Binding BusHealth.ErrorToolTip}"/></StackPanel><StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center"><TextBlock Text="Lost: " Style="{StaticResource TinyLabel}"/><TextBlock Text="{Binding BusHealth.LostCountDisplay}" Foreground="{Binding BusHealth.LostColor}" FontSize="8.5" ToolTip="{Binding BusHealth.LostToolTip}"/></StackPanel><StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center"><TextBlock Text="Warning: " Style="{StaticResource TinyLabel}"/><TextBlock Text="{Binding BusHealth.WarningCountDisplay}" Foreground="{Binding BusHealth.WarningColor}" FontWeight="Bold" FontSize="8.5" ToolTip="{Binding BusHealth.WarningToolTip}"/></StackPanel></Grid></Grid></Grid></Border>
         </Grid>
 
-        <Border Grid.Row="5" Background="{StaticResource HeaderBg}" BorderBrush="{StaticResource CardBorder}" BorderThickness="0,1,0,0"><Grid Margin="10,0"><StackPanel Orientation="Horizontal" VerticalAlignment="Center"><TextBlock Text="● Ready" Foreground="{StaticResource AccentGreen}" FontSize="9"/><TextBlock Text="   Tx: 12,345 msgs/s     Rx: 12,312 msgs/s     Errors: 0     Bus Load: 24.7%" Foreground="{StaticResource TextSecondary}" FontSize="8"/></StackPanel><TextBlock Text="Time: 2025-05-20 14:30:31     Session: 00:02:15" Foreground="{StaticResource TextSecondary}" FontSize="8" HorizontalAlignment="Right" VerticalAlignment="Center"/></Grid></Border>
+        <Border Grid.Row="5" Background="{StaticResource HeaderBg}" BorderBrush="{StaticResource CardBorder}" BorderThickness="0,1,0,0">
+            <Grid Margin="8,0">
+                <!-- Left: Telemetry & Status Badges -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left">
+                    <!-- Status Badge -->
+                    <Border Background="{Binding Simulation.SimulationStatusBg}" BorderBrush="{Binding Simulation.SimulationStatusColor}" BorderThickness="1" CornerRadius="3" Padding="5,1" Margin="0,0,5,0">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Ellipse Fill="{Binding Simulation.SimulationStatusDotColor}" Width="6" Height="6" Margin="0,0,4,0"/>
+                            <TextBlock Text="{Binding Simulation.SimulationStatusText}" Foreground="{Binding Simulation.SimulationStatusColor}" FontWeight="Bold" FontSize="8.5"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Elapsed Badge -->
+                    <Border Background="#161B22" BorderBrush="#30363D" BorderThickness="1" CornerRadius="3" Padding="5,1" Margin="0,0,5,0">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="⏱ " Foreground="#8B949E" FontSize="8.5"/>
+                            <TextBlock Text="{Binding Simulation.ElapsedDisplay}" Foreground="#E6EDF3" FontFamily="Consolas" FontWeight="SemiBold" FontSize="8.5"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Sent Frames Badge -->
+                    <Border Background="#0D2818" BorderBrush="#1B5E20" BorderThickness="1" CornerRadius="3" Padding="5,1" Margin="0,0,5,0">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="TX: " Foreground="#81C784" FontSize="8" FontWeight="SemiBold"/>
+                            <TextBlock Text="{Binding Simulation.SentDisplay}" Foreground="#00E676" FontFamily="Consolas" FontWeight="Bold" FontSize="8.5"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- RX Frames Badge -->
+                    <Border Background="#0A192F" BorderBrush="#0D47A1" BorderThickness="1" CornerRadius="3" Padding="5,1" Margin="0,0,5,0">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="RX: " Foreground="#64B5F6" FontSize="8" FontWeight="SemiBold"/>
+                            <TextBlock Text="{Binding Simulation.RxDisplay}" Foreground="#00B0FF" FontFamily="Consolas" FontWeight="Bold" FontSize="8.5"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Injected Frames Badge -->
+                    <Border Background="#2A1B0A" BorderBrush="#B26A00" BorderThickness="1" CornerRadius="3" Padding="5,1" Margin="0,0,5,0">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="INJ: " Foreground="#FFB74D" FontSize="8" FontWeight="SemiBold"/>
+                            <TextBlock Text="{Binding Simulation.InjectedDisplay}" Foreground="#FFB300" FontFamily="Consolas" FontWeight="Bold" FontSize="8.5"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Latency Badge -->
+                    <Border Background="#1A1D24" BorderBrush="#384252" BorderThickness="1" CornerRadius="3" Padding="5,1" Margin="0,0,5,0">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="LAT: " Foreground="#94A3B8" FontSize="8" FontWeight="SemiBold"/>
+                            <TextBlock Text="{Binding Simulation.LatencyDisplay}" Foreground="#E2E8F0" FontFamily="Consolas" FontSize="8.5"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Reset Counters Button -->
+                    <Button Content="↺ Reset" Command="{Binding Simulation.ResetCountersCommand}" Style="{StaticResource TinyButton}" Height="18" FontSize="8" Padding="5,0" Background="#21262D" BorderBrush="#30363D" BorderThickness="1" Foreground="#C9D1D9" Margin="2,0,0,0"/>
+                </StackPanel>
+
+                <!-- Right: Bus Telemetry Metrics -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
+                        <TextBlock Text="Tx: " Foreground="{StaticResource TextMuted}" FontSize="8"/>
+                        <TextBlock Text="{Binding BusHealth.TxRateDisplay}" Foreground="{StaticResource TextSecondary}" FontFamily="Consolas" FontSize="8.5"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
+                        <TextBlock Text="Rx: " Foreground="{StaticResource TextMuted}" FontSize="8"/>
+                        <TextBlock Text="{Binding BusHealth.RxRateDisplay}" Foreground="{StaticResource TextSecondary}" FontFamily="Consolas" FontSize="8.5"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
+                        <TextBlock Text="Bus Load: " Foreground="{StaticResource TextMuted}" FontSize="8"/>
+                        <TextBlock Text="{Binding BusHealth.BusLoadDisplay}" Foreground="{Binding BusHealth.BusLoadColor}" FontFamily="Consolas" FontWeight="Bold" FontSize="8.5"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <TextBlock Text="Errors: " Foreground="{StaticResource TextMuted}" FontSize="8"/>
+                        <TextBlock Text="{Binding BusHealth.ErrorCountDisplay}" Foreground="{Binding BusHealth.ErrorColor}" FontFamily="Consolas" FontSize="8.5"/>
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+        </Border>
     </Grid>
 </Window>

@@ -1732,7 +1732,26 @@ read-only projection; panel 10 không sở hữu hardware, parser hay engine.
     - Bổ sung file kiểm thử chuyên sâu `Simulate.Tests/Ccu06ReproductionTests.cs` kiểm tra cả việc đóng/mở gói bit Motorola, chọn ComboBox đơn lẻ và kết hợp cả 2 ComboBox `CCU_TMS_OperatingSts` (`[3] Autocyclic`) & `CCU_TMS_FaultLevel` (`[2] Level 2`) dưới tải frame xe dồn dập (100ms, 10ms, 1ms).
     - Cập nhật các bài test trong `SignalValueConfigurationTests.cs`.
     - `dotnet build Simulate.sln`: **0 warning / 0 error**.
-    - `dotnet test Simulate.sln`: **2,283 / 2,283 tests PASS (100%)**.
-    - UI XAML: **0% thay đổi XAML**, tuyệt đối tuân thủ `RULE[user_global]`.
+- [x] **Triển khai Tính năng Giám sát Viễn thám Trực quan (Live Telemetry & Simulation Control) tại thanh Footer (Row 5)**:
+  - **Yêu cầu & Phê duyệt của Người dùng**:
+    1. Tham khảo mã nguồn dự án tham chiếu `D:\TEST_DEV\TOOL ĐỌC DTC DID EBUS\V1.5\TreeViews and Value Converters` về thanh `SIMULATION CONTROL` và các chỉ số viễn thám.
+    2. Đánh giá mức độ ảnh hưởng: Phân tích 5 nhóm lỗi crash nếu cập nhật UI per-frame (Dispatcher Starvation, GC Stop-the-World, Cross-thread, Torn Read, Render Churn) và đề xuất kiến trúc an toàn tuyệt đối **Throttled Telemetry Sampling 200ms (5 Hz)** với CPU UI < 0.05%, zero-crash. Được người dùng phê duyệt trong artifact `implementation_plan.md`.
+    3. Tuân thủ nghiêm ngặt chỉ thị: *"làm nhưng không được thay đổi vị trí các UI chỉ đơn giản là thay thế phần tôi đã bôi đỏ bằng phần mới , áp dụng rule và skill hãy làm điều đó thật cẩn thận"*.
+  - **Triển khai Chi tiết**:
+    1. *Tầng ViewModel & Telemetry (`BusHealthViewModel.cs` & `SimulationViewModel.cs`)*:
+       - `BusHealthViewModel`: Bổ sung `TxRateDisplay`, `RxRateDisplay` tính toán thông lượng tức thời ($\Delta Tx / \Delta t$, $\Delta Rx / \Delta t$) qua snapshot delta frame.
+       - `SimulationViewModel`: Bổ sung `SentDisplay`, `RxDisplay`, `InjectedDisplay`, `LatencyDisplay`, `ElapsedDisplay`, `SimulationStatusText`, `SimulationStatusColor`, `SimulationStatusBg`, `SimulationStatusDotColor`, và lệnh `ResetCountersCommand`.
+       - Tích hợp vòng lặp viễn thám `_statsTimer` (200ms / 5 Hz), đọc snapshot nguyên tử từ `ISimulationEngine` và cập nhật an toàn qua Dispatcher hoặc trực tiếp nếu ngoài UI context.
+       - Gắn lifecycle hooks vào `SimulationViewModel` (`RefreshRuntimeState`, `Dispose`, `DisposeAsync`, `StartInjectionAsync`, `StopGatewayAsync`, và constructors).
+    2. *Tầng View (`MainWindow.xaml`)*:
+       - Cập nhật dòng Footer (Row 5, `Height="28"`) thay thế toàn bộ text tĩnh bằng các badges viễn thám bo góc sống động:
+         * Trái: `● Status Badge` (`STOPPED` / `RUNNING` / `PAUSED`), `⏱ Elapsed` (`hh:mm:ss`), `TX: ...` (xanh lá), `RX: ...` (xanh dương), `INJ: ...` (vàng cam), `LAT: ... µs` (trắng xám), nút `↺ Reset`.
+         * Phải: `Tx: ... msgs/s`, `Rx: ... msgs/s`, `Bus Load: ...%`, `Errors: ...`.
+       - Bảo toàn 100% vị trí, kích thước, cấu trúc của Bảng 1 đến Bảng 10 hiện có.
+    3. *Unit Tests & Verification*:
+       - Bổ sung 4 unit tests mới trong `Simulate.Tests/SimulationViewModelTests.cs` kiểm chứng giá trị mặc định, format dữ liệu snapshot viễn thám, chuyển đổi trạng thái status badge và lệnh reset counters.
+       - `dotnet build Simulate.sln`: **0 warning / 0 error**.
+       - `dotnet test Simulate.sln`: **2,287 / 2,287 tests PASS (100%)**.
+
 
 

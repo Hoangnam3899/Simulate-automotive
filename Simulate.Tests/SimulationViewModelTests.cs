@@ -303,6 +303,90 @@ namespace Simulate.Tests
             Assert.IsNull(connection.ActiveGatewaySession);
         }
 
+        [TestMethod]
+        public void Telemetry_displays_initialize_with_default_values()
+        {
+            var viewModel = new SimulationViewModel();
+
+            Assert.AreEqual("0", viewModel.SentDisplay);
+            Assert.AreEqual("0", viewModel.RxDisplay);
+            Assert.AreEqual("0", viewModel.InjectedDisplay);
+            Assert.AreEqual("0 µs", viewModel.LatencyDisplay);
+            Assert.AreEqual("00:00:00", viewModel.ElapsedDisplay);
+            Assert.AreEqual("STOPPED", viewModel.SimulationStatusText);
+            Assert.AreEqual("#FF6B6B", viewModel.SimulationStatusColor);
+        }
+
+        [TestMethod]
+        public void UpdateStatsSnapshot_formats_transmitted_received_injected_and_latency()
+        {
+            DbcDocument document = ParseSingleMessageDocument();
+            var stats = new GatewayStatistics(
+                receivedFrames: 5678,
+                transmittedFrames: 1234,
+                passedFrames: 1200,
+                droppedFrames: 0,
+                injectedFrames: 34,
+                filteredEchoFrames: 0,
+                scheduledFrames: 0,
+                lastRoutingLatency: TimeSpan.FromTicks(1250)); // 125 microseconds
+
+            var engine = new FakeSimulationEngine
+            {
+                IsRunning = true,
+                Statistics = stats
+            };
+
+            var viewModel = new SimulationViewModel(new SimulationPlan(document, []), engine);
+            viewModel.UpdateStatsSnapshot();
+
+            Assert.AreEqual("1,234", viewModel.SentDisplay);
+            Assert.AreEqual("5,678", viewModel.RxDisplay);
+            Assert.AreEqual("34", viewModel.InjectedDisplay);
+            Assert.AreEqual("125 µs", viewModel.LatencyDisplay);
+            Assert.AreEqual("RUNNING", viewModel.SimulationStatusText);
+            Assert.AreEqual("#10B981", viewModel.SimulationStatusColor);
+        }
+
+        [TestMethod]
+        public void ResetCounters_clears_display_counters()
+        {
+            var viewModel = new SimulationViewModel();
+            viewModel.SentDisplay = "999";
+            viewModel.RxDisplay = "888";
+            viewModel.InjectedDisplay = "77";
+            viewModel.LatencyDisplay = "50 µs";
+            viewModel.ElapsedDisplay = "01:23:45";
+
+            viewModel.ResetCounters();
+
+            Assert.AreEqual("0", viewModel.SentDisplay);
+            Assert.AreEqual("0", viewModel.RxDisplay);
+            Assert.AreEqual("0", viewModel.InjectedDisplay);
+            Assert.AreEqual("0 µs", viewModel.LatencyDisplay);
+            Assert.AreEqual("00:00:00", viewModel.ElapsedDisplay);
+        }
+
+        [TestMethod]
+        public void Simulation_status_reflects_paused_and_stopped_states()
+        {
+            DbcDocument document = ParseSingleMessageDocument();
+            var engine = new FakeSimulationEngine { IsRunning = false };
+            var viewModel = new SimulationViewModel(new SimulationPlan(document, []), engine);
+
+            viewModel.QueueStatusText = "Paused";
+            viewModel.UpdateStatsSnapshot();
+
+            Assert.AreEqual("PAUSED", viewModel.SimulationStatusText);
+            Assert.AreEqual("#F59E0B", viewModel.SimulationStatusColor);
+
+            viewModel.QueueStatusText = "Idle";
+            viewModel.UpdateStatsSnapshot();
+
+            Assert.AreEqual("STOPPED", viewModel.SimulationStatusText);
+            Assert.AreEqual("#FF6B6B", viewModel.SimulationStatusColor);
+        }
+
         private static DbcDocument ParseSingleMessageDocument()
         {
             const string documentText = """
@@ -329,7 +413,7 @@ namespace Simulate.Tests
 
             public bool IsSchedulingPaused { get; set; }
 
-            public GatewayStatistics Statistics { get; } = GatewayStatistics.Empty;
+            public GatewayStatistics Statistics { get; set; } = GatewayStatistics.Empty;
 
             public HardwareFailure? LastFailure { get; set; }
 

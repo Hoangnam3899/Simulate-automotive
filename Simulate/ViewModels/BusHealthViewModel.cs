@@ -31,6 +31,8 @@ namespace Simulate.ViewModels
         private DateTime _previousSampleTime;
         private int _accumulatedErrors;
         private int _accumulatedWarnings;
+        private long _previousTxFrames;
+        private long _previousRxFrames;
         private bool _disposed;
 
         [ObservableProperty]
@@ -38,6 +40,12 @@ namespace Simulate.ViewModels
 
         [ObservableProperty]
         private string _busLoadColor = "#64748B";
+
+        [ObservableProperty]
+        private string _txRateDisplay = "0 msgs/s";
+
+        [ObservableProperty]
+        private string _rxRateDisplay = "0 msgs/s";
 
         [ObservableProperty]
         private string _errorCountDisplay = "0";
@@ -180,16 +188,22 @@ namespace Simulate.ViewModels
             DateTime now = DateTime.UtcNow;
             long currentTotalFrames = 0;
             long droppedFrames = 0;
+            long currentTxFrames = 0;
+            long currentRxFrames = 0;
 
             if (stats != null)
             {
                 currentTotalFrames = stats.ReceivedFrames + stats.TransmittedFrames;
                 droppedFrames = stats.DroppedFrames;
+                currentTxFrames = stats.TransmittedFrames;
+                currentRxFrames = stats.ReceivedFrames;
             }
 
             TimeSpan elapsed;
             long deltaFrames;
             long deltaDroppedFrames;
+            long deltaTx;
+            long deltaRx;
             int deltaErrors;
             int deltaWarnings;
 
@@ -213,6 +227,12 @@ namespace Simulate.ViewModels
                 deltaDroppedFrames = droppedFrames - _previousDroppedFrames;
                 if (deltaDroppedFrames < 0) deltaDroppedFrames = 0;
 
+                deltaTx = currentTxFrames - _previousTxFrames;
+                if (deltaTx < 0) deltaTx = 0;
+
+                deltaRx = currentRxFrames - _previousRxFrames;
+                if (deltaRx < 0) deltaRx = 0;
+
                 deltaErrors = errors - _previousErrors;
                 if (deltaErrors < 0) deltaErrors = 0;
 
@@ -230,6 +250,8 @@ namespace Simulate.ViewModels
 
                 _previousTotalFrames = currentTotalFrames;
                 _previousDroppedFrames = droppedFrames;
+                _previousTxFrames = currentTxFrames;
+                _previousRxFrames = currentRxFrames;
                 _previousErrors = errors;
                 _previousWarnings = warnings;
                 _previousSampleTime = now;
@@ -250,7 +272,9 @@ namespace Simulate.ViewModels
                 elapsed,
                 activeDrops,
                 activeErrors,
-                activeWarnings);
+                activeWarnings,
+                deltaTx,
+                deltaRx);
 
             ApplySnapshot(snapshot, droppedFrames, errors, warnings);
         }
@@ -280,6 +304,22 @@ namespace Simulate.ViewModels
             long droppedFrames,
             int errors,
             int warnings)
+            => ComputeTelemetrySnapshot(isConnected, isEngineRunning, baudrate, deltaFrames, elapsed, droppedFrames, errors, warnings, 0, 0);
+
+        /// <summary>
+        /// Thuật toán thuần túy tính toán trạng thái sức khỏe và các chỉ số viễn thám đầy đủ kèm thông lượng TX/RX.
+        /// </summary>
+        public static TelemetrySnapshot ComputeTelemetrySnapshot(
+            bool isConnected,
+            bool isEngineRunning,
+            uint baudrate,
+            long deltaFrames,
+            TimeSpan elapsed,
+            long droppedFrames,
+            int errors,
+            int warnings,
+            long deltaTx,
+            long deltaRx)
         {
             if (!isConnected)
             {
@@ -294,7 +334,9 @@ namespace Simulate.ViewModels
                     WarningColor: warnings > 0 ? "#F59E0B" : "#64748B",
                     HealthStrokeColor: errors > 0 ? "#EF4444" : (warnings > 0 ? "#F59E0B" : "#64748B"),
                     HealthStatusText: errors > 0 ? "● Error" : "● Offline",
-                    StatusLevel: errors > 0 ? HealthStatusLevel.Critical : HealthStatusLevel.Offline);
+                    StatusLevel: errors > 0 ? HealthStatusLevel.Critical : HealthStatusLevel.Offline,
+                    TxRateDisplay: "0 msgs/s",
+                    RxRateDisplay: "0 msgs/s");
             }
 
             if (!isEngineRunning)
@@ -310,7 +352,9 @@ namespace Simulate.ViewModels
                     WarningColor: warnings > 0 ? "#F59E0B" : "#64748B",
                     HealthStrokeColor: errors > 0 ? "#EF4444" : (warnings > 0 ? "#F59E0B" : "#64748B"),
                     HealthStatusText: errors > 0 ? "● Faulted" : "● Standby",
-                    StatusLevel: errors > 0 ? HealthStatusLevel.Critical : HealthStatusLevel.Offline);
+                    StatusLevel: errors > 0 ? HealthStatusLevel.Critical : HealthStatusLevel.Offline,
+                    TxRateDisplay: "0 msgs/s",
+                    RxRateDisplay: "0 msgs/s");
             }
 
             // Tính toán Bus Load (%) với sàn thời gian lấy mẫu an toàn tối thiểu 0.2s
@@ -326,6 +370,11 @@ namespace Simulate.ViewModels
                 if (busLoad > 100.0) busLoad = 100.0;
                 if (busLoad < 0.0) busLoad = 0.0;
             }
+
+            double txRate = seconds > 0 ? (deltaTx / seconds) : 0.0;
+            double rxRate = seconds > 0 ? (deltaRx / seconds) : 0.0;
+            string txRateDisplay = $"{txRate:N0} msgs/s";
+            string rxRateDisplay = $"{rxRate:N0} msgs/s";
 
             // Xác định phân cấp trạng thái sức khỏe
             HealthStatusLevel level;
@@ -381,7 +430,9 @@ namespace Simulate.ViewModels
                 WarningColor: warningColor,
                 HealthStrokeColor: strokeColor,
                 HealthStatusText: statusText,
-                StatusLevel: level);
+                StatusLevel: level,
+                TxRateDisplay: txRateDisplay,
+                RxRateDisplay: rxRateDisplay);
         }
 
         private void ApplySnapshot(TelemetrySnapshot snapshot, long cumulativeDrops, int cumulativeErrors, int cumulativeWarnings)
@@ -396,6 +447,8 @@ namespace Simulate.ViewModels
             WarningColor = cumulativeWarnings > 0 ? "#F59E0B" : "#F8FAFC";
             HealthStrokeColor = snapshot.HealthStrokeColor;
             HealthStatusText = snapshot.HealthStatusText;
+            TxRateDisplay = snapshot.TxRateDisplay;
+            RxRateDisplay = snapshot.RxRateDisplay;
         }
 
         private void ApplySnapshot(TelemetrySnapshot snapshot)
@@ -410,6 +463,8 @@ namespace Simulate.ViewModels
             WarningColor = snapshot.WarningColor;
             HealthStrokeColor = snapshot.HealthStrokeColor;
             HealthStatusText = snapshot.HealthStatusText;
+            TxRateDisplay = snapshot.TxRateDisplay;
+            RxRateDisplay = snapshot.RxRateDisplay;
         }
 
         /// <summary>
@@ -421,6 +476,8 @@ namespace Simulate.ViewModels
             {
                 _previousTotalFrames = 0;
                 _previousDroppedFrames = 0;
+                _previousTxFrames = 0;
+                _previousRxFrames = 0;
                 _previousErrors = 0;
                 _previousWarnings = 0;
                 _recentWarningCooldownTicks = 0;
@@ -469,5 +526,7 @@ namespace Simulate.ViewModels
         string WarningColor,
         string HealthStrokeColor,
         string HealthStatusText,
-        HealthStatusLevel StatusLevel);
+        HealthStatusLevel StatusLevel,
+        string TxRateDisplay = "0 msgs/s",
+        string RxRateDisplay = "0 msgs/s");
 }
