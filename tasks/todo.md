@@ -1753,5 +1753,42 @@ read-only projection; panel 10 không sở hữu hardware, parser hay engine.
        - `dotnet build Simulate.sln`: **0 warning / 0 error**.
        - `dotnet test Simulate.sln`: **2,287 / 2,287 tests PASS (100%)**.
 
+## Work log — 2026-09-24 (UI-10: STATUS OVERVIEW Dynamic MVVM Integration)
 
-
+- [x] **Triển khai Logic Động cho Bảng 10 (`10. STATUS OVERVIEW`)**:
+  - **Yêu cầu & Ranh giới nghiêm ngặt từ Người dùng**:
+    * Triển khai liên kết dữ liệu sống động cho Bảng 10 sau khi logic đã được người dùng phê duyệt.
+    * *Chỉ thị tối cao*: *"UI 10 này không được làm thay đổi bất kì thuộc tính nào của các UI khác"*.
+    * Bảo toàn 100% vị trí, layout, kích thước, styling của Bảng 1 đến Bảng 9 và thanh Footer Row 5. Chỉ thay thế các chuỗi tĩnh (hardcoded dummy text) trong Bảng 10 bằng data binding tới `StatusOverview.*`.
+  - **Triển khai Chi tiết**:
+    1. *Tầng ViewModel (`StatusOverviewViewModel.cs`)*:
+       - Tạo mới `StatusOverviewViewModel` kế thừa `ObservableObject` và `IDisposable`.
+       - Observable Properties:
+         * `ConnectionText`: `"● Connected"` (#10B981) hoặc `"● Disconnected"` (#64748B).
+         * `ConnectionColor`: Brush/Mã màu đồng bộ trạng thái kết nối.
+         * `DriverText`: Hiển thị tên thiết bị phần cứng đang kết nối (`VN1640A Channel 1`, `Virtual CAN...`) hoặc `"None"`. Cắt bớt đuôi bằng `TextTrimming="CharacterEllipsis"` nếu tên dài.
+         * `BusStateText`: `"Active"` (#10B981) khi engine đang chạy, `"Standby"` (#64748B) khi đã kết nối nhưng chưa chạy engine, hoặc `"Off"` (#64748B) khi ngắt kết nối.
+         * `BusStateColor`: Brush tương ứng cho Bus State.
+         * `DbcText`: `"Tên_file.dbc (N msgs)"` hoặc `"None (0 msgs)"` khi chưa nạp DBC.
+         * `BusHealthText`: `"♡ 100%"` (hoặc theo điểm sức khỏe thực tế từ `BusHealthViewModel`) kèm màu `#10B981` (xanh), `#F59E0B` (vàng), hoặc `#EF4444` (đỏ).
+         * `CanFdText`: `"Enabled (2 Mbps)"` hoặc `"Disabled (Classic)"`.
+       - Lắng nghe event từ 4 ViewModels lõi (`ConnectionViewModel`, `DbcManagementViewModel`, `SimulationViewModel`, `BusHealthViewModel`).
+       - Điều hướng cập nhật UI thread an toàn qua Dispatcher khi ở runtime hoặc trực tiếp khi chạy unit test runner.
+       - Hủy đăng ký sự kiện (`Dispose()`) tránh rò rỉ bộ nhớ.
+    2. *Tầng Composition (`MainViewModel.cs`)*:
+       - Khởi tạo `public StatusOverviewViewModel StatusOverview { get; }`.
+       - Tích hợp gọi `StatusOverview.Dispose()` trong khối `ShutdownCoreAsync()`.
+    3. *Tầng View (`MainWindow.xaml`)*:
+       - Giữ nguyên 100% cấu trúc `<Border Grid.Column="2" Style="{StaticResource Panel}" Margin="3,0,0,0">`.
+       - Chỉ chuyển các TextBlock tĩnh sang `{Binding StatusOverview.*}`.
+       - Tuyệt đối không thay đổi bất kỳ ký tự nào của Bảng 1 đến Bảng 9 hay Row 5 Footer.
+    4. *Unit Tests & Verification*:
+       - Tạo mới `Simulate.Tests/StatusOverviewViewModelTests.cs` (6 bài kiểm thử toàn diện):
+         * `DefaultState_ReflectsDisconnectedAndEmptyDbc`: Kiểm tra trạng thái khởi tạo.
+         * `ConnectionStateChange_UpdatesConnectionStatusAndDriver`: Kiểm tra chuyển trạng thái kết nối và driver name.
+         * `EngineStateChange_UpdatesBusStateActiveAndStandby`: Kiểm tra chuyển trạng thái Bus State giữa Active và Standby.
+         * `DbcStateChange_UpdatesDbcTextAndMessageCount`: Kiểm tra cập nhật DBC text và số lượng message.
+         * `CanFdStateChange_UpdatesCanFdText`: Kiểm tra cập nhật định dạng CAN FD / Classic.
+         * `MainViewModel_InitializesAndDisposesStatusOverview`: Kiểm tra vòng đời và tích hợp MainViewModel.
+       - `dotnet build Simulate.sln`: **PASS (0 warning, 0 error)**.
+       - `dotnet test Simulate.sln`: **PASS 100% (2,293 / 2,293 tests)**.

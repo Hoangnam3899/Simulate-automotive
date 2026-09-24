@@ -285,9 +285,8 @@ Không dùng câu chung chung như “tiếp tục UI”; phải ghi tên panel 
 | 5 | Fault Configuration | selected signal, direct fault (Cyclic/One-Shot), sequence queue, conditional Add to Queue | **Terra xhigh** | **Luna high** | `USER_ACCEPTED` |
 | 6 | Signal Value Configuration | physical value/`VAL_` selection, Min/Max validation, message-filtered isolation | **Terra xhigh** | **Sol xhigh** | `USER_ACCEPTED` |
 | 7 | Execution Control | engine/session start-stop-pause lifecycle, injection runner, DBC-independent raw gateway bridge | **Sol ultra** | **Terra xhigh** | `USER_ACCEPTED` |
-| 8 | Log / Output | user action audit & system diagnostic log, filter/clear/export | **Terra high** | **Luna high** | `USER_ACCEPTED` |
-| 9 | Bus Monitor / Health | health indicators & telemetry (load/errors/lost/warn), status line color (Xanh/Vàng/Đỏ/Xám) | **Terra high** | **Luna high** | `WAITING_USER_DEBUG` |
-| 10 | Status Overview | aggregate connection/DBC/engine/health + footer projection | **Terra xhigh** | **Luna high** | `LOCKED_BY_UI-09` |
+| 9 | Bus Monitor / Health | health indicators & telemetry (load/errors/lost/warn), status line color (Xanh/Vàng/Đỏ/Xám) | **Terra high** | **Luna high** | `USER_ACCEPTED` |
+| 10 | Status Overview | aggregate connection/DBC/engine/health + footer projection | **Terra xhigh** | **Luna high** | `WAITING_USER_DEBUG` |
 
 Sau UI-10, **Sol ultra** thực hiện final lifecycle/race review; người dùng vẫn là final runtime gate.
 
@@ -508,3 +507,10 @@ Trước Task 0/1 cần người dùng phê duyệt riêng nếu thực hiện:
 - **Nội dung**: Thay thế dòng Footer tĩnh (Row 5) bằng các Badges viễn thám sống động (Status, Elapsed, Sent, RX, Injected, Latency, Tx/Rx rates, Bus Load, Reset Counters) kết nối MVVM trực tiếp từ `SimulationEngine` và `BusHealthViewModel`.
 - **Kiến trúc**: Throttled Sampling 200ms (5 Hz), CPU UI < 0.05%, triệt tiêu 100% rủi ro crash.
 - **Verification**: `dotnet build` 0 error/0 warning; `dotnet test` 2,287/2,287 PASS.
+
+## 14. Checkpoint: UI-10 Status Overview Dynamic Integration (2026-09-24)
+- **Trạng thái**: `DONE` (chờ User Debug) — Đã triển khai và xác minh toàn diện theo phê duyệt của người dùng.
+- **Nội dung**: Thay thế toàn bộ text tĩnh Bảng 10 bằng data binding động tới `StatusOverview.*` (Connection, Driver, Bus State, DBC, Bus Health, CAN FD).
+- **Bảo vệ UI**: 100% không làm thay đổi bất kỳ thuộc tính hay layout của Bảng 1 đến Bảng 9 và dòng Footer.
+- **Verification**: `dotnet build` 0 error/0 warning; `dotnet test` 2,293/2,293 PASS (100%).
+

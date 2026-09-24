@@ -105,7 +105,37 @@
                 <Grid Grid.Row="2" Margin="0,4,0,6"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><StackPanel><TextBlock Text="Messages" Style="{StaticResource TinyLabel}"/><TextBlock Text="{Binding Dbc.MessageCount}" Foreground="White" FontSize="14" FontWeight="Bold"/></StackPanel><StackPanel Grid.Column="1"><TextBlock Text="Nodes" Style="{StaticResource TinyLabel}"/><TextBlock Text="{Binding Dbc.NodeCount}" Foreground="White" FontSize="14" FontWeight="Bold"/></StackPanel><StackPanel Grid.Column="2"><TextBlock Text="Signals" Style="{StaticResource TinyLabel}"/><TextBlock Text="{Binding Dbc.SignalCount}" Foreground="White" FontSize="14" FontWeight="Bold"/></StackPanel></Grid>
                 <Grid Grid.Row="3"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Button Content="Load DBC" Command="{Binding Dbc.LoadDbcCommand}" IsEnabled="{Binding Dbc.CanLoadDbc}" Style="{StaticResource TinyButton}" Margin="0,0,3,0"/><Button Grid.Column="1" Content="Unload DBC" Command="{Binding Dbc.UnloadDbcCommand}" IsEnabled="{Binding Dbc.CanUnloadDbc}" Style="{StaticResource TinyButton}" Background="Transparent" BorderBrush="{StaticResource CardBorder}" BorderThickness="1" Foreground="{StaticResource TextSecondary}" Margin="3,0,0,0"/></Grid>
             </Grid></Border>
-            <Border Grid.Column="2" Style="{StaticResource Panel}" Margin="3,0,0,0"><Grid><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions><TextBlock Text="10. STATUS OVERVIEW" Style="{StaticResource SectionTitle}"/><Grid Grid.Row="1" Margin="0,7,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><StackPanel><TextBlock Text="Connection" Style="{StaticResource TinyLabel}"/><TextBlock Text="● Connected" Foreground="{StaticResource AccentGreen}" FontSize="9" Margin="0,1,0,6"/><TextBlock Text="Driver" Style="{StaticResource TinyLabel}"/><TextBlock Text="CANoe 17.0" Style="{StaticResource TinyText}" Margin="0,1,0,6"/><TextBlock Text="Bus State" Style="{StaticResource TinyLabel}"/><TextBlock Text="Active" Foreground="{StaticResource AccentGreen}" FontSize="9" FontWeight="Bold"/></StackPanel><StackPanel Grid.Column="1"><TextBlock Text="DBC" Style="{StaticResource TinyLabel}"/><TextBlock Text="Vehicle_Network.dbc (256 msgs)" Style="{StaticResource TinyText}" Margin="0,1,0,6"/><TextBlock Text="Bus Health" Style="{StaticResource TinyLabel}"/><TextBlock Text="♡ 100%" Foreground="{StaticResource AccentGreen}" FontSize="9" Margin="0,1,0,6"/><TextBlock Text="CAN FD" Style="{StaticResource TinyLabel}"/><TextBlock Text="Enabled (2 Mbps)" Style="{StaticResource TinyText}"/></StackPanel></Grid></Grid></Border>
+            <Border Grid.Column="2" Style="{StaticResource Panel}" Margin="3,0,0,0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Text="10. STATUS OVERVIEW" Style="{StaticResource SectionTitle}"/>
+                    <Grid Grid.Row="1" Margin="0,7,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Text="Connection" Style="{StaticResource TinyLabel}"/>
+                            <TextBlock Text="{Binding StatusOverview.ConnectionText}" Foreground="{Binding StatusOverview.ConnectionColor}" FontSize="9" Margin="0,1,0,6"/>
+                            <TextBlock Text="Driver" Style="{StaticResource TinyLabel}"/>
+                            <TextBlock Text="{Binding StatusOverview.DriverText}" Style="{StaticResource TinyText}" Margin="0,1,0,6" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="Bus State" Style="{StaticResource TinyLabel}"/>
+                            <TextBlock Text="{Binding StatusOverview.BusStateText}" Foreground="{Binding StatusOverview.BusStateColor}" FontSize="9" FontWeight="Bold"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1">
+                            <TextBlock Text="DBC" Style="{StaticResource TinyLabel}"/>
+                            <TextBlock Text="{Binding StatusOverview.DbcText}" Style="{StaticResource TinyText}" Margin="0,1,0,6" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="Bus Health" Style="{StaticResource TinyLabel}"/>
+                            <TextBlock Text="{Binding StatusOverview.BusHealthText}" Foreground="{Binding StatusOverview.BusHealthColor}" FontSize="9" Margin="0,1,0,6"/>
+                            <TextBlock Text="CAN FD" Style="{StaticResource TinyLabel}"/>
+                            <TextBlock Text="{Binding StatusOverview.CanFdText}" Style="{StaticResource TinyText}"/>
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+            </Border>
         </Grid>
 
         <!-- Message list and live monitor -->

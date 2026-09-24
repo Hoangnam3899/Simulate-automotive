@@ -411,6 +411,8 @@ namespace Simulate.ViewModels
 
         public BusHealthViewModel BusHealth { get; }
 
+        public StatusOverviewViewModel StatusOverview { get; }
+
         public ObservableCollection<MessageModel> Messages => Simulation.Messages;
         public ObservableCollection<SignalModel> Signals => Simulation.Signals;
         public ObservableCollection<FaultQueueModel> FaultQueue => Simulation.FaultQueue;
@@ -460,6 +462,8 @@ namespace Simulate.ViewModels
                 () => Simulation.CurrentEngine?.Statistics ?? Simulation.Statistics,
                 () => Connection.LastFailure ?? Simulation.CurrentEngine?.LastFailure ?? Simulation.LastFailure,
                 () => 0);
+
+            StatusOverview = new StatusOverviewViewModel(Connection, Dbc, Simulation, BusHealth);
 
             Logging.LogService.LogAdded += (sender, entry) =>
             {
@@ -664,6 +668,7 @@ namespace Simulate.ViewModels
             }
             finally
             {
+                StatusOverview.Dispose();
                 await Connection.ShutdownAsync();
             }
         }

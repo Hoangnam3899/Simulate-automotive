@@ -1,4 +1,4 @@
-# Handoff — UI Live Telemetry & Simulation Control Footer Completed / 2,287 Tests Passing
+# Handoff — UI-10 Status Overview Dynamic Integration Completed / 2,293 Tests Passing
 
 ## Source of truth
 
@@ -9,23 +9,19 @@
 ## Current repository state
 
 - Branch: `chore/merge-agent-skills`.
-- Panels 1–10: Hoàn thành 100%, giữ nguyên vị trí và kích thước.
-- **Hoàn thành Tính năng Giám sát Viễn thám Trực quan (Live Telemetry & Simulation Control) tại thanh Footer (Row 5) (2026-09-23)**:
-  * **Yêu cầu & Phê duyệt của Người dùng**:
-    - Tham khảo mã nguồn dự án tham chiếu `D:\TEST_DEV\TOOL ĐỌC DTC DID EBUS\V1.5\TreeViews and Value Converters` về thanh `SIMULATION CONTROL` và các chỉ số viễn thám.
-    - Đánh giá mức độ ảnh hưởng: Phân tích 5 nhóm lỗi crash nếu cập nhật UI per-frame (Dispatcher Starvation, GC Stop-the-World, Cross-thread, Torn Read, Render Churn) và đề xuất kiến trúc an toàn tuyệt đối **Throttled Telemetry Sampling 200ms (5 Hz)** với CPU UI < 0.05%, zero-crash. Được người dùng phê duyệt trong artifact `implementation_plan.md`.
-    - Tuân thủ nghiêm ngặt chỉ thị: *"làm nhưng không được thay đổi vị trí các UI chỉ đơn giản là thay thế phần tôi đã bôi đỏ bằng phần mới , áp dụng rule và skill hãy làm điều đó thật cẩn thận"*.
-  * **Tầng ViewModel & Telemetry (`BusHealthViewModel.cs` & `SimulationViewModel.cs`)**:
-    - `BusHealthViewModel`: `TxRateDisplay`, `RxRateDisplay` tính toán thông lượng tức thời ($\Delta Tx / \Delta t$, $\Delta Rx / \Delta t$) qua snapshot delta frame.
-    - `SimulationViewModel`: Bổ sung `SentDisplay`, `RxDisplay`, `InjectedDisplay`, `LatencyDisplay`, `ElapsedDisplay`, `SimulationStatusText`, `SimulationStatusColor`, `SimulationStatusBg`, `SimulationStatusDotColor`, và lệnh `ResetCountersCommand`.
-    - Vòng lặp viễn thám `_statsTimer` (200ms / 5 Hz) an toàn qua Dispatcher.
-    - Gắn lifecycle hooks vào `SimulationViewModel` (`RefreshRuntimeState`, `Dispose`, `DisposeAsync`, `StartInjectionAsync`, `StopGatewayAsync`, và constructors).
+- Panels 1–10: Hoàn thành 100%, giữ nguyên vị trí, kích thước và thuộc tính của các UI khác.
+- **Hoàn thành Triển khai Logic Động cho Bảng 10 (`10. STATUS OVERVIEW`) (2026-09-24)**:
+  * **Yêu cầu & Ranh giới nghiêm ngặt từ Người dùng**:
+    - Thay thế dummy text tĩnh trong Bảng 10 bằng data binding tới `StatusOverview.*`.
+    - Bảo toàn 100% không thay đổi bất kỳ thuộc tính nào của các UI khác (Bảng 1 đến Bảng 9 và Footer Row 5).
+  * **Tầng ViewModel (`StatusOverviewViewModel.cs`)**:
+    - Quản lý và tổng hợp 6 trường trạng thái: `ConnectionText/Color`, `DriverText`, `BusStateText/Color`, `DbcText`, `BusHealthText/Color`, `CanFdText`.
+    - Lắng nghe event thay đổi từ 4 ViewModels cốt lõi (`ConnectionViewModel`, `DbcManagementViewModel`, `SimulationViewModel`, `BusHealthViewModel`).
+    - Điều hướng cập nhật Dispatcher an toàn, triển khai `IDisposable` chống rò rỉ bộ nhớ.
   * **Tầng View (`MainWindow.xaml`)**:
-    - Dòng Footer (Row 5, `Height="28"`) thay thế toàn bộ text tĩnh bằng các badges viễn thám bo góc sống động:
-      * Trái: `● Status Badge` (`STOPPED` / `RUNNING` / `PAUSED`), `⏱ Elapsed` (`hh:mm:ss`), `TX: ...` (xanh lá), `RX: ...` (xanh dương), `INJ: ...` (vàng cam), `LAT: ... µs` (trắng xám), nút `↺ Reset`.
-      * Phải: `Tx: ... msgs/s`, `Rx: ... msgs/s`, `Bus Load: ...%`, `Errors: ...`.
-    - Bảo toàn 100% vị trí, kích thước, cấu trúc của Bảng 1 đến Bảng 10 hiện có.
-  * **Toàn bộ suite kiểm thử**: **2,287 / 2,287 tests PASS (100%)**, biên dịch `dotnet build` đạt **0 warning / 0 error**.
+    - Chỉ đổi text tĩnh Bảng 10 sang `{Binding StatusOverview.*}` với `TextTrimming="CharacterEllipsis"`.
+  * **Toàn bộ suite kiểm thử**: **2,293 / 2,293 tests PASS (100%)**, biên dịch `dotnet build` đạt **0 warning / 0 error**.
+
 
 ## UI binding contract — source of truth
 
