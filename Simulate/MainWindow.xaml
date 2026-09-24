@@ -157,7 +157,13 @@
                         <RowDefinition Height="26"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
-                    <TextBlock Text="6. SIGNAL VALUE CONFIGURATION" Style="{StaticResource SectionTitle}"/>
+                    <Grid Grid.Row="0">
+                        <TextBlock Text="6. SIGNAL VALUE CONFIGURATION" Style="{StaticResource SectionTitle}" HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Simulation.SelectedSignalE2eText}" Foreground="{Binding Simulation.SelectedSignalE2eColor}" FontSize="8" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0" ToolTip="Trạng thái bảo vệ End-to-End (CRC8 + Alive Counter) của Message chứa tín hiệu này"/>
+                            <CheckBox Content="E2E Protection" IsChecked="{Binding Simulation.IsSelectedSignalE2eChecked, Mode=TwoWay}" IsEnabled="{Binding Simulation.CanToggleSelectedSignalE2e}" Foreground="White" FontSize="8" VerticalAlignment="Center" ToolTip="Bật/Tắt bảo vệ E2E cho Message này. Nếu DBC không tự nhận diện được, hệ thống sẽ dùng cấu hình chuẩn dự phòng."/>
+                        </StackPanel>
+                    </Grid>
                     <Grid Grid.Row="1" Margin="0,2,0,4">
                         <TextBox Text="{Binding Simulation.SignalValueSearchText, UpdateSourceTrigger=PropertyChanged}" FontSize="9.5" Height="22" Width="170" HorizontalAlignment="Left" ToolTip="Tìm kiếm tín hiệu theo tên hoặc message"/>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">

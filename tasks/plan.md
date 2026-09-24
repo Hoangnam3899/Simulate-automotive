@@ -514,3 +514,18 @@ Trước Task 0/1 cần người dùng phê duyệt riêng nếu thực hiện:
 - **Bảo vệ UI**: 100% không làm thay đổi bất kỳ thuộc tính hay layout của Bảng 1 đến Bảng 9 và dòng Footer.
 - **Verification**: `dotnet build` 0 error/0 warning; `dotnet test` 2,293/2,293 PASS (100%).
 
+## 15. Checkpoint: E2E Auto-Detection & UI-6 Indicator & Manual Fallback (2026-09-24)
+- **Trạng thái**: `DONE` (chờ User Review / Debug) — Đã triển khai và xác minh toàn diện theo yêu cầu người dùng.
+- **Nội dung**:
+  1. Tự động nhận diện cấu hình E2E (CRC8 + Alive Counter) cho từng Message từ ma trận DBC (`DbcE2eDetector.cs`).
+  2. Hiển thị nhãn trạng thái E2E động ở đầu khung Bảng 6 (`6. SIGNAL VALUE CONFIGURATION`) khi chọn signal:
+     - `● E2E: Active (Auto CRC8)` (màu xanh lá `#10B981`)
+     - `● E2E: Active (Manual)` (màu xanh ngọc `#06B6D4`)
+     - `○ E2E: Inactive` (màu xám `#64748B`)
+  3. Bổ sung CheckBox `E2E Protection` cho phép người dùng chủ động bật/tắt (manual fallback chuẩn: Byte 0 CRC, Byte 1 Counter) phòng trường hợp DBC không nhận diện được signal E2E hoặc kiểm thử phản ứng của ECU khi nhận frame Checksum lỗi.
+  4. Đồng bộ cấu hình E2E thời gian thực xuống simulation engine gateway `_engine.UpdatePlan(BuildSimulationPlan())`.
+- **Bảo vệ UI**: Tận dụng khoảng trống tiêu đề Bảng 6 (Row 0), giữ nguyên 100% layout, kích thước của Bảng 1–5, Bảng 7–10 và Footer.
+- **Verification**:
+  - `dotnet build`: 0 warning / 0 error.
+  - `dotnet test`: 2,300 / 2,300 tests PASS (100%).
+

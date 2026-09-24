@@ -1792,3 +1792,31 @@ read-only projection; panel 10 khÃ´ng sá»Ÿ há»¯u hardware, parser hay engine.
          * `MainViewModel_InitializesAndDisposesStatusOverview`: Kiá»ƒm tra vÃ²ng Ä‘á»i vÃ  tÃ­ch há»£p MainViewModel.
        - `dotnet build Simulate.sln`: **PASS (0 warning, 0 error)**.
        - `dotnet test Simulate.sln`: **PASS 100% (2,293 / 2,293 tests)**.
+
+## Work log — 2026-09-24 (E2E Auto-Detection, Status Badge & Manual Fallback CheckBox in Panel 6)
+
+- [x] **Tri?n khai Tính nang T? d?ng Nh?n di?n E2E t? DBC, Nhãn Tr?ng thái & CheckBox Can thi?p Th? công t?i B?ng 6**:
+  - **Yêu c?u & Ranh gi?i t? Ngu?i dùng**:
+    * Ğ?nh hu?ng 1: T? d?ng phát hi?n c?u hình E2E (CRC8 + Alive Counter) cho t?ng Message t? DBC.
+    * Khi ngu?i dùng ch?n b?t k? tín hi?u nào ? B?ng 6: Hi?n th? ch? nh? ? d?u khung UI 6 cho bi?t Message dó dã kích ho?t E2E hay chua.
+    * Co ch? phòng v? (Defensive Mechanism): Trong tru?ng h?p DBC không nh?n di?n du?c do cách d?t tên d? thu?ng ho?c thi?u signal, cung c?p CheckBox E2E Protection d? ngu?i dùng ch? d?ng tick b?t E2E (áp d?ng c?u hình chu?n d? phòng Fallback: Byte 0 CRC, Byte 1 Counter). Ngu?i dùng cung có th? b? tick d? ki?m th? ph?n ?ng c?a ECU khi Checksum b? l?i.
+    * Ranh gi?i UI: Ch? t?n d?ng kho?ng tr?ng bên ph?i c?a tiêu d? B?ng 6 (Row 0), b?o toàn 100% v? trí, layout, kích thu?c c?a các UI khác.
+  - **Tri?n khai Chi ti?t**:
+    1. *T?ng Service (DbcE2eDetector.cs)*:
+       - T?o m?i DbcE2eDetector: Quét danh sách signals trong DbcMessage nh?n di?n c?p Checksum/CRC và Alive/Counter.
+       - Trích xu?t t? d?ng ChecksumByteIndex, CounterByteIndex, CounterMask (x? lı c? Motorola BigEndian và Intel LittleEndian), CounterMaximumValue (14 ho?c 15), d?i tính CRC (CrcStartByteIndex, CrcEndByteIndex).
+       - Cung c?p phuong th?c CreateStandardFallback(payloadLength, isEnabled) t?o c?u hình d? phòng chu?n khi ngu?i dùng b?t th? công.
+    2. *T?ng ViewModel (SimulationViewModel.cs)*:
+       - Qu?n lı tr?ng thái E2E theo Message qua _messageE2eStates mapping (uint CanIdentifier, bool IsExtendedIdentifier).
+       - Observable Properties: SelectedSignalE2eText, SelectedSignalE2eColor, IsSelectedSignalE2eChecked, CanToggleSelectedSignalE2e.
+       - Trong OnSelectedSignalChanged: T? d?ng tra c?u message và c?p nh?t nhãn tr?ng thái (? E2E: Active (Auto CRC8) xanh lá #10B981, ? E2E: Active (Manual) xanh ng?c #06B6D4, ho?c ? E2E: Inactive xám #64748B) cùng tr?ng thái CheckBox.
+       - Trong OnIsSelectedSignalE2eCheckedChanged: C?p nh?t c?u hình E2E c?a message và d?ng b? xu?ng Gateway (_engine.UpdatePlan(BuildSimulationPlan())).
+       - Trong BuildSimulationPlan() và BuildBaselineSimulationPlan(): S? d?ng GetE2eConfiguration(...) thay th? toàn b? các di?m hardcode alse tru?c dây.
+    3. *T?ng View (MainWindow.xaml)*:
+       - T?i Row 0 c?a B?ng 6 (Height="22"), thay th? TextBlock tiêu d? b?ng Grid ch?a tiêu d? bên trái và c?m SelectedSignalE2eText + CheckBox E2E Protection bên ph?i.
+       - Gi? nguyên 100% b? c?c, không ?nh hu?ng d?n b?t k? panel nào khác.
+    4. *Unit Tests & Verification*:
+       - DbcE2eDetectorTests.cs (3 tests): Ki?m ch?ng t? nh?n di?n message có CRC/Counter, message không có E2E, và t?o fallback configuration.
+       - SimulationViewModelE2eTests.cs (4 tests): Ki?m ch?ng t? d?ng b?t E2E và nhãn tr?ng thái, ngu?i dùng b? tick d? t?t, message không có E2E, và ngu?i dùng tick b?t th? công (Manual fallback).
+       - dotnet build Simulate.sln: **PASS (0 warning, 0 error)**.
+       - dotnet test Simulate.sln: **PASS 100% (2,300 / 2,300 tests)**.

@@ -27,6 +27,23 @@ namespace Simulate.ViewModels
         private Func<ICanGatewaySession?>? _sessionProvider;
         private CancellationTokenSource? _executionCts;
 
+        private sealed class MessageE2eState
+        {
+            public bool IsEnabled { get; set; }
+            public bool IsAutoDetected { get; set; }
+            public E2eProtectionConfiguration Configuration { get; set; }
+
+            public MessageE2eState(bool isEnabled, bool isAutoDetected, E2eProtectionConfiguration configuration)
+            {
+                IsEnabled = isEnabled;
+                IsAutoDetected = isAutoDetected;
+                Configuration = configuration;
+            }
+        }
+
+        private readonly Dictionary<(uint CanIdentifier, bool IsExtendedIdentifier), MessageE2eState> _messageE2eStates = new();
+        private bool _isUpdatingE2eSelection;
+
         [ObservableProperty]
         private string _queueStatusText = "Idle";
 
@@ -127,6 +144,18 @@ namespace Simulate.ViewModels
 
         [ObservableProperty]
         private bool _isSignalMonitorPaused;
+
+        [ObservableProperty]
+        private string _selectedSignalE2eText = string.Empty;
+
+        [ObservableProperty]
+        private string _selectedSignalE2eColor = "#64748B";
+
+        [ObservableProperty]
+        private bool _isSelectedSignalE2eChecked;
+
+        [ObservableProperty]
+        private bool _canToggleSelectedSignalE2e;
 
         public ObservableCollection<string> AvailableSignalMessageFilters { get; } = new() { "All Messages" };
 
@@ -300,6 +329,135 @@ namespace Simulate.ViewModels
         partial void OnSelectedSignalChanged(SignalModel? value)
         {
             FaultConfig.SetTargetSignal(value);
+            UpdateSelectedSignalE2eDisplay(value);
+        }
+
+        partial void OnIsSelectedSignalE2eCheckedChanged(bool value)
+        {
+            if (_isUpdatingE2eSelection || SelectedSignal is null)
+            {
+                return;
+            }
+
+            var key = (SelectedSignal.RawIdentifier, SelectedSignal.IsExtendedIdentifier);
+            if (_messageE2eStates.TryGetValue(key, out MessageE2eState? state))
+            {
+                state.IsEnabled = value;
+                if (value && !state.IsAutoDetected)
+                {
+                    DbcMessage? docMsg = _currentDocument?.Messages.FirstOrDefault(m =>
+                        m.Identifier == SelectedSignal.RawIdentifier && m.IsExtendedIdentifier == SelectedSignal.IsExtendedIdentifier);
+                    int payloadLen = docMsg?.PayloadLength ?? 8;
+                    state.Configuration = DbcE2eDetector.CreateStandardFallback(payloadLen, isEnabled: true);
+                }
+            }
+            else
+            {
+                DbcMessage? docMsg = _currentDocument?.Messages.FirstOrDefault(m =>
+                    m.Identifier == SelectedSignal.RawIdentifier && m.IsExtendedIdentifier == SelectedSignal.IsExtendedIdentifier);
+                int payloadLen = docMsg?.PayloadLength ?? 8;
+                state = new MessageE2eState(
+                    isEnabled: value,
+                    isAutoDetected: false,
+                    configuration: DbcE2eDetector.CreateStandardFallback(payloadLen, isEnabled: value));
+                _messageE2eStates[key] = state;
+            }
+
+            UpdateSelectedSignalE2eDisplay(SelectedSignal);
+
+            if (_engine is not null && _currentDocument is not null)
+            {
+                try
+                {
+                    _engine.UpdatePlan(BuildSimulationPlan());
+                }
+                catch
+                {
+                    // Plan update safeguard
+                }
+            }
+        }
+
+        private void UpdateSelectedSignalE2eDisplay(SignalModel? signal)
+        {
+            if (signal is null)
+            {
+                _isUpdatingE2eSelection = true;
+                try
+                {
+                    SelectedSignalE2eText = string.Empty;
+                    SelectedSignalE2eColor = "#64748B";
+                    IsSelectedSignalE2eChecked = false;
+                    CanToggleSelectedSignalE2e = false;
+                }
+                finally
+                {
+                    _isUpdatingE2eSelection = false;
+                }
+                return;
+            }
+
+            CanToggleSelectedSignalE2e = true;
+            var key = (signal.RawIdentifier, signal.IsExtendedIdentifier);
+
+            if (!_messageE2eStates.TryGetValue(key, out MessageE2eState? state))
+            {
+                DbcMessage? docMsg = _currentDocument?.Messages.FirstOrDefault(m =>
+                    m.Identifier == signal.RawIdentifier && m.IsExtendedIdentifier == signal.IsExtendedIdentifier);
+                if (docMsg is not null)
+                {
+                    var (auto, cfg) = DbcE2eDetector.Detect(docMsg);
+                    state = new MessageE2eState(cfg.IsEnabled, auto, cfg);
+                    _messageE2eStates[key] = state;
+                }
+            }
+
+            _isUpdatingE2eSelection = true;
+            try
+            {
+                if (state is not null && state.IsEnabled)
+                {
+                    IsSelectedSignalE2eChecked = true;
+                    if (state.IsAutoDetected)
+                    {
+                        SelectedSignalE2eText = "● E2E: Active (Auto CRC8)";
+                        SelectedSignalE2eColor = "#10B981";
+                    }
+                    else
+                    {
+                        SelectedSignalE2eText = "● E2E: Active (Manual)";
+                        SelectedSignalE2eColor = "#06B6D4";
+                    }
+                }
+                else
+                {
+                    IsSelectedSignalE2eChecked = false;
+                    SelectedSignalE2eText = "○ E2E: Inactive";
+                    SelectedSignalE2eColor = "#64748B";
+                }
+            }
+            finally
+            {
+                _isUpdatingE2eSelection = false;
+            }
+        }
+
+        private E2eProtectionConfiguration GetE2eConfiguration(uint identifier, bool isExtended, DbcMessage? docMsg)
+        {
+            var key = (identifier, isExtended);
+            if (_messageE2eStates.TryGetValue(key, out MessageE2eState? state))
+            {
+                return state.IsEnabled ? state.Configuration : new E2eProtectionConfiguration(false);
+            }
+
+            if (docMsg is not null)
+            {
+                var (auto, cfg) = DbcE2eDetector.Detect(docMsg);
+                _messageE2eStates[key] = new MessageE2eState(cfg.IsEnabled, auto, cfg);
+                return cfg.IsEnabled ? cfg : new E2eProtectionConfiguration(false);
+            }
+
+            return new E2eProtectionConfiguration(false);
         }
 
         partial void OnSignalSearchTextChanged(string value)
@@ -1006,6 +1164,8 @@ namespace Simulate.ViewModels
             Signals.Clear();
             FaultQueue.Clear();
             SelectedMessage = null;
+            _messageE2eStates.Clear();
+            UpdateSelectedSignalE2eDisplay(null);
 
             if (_engine is not null && _engine.IsRunning)
             {
@@ -1029,6 +1189,8 @@ namespace Simulate.ViewModels
             Signals.Clear();
             FaultQueue.Clear();
             SelectedMessage = null;
+            _messageE2eStates.Clear();
+            UpdateSelectedSignalE2eDisplay(null);
 
             if (_engine is not null && _engine.IsRunning)
             {
@@ -1249,7 +1411,7 @@ namespace Simulate.ViewModels
                         sendType,
                         timing,
                         overrides,
-                        new E2eProtectionConfiguration(false)));
+                        GetE2eConfiguration(msg.RawIdentifier, msg.IsExtendedIdentifier, docMsg)));
 
                     messageKeysAdded.Add((msg.RawIdentifier, msg.IsExtendedIdentifier));
                 }
@@ -1297,7 +1459,7 @@ namespace Simulate.ViewModels
                         SimulationSendType.Cyclic,
                         timing,
                         [],
-                        new E2eProtectionConfiguration(false)));
+                        GetE2eConfiguration(msg.RawIdentifier, msg.IsExtendedIdentifier, docMsg)));
 
                     messageKeysAdded.Add((msg.RawIdentifier, msg.IsExtendedIdentifier));
                 }
@@ -1322,7 +1484,7 @@ namespace Simulate.ViewModels
                         SimulationSendType.Cyclic,
                         timing,
                         [],
-                        new E2eProtectionConfiguration(false)));
+                        GetE2eConfiguration(msg.Identifier, msg.IsExtendedIdentifier, msg)));
 
                     messageKeysAdded.Add((msg.Identifier, msg.IsExtendedIdentifier));
                 }
