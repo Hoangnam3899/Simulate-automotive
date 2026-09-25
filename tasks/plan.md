@@ -529,3 +529,67 @@ Trước Task 0/1 cần người dùng phê duyệt riêng nếu thực hiện:
   - `dotnet build`: 0 warning / 0 error.
   - `dotnet test`: 2,300 / 2,300 tests PASS (100%).
 
+## 16. Checkpoint: License Lock Window & License Verification Engine (2026-09-24)
+- **Trạng thái**: `DONE` (chờ User Review / Test) — Đã triển khai và xác minh toàn diện theo yêu cầu người dùng.
+- **Nội dung**:
+  1. Tạo XAML riêng biệt `LicenseLockWindow.xaml` khớp 100% hình ảnh mẫu của người dùng:
+     - Header: Icon ổ khóa đỏ nền hồng bo góc mềm + Tiêu đề 'Ứng dụng đang bị khóa' + Phụ đề + Hình ảnh minh họa hacker nghệ thuật (`license_hacker_art.png`) + Nút đóng ✕.
+     - Card 1: Machine ID + TextBox ReadOnly hiển thị ID + Nút 'Sao chép' (Icon Copy + chữ xanh dương).
+     - Card 2: License Key + TextBox có Icon chìa khóa & Placeholder mờ + Nút 'Dán' + Khung thông báo lỗi (Error Banner đỏ hồng).
+     - Footer: Nút 'Hướng dẫn kích hoạt' (icon ?) + Nút 'Kích hoạt' màu xanh dương phẳng (icon ✓).
+  2. Xây dựng dịch vụ bản quyền `ILicenseService` và `LicenseService`:
+     - Tự động lấy/sinh Machine ID duy nhất cho thiết bị (Registry GUID hoặc UUID).
+     - Thuật toán xác thực License Key (SHA-256 băm kèm Secret Salt hoặc Master Key).
+     - Lưu trữ trạng thái bản quyền an toàn.
+  3. Xây dựng ViewModel `LicenseLockViewModel` với đầy đủ commands: `CopyMachineId`, `PasteLicenseKey`, `Activate`, `OpenGuide`, `Close`.
+  4. Tích hợp trực tiếp vào luồng khởi động ứng dụng (`App.xaml` & `App.xaml.cs`):
+     - Kiểm tra `IsLicensed()` trước khi nạp `MainWindow`.
+     - Nếu chưa kích hoạt: Hiển thị `LicenseLockWindow.ShowDialog()`. Kích hoạt thành công mới nạp `MainWindow`.
+     - Nếu đóng hoặc hủy: Thoát ứng dụng an toàn.
+- **Bảo vệ UI**: Là một Window XAML độc lập, giữ nguyên 100% không làm thay đổi bất kỳ UI nào đã tồn tại trong ứng dụng.
+- **Verification**:
+  - `dotnet build`: 0 warning / 0 error.
+  - `dotnet test`: 2,306 / 2,306 tests PASS (100%).
+
+## 17. Checkpoint: RSA-2048 Asymmetric Signature & License Expiry Engine with Key Manager Integration (2026-09-24)
+- **Trạng thái**: `DONE` — Đã triển khai và xác minh toàn diện theo yêu cầu người dùng.
+- **Nội dung**:
+  1. Nâng cấp hệ thống bản quyền sang mã hóa bất đối xứng **RSA-2048**:
+     - Client (`Simulate`): Chứa **Public Key** dùng để verify chữ ký số (SHA256withRSA) và kiểm tra hạn sử dụng.
+     - Server / Tool (`Key Manager`): Giữ **Private Key** được bảo vệ bằng chữ ký quản trị `Tr@nHo@ngN@m*4`.
+  2. Hỗ trợ khóa bản quyền theo thời hạn linh hoạt: 7 ngày, 30 ngày, 60 ngày, 90 ngày, 180 ngày, 365 ngày (1 năm), Vĩnh viễn (Permanent).
+  3. Tích hợp trực tiếp vào màn hình `SimulateActivationWindow` của công cụ `C:\Users\Hnam\Desktop\Key Manager`:
+     - Bổ sung ô nhập Chữ ký quản trị (Passphrase).
+     - Kiểm tra đúng `Tr@nHo@ngN@m*4` mới cho phép tạo key.
+     - Sinh mã kích hoạt RSA-2048 định dạng `UTK-SM25-{PayloadB64}.{SignatureB64}`.
+  4. Xuất bản toàn bộ ứng dụng `Key Manager` sang `D:\TEST_DEV\Unlock key cac tool tu lam\Unlock ley Simulate\`:
+     - Chạy `dotnet publish -c Release`.
+     - Xuất bản đầy đủ `Key Manager.exe`, DLLs, Assets, Data.
+- **Verification**:
+  - `dotnet build Simulate.sln`: 0 warning / 0 error.
+  - `dotnet test Simulate.sln`: 2,309 / 2,309 tests PASS (100%).
+  - `dotnet test "Key Manager.sln"`: 12 / 12 tests PASS (100%).
+
+
+## 18. Checkpoint: Khắc Phục Lỗi Hiển Thị LicenseLockWindow & Nhúng Tài Nguyên Assembly (2026-09-25)
+- **Trạng thái**: DONE — Đã hoàn tất và kiểm chứng thành công.
+- **Nội dung**:
+  1. Đăng ký Assets\license_hacker_art.png và Assets\splash.png vào <Resource> trong Simulate.csproj để WPF Pack URI đọc được hình ảnh minh họa hacker lúc runtime.
+  2. Cập nhật LicenseLockWindow.xaml: Chuyển Window.Background sang Transparent để loại bỏ dải viền mờ 10px, giúp hiệu ứng bóng đổ DropShadowEffect mềm mại, khớp 100% thiết kế gốc trong Designer.
+- **Verification**:
+  - Trích xuất tài nguyên từ Simulate.dll qua Reflection: ssets/license_hacker_art.png đã hiện diện trong Simulate.g.resources.
+  - dotnet build Simulate.sln: 0 warning / 0 error.
+  - dotnet test Simulate.sln: 2,309 / 2,309 tests PASS (100%).
+
+## 19. Kế Hoạch Chi Tiết: Triển Khai Hệ Thống Đa Ngôn Ngữ (Localization - i18n 5 Ngôn Ngữ)
+- **Mục tiêu**: Hỗ trợ 5 ngôn ngữ (Tiếng Việt, Tiếng Anh, Tiếng Hàn, Tiếng Nhật, Tiếng Trung) chuyển đổi động (Zero-restart Live Switching) qua nút ⚙ (Settings) trên Title Bar, đồng bộ 100% từ giao diện tĩnh, icon tooltip, thông báo lỗi đến trạng thái động mà không ảnh hưởng logic vận hành.
+- **Rào chắn an toàn (Guardrails)**:
+  1. Bảo vệ code logic: Tuyệt đối không thay đổi các giá trị string nội bộ dùng để so sánh (QueueStatusText == "Running"). Áp dụng quy tắc Decoupling State from Display bằng ValueConverters hoặc Display properties.
+  2. Bảo vệ UI: Giữ nguyên toàn bộ cấu trúc Grid, Layout, Dark Theme Styling, chỉ thay thế chuỗi hiển thị tĩnh bằng {DynamicResource Loc_...}.
+  3. Duy trì chất lượng: Build 0 warning / 0 error; 2,309 tests PASS 100%.
+- **Các giai đoạn thực hiện**:
+  - [ ] **Task 19.1**: Xây dựng Core Service & 5 Bộ Từ Điển XAML đầy đủ (ILanguageService, LanguageService, Strings.vi-VN.xaml, Strings.en-US.xaml, Strings.ko-KR.xaml, Strings.ja-JP.xaml, Strings.zh-CN.xaml, Unit Tests).
+  - [ ] **Task 19.2**: Xây dựng bộ StatusToLocalizedTextConverter và tách biệt State vs Display trong ViewModels (QueueStatusText, HealthStatusText, StatusOverview).
+  - [ ] **Task 19.3**: Đồng bộ hóa toàn bộ Icon Tooltips, Thông báo lỗi (Validation Banners), Hộp thoại (SelectMessageWindow, LicenseLockWindow, IMessageDialogService).
+  - [ ] **Task 19.4**: Tích hợp ContextMenu chọn 5 ngôn ngữ vào nút ⚙ trên Title Bar và liên kết {DynamicResource Loc_...} cho 10 bảng điều khiển.
+  - [ ] **Task 19.5**: Verification Gate (Build, Run test suite 2,309 tests, Test chuyển đổi 5 ngôn ngữ, kiểm tra persistence tại %LocalAppData%\Simulate\settings.json).

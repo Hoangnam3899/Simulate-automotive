@@ -1820,3 +1820,67 @@ read-only projection; panel 10 không sở hữu hardware, parser hay engine.
        - SimulationViewModelE2eTests.cs (4 tests): Ki?m ch?ng t? d?ng b?t E2E v� nh�n tr?ng th�i, ngu?i d�ng b? tick d? t?t, message kh�ng c� E2E, v� ngu?i d�ng tick b?t th? c�ng (Manual fallback).
        - dotnet build Simulate.sln: **PASS (0 warning, 0 error)**.
        - dotnet test Simulate.sln: **PASS 100% (2,300 / 2,300 tests)**.
+
+- [x] **Triển khai Cửa Sổ Khóa Bản Quyền (License Lock UI Window & License Service)**:
+  - **Yêu cầu & Ranh giới từ Người dùng**:
+    * Tạo UI mới là một XAML riêng biệt (LicenseLockWindow.xaml) khớp 100% với hình ảnh mẫu của người dùng.
+    * Không làm thay đổi hay ảnh hưởng đến bất kỳ UI nào đã có (MainWindow.xaml, SelectMessageWindow.xaml).
+  - **Triển khai Chi tiết**:
+    1. *Tầng Service (ILicenseService.cs & LicenseService.cs)*:
+       - Cung cấp GetMachineId(): Lấy Machine GUID từ Windows Registry (HKLM\SOFTWARE\Microsoft\Cryptography\MachineGuid) hoặc sinh UUID lưu trữ an toàn.
+       - Cung cấp ValidateLicense(machineId, licenseKey): Kiểm tra tính hợp lệ của license key (hỗ trợ cả Master Key SIMULATE-PRO-AUTOMOTIVE-2026 và thuật toán sinh key SHA256 từ Machine ID).
+       - Quản lý trạng thái bản quyền: IsLicensed(), SaveLicense(), ClearLicense().
+    2. *Tầng ViewModel (LicenseLockViewModel.cs)*:
+       - Thuộc tính MVVM: MachineId, LicenseKey, ErrorMessage, HasError, IsActivated, StatusMessage.
+       - Commands: CopyMachineIdCommand, PasteLicenseKeyCommand, ActivateCommand, OpenGuideCommand, CloseCommand.
+       - Callback RequestClose(bool isSuccess) để tương tác với Window.
+    3. *Tầng View (LicenseLockWindow.xaml & LicenseLockWindow.xaml.cs)*:
+       - Window Style không viền (WindowStyle= None, AllowsTransparency=True, bo góc CornerRadius=14, đổ bóng DropShadowEffect).
+       - Header: Icon ổ khóa đỏ + Tiêu đề 'Ứng dụng đang bị khóa' + Phụ đề + Hình ảnh minh họa hacker nghệ thuật (license_hacker_art.png) + Nút đóng ✕.
+       - Card 1: Machine ID + TextBox ReadOnly hiển thị ID + Nút 'Sao chép'.
+       - Card 2: License Key + TextBox có Icon chìa khóa & Placeholder mờ + Nút 'Dán' + Khung thông báo lỗi (Error Banner đỏ hồng).
+       - Footer: Nút 'Hướng dẫn kích hoạt' (icon ?) + Nút 'Kích hoạt' màu xanh dương (icon ✓).
+    4. *Unit Tests & Verification*:
+       - LicenseLockViewModelTests.cs (6 tests): Kiểm thử sinh key thực tế, nạp Machine ID mặc định, báo lỗi khi để trống hoặc nhập sai key, xóa lỗi khi người dùng gõ lại, và kích hoạt thành công.
+       - dotnet build Simulate.sln: **PASS (0 warning, 0 error)**.
+       - dotnet test Simulate.sln: **PASS 100% (2,306 / 2,306 tests)**.
+  - **Tích hợp Luồng Khởi Động Ứng Dụng (App.xaml & App.xaml.cs)**:
+    * Chuyển StartupUri sang phương thức quản lý OnStartup(StartupEventArgs e) chủ động trong App.xaml.cs.
+    * Áp dụng ShutdownMode.OnExplicitShutdown trong quá trình xác thực License để tránh crash khi dialog đóng.
+    * Khi ứng dụng chưa có bản quyền: Hiển thị LicenseLockWindow.ShowDialog().
+    * Nếu người dùng nhập key hợp lệ: Lưu key và mở MainWindow.Show() với ShutdownMode.OnMainWindowClose.
+    * Nếu người dùng hủy hoặc đóng cửa sổ khóa: Gọi Shutdown() thoát an toàn.
+
+- [x] **Nâng cấp Hệ Thống Bản Quyền: Mã Hóa Bất Đối Xứng RSA-2048, Khóa Theo Thời Hạn & Tích Hợp Key Manager**:
+  - **Yêu cầu từ Người dùng**:
+    * Nhúng hạn sử dụng vào key (7 ngày, 30 ngày, 60 ngày, 90 ngày, 180 ngày, 365 ngày, Vĩnh viễn).
+    * Mã hóa bất đối xứng RSA-2048: Dùng Private Key để ký bên phát hành (Key Manager) và Public Key để xác thực bên ứng dụng (Simulate).
+    * Chữ ký quản trị bảo vệ Private Key: Tr@nHo@ngN@m*4.
+    * Tích hợp vào C:\Users\Hnam\Desktop\Key Manager (màn hình Simulate) và xuất bản sang D:\TEST_DEV\Unlock key cac tool tu lam\Unlock ley Simulate.
+  - **Triển khai Chi tiết**:
+    1. *Tầng Service (Simulate/Services/LicenseService.cs)*:
+       - Nhúng RSA-2048 Public Key tiêu chuẩn SubjectPublicKeyInfo PEM.
+       - Giải mã Payload MID=...;EXP=...;TYP=...;ISS=... và xác thực chữ ký SHA256withRSA.
+       - Kiểm tra thời hạn bản quyền: Nếu quá hạn báo lỗi chi tiết, nếu còn hạn hiển thị số ngày còn lại.
+    2. *Tầng ViewModel (Simulate/ViewModels/LicenseLockViewModel.cs)*:
+       - Hỗ trợ LicenseValidationResult, hiển thị trạng thái hạn dùng và thông báo lỗi tương ứng.
+    3. *Tầng Tool Quản Lý Key (C:\Users\Hnam\Desktop\Key Manager)*:
+       - Cập nhật SimulateActivationWindow.xaml bổ sung trường nhập Chữ ký quản trị (Passphrase).
+       - Cập nhật SimulateActivationWindow.xaml.cs kiểm tra Tr@nHo@ngN@m*4, dùng Private Key RSA-2048 ký payload và xuất ra mã kích hoạt chuẩn UTK-SM25-{PayloadB64}.{SignatureB64}.
+       - Biên dịch thành công 0 warning / 0 error và pass toàn bộ unit tests của Key Manager.
+    4. *Xuất bản Tool sang Thư mục D:*:
+       - Chạy dotnet publish xuất bản toàn bộ file thực thi (Key Manager.exe, DLLs, Assets, Data) sang D:\TEST_DEV\Unlock key cac tool tu lam\Unlock ley Simulate\.
+    5. *Verification*:
+       - dotnet build Simulate.sln: **PASS (0 warning, 0 error)**.
+       - dotnet test Simulate.sln: **PASS 100% (2,309 / 2,309 tests)**.
+       - dotnet test Key Manager.sln: **PASS 100% (12 / 12 tests)**.
+
+- [x] **Khắc Phục Lỗi Hiển Thị Giao Diện Khóa Bản Quyền (LicenseLockWindow UI Fidelity)**:
+  - **Triệu chứng & Nguyên nhân**: File Assets/license_hacker_art.png không được nhúng vào Simulate.g.resources trong Simulate.csproj, dẫn đến ảnh hacker "NO LICENSE NO ACCESS" bị mất lúc runtime thực tế dù vẫn hiện trong VS Designer. Viền Background="#80000000" của Window làm lộ khung đen mờ 10px xung quanh thẻ bo góc.
+  - **Khắc phục**:
+    1. Cập nhật Simulate/Simulate.csproj: Đăng ký <Resource Include="Assets\license_hacker_art.png" /> và splash.png vào assembly resources.
+    2. Cập nhật Simulate/Views/LicenseLockWindow.xaml: Đổi Window.Background sang Transparent để hiệu ứng đổ bóng DropShadowEffect hòa mượt mà vào màn hình.
+  - **Verification**:
+    * Trích xuất tài nguyên Simulate.dll qua PowerShell: Đã xác nhận ssets/license_hacker_art.png hiện diện trong Simulate.g.resources.
+    * dotnet build Simulate.sln: 0 warning, 0 error.
+    * dotnet test Simulate.sln: 2,309 / 2,309 tests PASS (100%).
