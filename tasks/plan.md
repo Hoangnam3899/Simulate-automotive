@@ -597,3 +597,26 @@ Trước Task 0/1 cần người dùng phê duyệt riêng nếu thực hiện:
 - **Verification**:
   - `dotnet build Simulate.sln`: **0 warning, 0 error**.
   - `dotnet test Simulate.sln`: **2,318 / 2,318 tests PASS (100%)**.
+
+## 20. Kế Hoạch Chi Tiết & Triển Khai: Nhúng Video Mở Đầu (Intro Video Splash Screen) & Tối Ưu Menu Ngôn Ngữ (2026-09-25)
+- **Mục tiêu**:
+  1. Khắc phục màu sắc ContextMenu chọn ngôn ngữ tại nút Settings (⚙) bị tối, khó đọc; đồng bộ icon cờ/địa cầu và dấu tích `✓` xanh lục cho ngôn ngữ đang chọn.
+  2. Nhúng video clip mở màn `C:\Users\Hnam\Downloads\clipStart.mp4` vào ứng dụng: khi khởi động sẽ mở cửa sổ video phát hết (hoặc nhấn phím bỏ qua) rồi mới chuyển sang luồng kiểm tra bản quyền / mở giao diện chính. Kích thước vừa phải (720x405 chuẩn 16:9), bo góc 14px mềm mại, không chiếm toàn màn hình, không giật lag.
+- **Rào chắn an toàn (Guardrails)**:
+  1. Bảo vệ code logic & quy tắc startup: Giữ nguyên vẹn quy trình kiểm tra bản quyền RSA-2048 (`LicenseService.IsLicensed()`) và nạp `MainWindow`.
+  2. Xử lý ngoại lệ an toàn: Bọc toàn bộ quá trình phát video và đóng cửa sổ trong `try-catch` để đảm bảo nếu máy tính thiếu codec hoặc video lỗi thì ứng dụng vẫn tiếp tục khởi động bình thường.
+  3. Ranh giới Git: Tuyệt đối không commit hay push khi chưa có lệnh tường minh từ người dùng.
+- **Các bước đã hoàn tất**:
+  - [x] **Task 20.1**: Tối ưu màu sắc ContextMenu nút ⚙ trong `MainWindow.xaml`: Template phẳng nền `#141E30`, viền `#334B73`, bo góc 8px, đổ bóng mềm, triệt tiêu dải trắng icon gutter, chữ trắng sáng `#F8FAFC`, hover xanh lam `#2563EB`, tiêu đề `🌐 Chọn ngôn ngữ / Select Language`, dấu `✓` màu xanh lục `#10B981` cho ngôn ngữ kích hoạt.
+  - [x] **Task 20.2**: Sao chép `clipStart.mp4` vào `Simulate/Assets/clipStart.mp4` và cấu hình trong `Simulate.csproj` dưới dạng `<Content Include="Assets\clipStart.mp4"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>`.
+  - [x] **Task 20.3**: Thiết kế `IntroVideoWindow.xaml` và code-behind `IntroVideoWindow.xaml.cs`:
+    + Kích thước 720x405 px, `WindowStyle="None"`, `AllowsTransparency="True"`, `Background="Transparent"`, `WindowStartupLocation="CenterScreen"`, bo góc 14px, `DropShadowEffect`.
+    + `MediaElement` phát tự động, nút `[ Bỏ qua / Skip (ESC) ]` mờ ở góc dưới phải.
+    + Bắt sự kiện `MediaEnded`, `MediaFailed`, phím tắt `ESC`, `Space`, `Enter` và `DispatcherTimer` an toàn 11s để tự động đóng cửa sổ.
+    + Bọc an toàn `try-catch (InvalidOperationException)` khi gán `DialogResult = true`.
+  - [x] **Task 20.4**: Tích hợp vào `Simulate/App.xaml.cs`: Gọi `new IntroVideoWindow().ShowDialog()` trong `OnStartup` trước khi kiểm tra bản quyền `LicenseService.IsLicensed()`.
+  - [x] **Task 20.5**: Bổ sung Unit Tests trong `Simulate.Tests/IntroVideoTests.cs` (kiểm tra file tồn tại trong build output, kiểm tra khởi tạo và đóng cửa sổ an toàn trên STA thread).
+- **Trạng thái**: DONE — Đã hoàn thành và kiểm chứng thành công.
+- **Verification**:
+  - `dotnet build Simulate.sln`: **0 warning, 0 error**.
+  - `dotnet test Simulate.sln`: **PASS 100% (2,320 / 2,320 tests)**.

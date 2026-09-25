@@ -7,6 +7,7 @@
         Background="{StaticResource BgDark}" WindowStartupLocation="CenterScreen"
         WindowStyle="None" ResizeMode="CanResize">
     <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <Style x:Key="Panel" TargetType="Border">
             <Setter Property="Background" Value="{StaticResource CardBg}"/>
             <Setter Property="BorderBrush" Value="{StaticResource CardBorder}"/>
@@ -79,14 +80,146 @@
                     <Button Content="?" ToolTip="{DynamicResource Loc_Tooltip_Help}" Style="{StaticResource WinBtnStyle}"/>
                     <Button Content="&#x2699;" ToolTip="{DynamicResource Loc_Tooltip_Settings}" Style="{StaticResource WinBtnStyle}" Click="BtnSettings_Click">
                         <Button.ContextMenu>
-                            <ContextMenu Background="{StaticResource CardBg}" BorderBrush="{StaticResource CardBorder}" BorderThickness="1">
-                                <MenuItem Header="{DynamicResource Loc_Lang_MenuTitle}" IsEnabled="False" FontWeight="Bold" Foreground="{StaticResource AccentCyan}"/>
-                                <Separator Background="{StaticResource CardBorder}"/>
-                                <MenuItem Header="🇻🇳  Tiếng Việt (Vietnamese)" Command="{Binding ChangeLanguageCommand}" CommandParameter="Vietnamese"/>
-                                <MenuItem Header="🇬🇧  English (English)" Command="{Binding ChangeLanguageCommand}" CommandParameter="English"/>
-                                <MenuItem Header="🇰🇷  한국어 (Korean)" Command="{Binding ChangeLanguageCommand}" CommandParameter="Korean"/>
-                                <MenuItem Header="🇯🇵  日本語 (Japanese)" Command="{Binding ChangeLanguageCommand}" CommandParameter="Japanese"/>
-                                <MenuItem Header="🇨🇳  简体中文 (Chinese)" Command="{Binding ChangeLanguageCommand}" CommandParameter="Chinese"/>
+                            <ContextMenu BorderThickness="0" Background="Transparent" HasDropShadow="True">
+                                <ContextMenu.Resources>
+                                    <Style TargetType="Separator">
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="Separator">
+                                                    <Border Background="#253550" Height="1" Margin="8,4"/>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                    <Style x:Key="LangMenuItemStyle" TargetType="MenuItem">
+                                        <Setter Property="Foreground" Value="#F8FAFC"/>
+                                        <Setter Property="FontSize" Value="11.5"/>
+                                        <Setter Property="Cursor" Value="Hand"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="MenuItem">
+                                                    <Border x:Name="ItemBorder" Background="Transparent" CornerRadius="5" Padding="10,6" Margin="4,2">
+                                                        <ContentPresenter ContentSource="Header" RecognizesAccessKey="True" VerticalAlignment="Center"/>
+                                                    </Border>
+                                                    <ControlTemplate.Triggers>
+                                                        <Trigger Property="IsHighlighted" Value="True">
+                                                            <Setter TargetName="ItemBorder" Property="Background" Value="#2563EB"/>
+                                                            <Setter Property="Foreground" Value="#FFFFFF"/>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </ContextMenu.Resources>
+                                <ContextMenu.Template>
+                                    <ControlTemplate TargetType="ContextMenu">
+                                        <Border Background="#141E30" BorderBrush="#334B73" BorderThickness="1.5" CornerRadius="8" Padding="4,5" MinWidth="220">
+                                            <Border.Effect>
+                                                <DropShadowEffect Color="#000000" BlurRadius="16" Opacity="0.55" Direction="270" ShadowDepth="4"/>
+                                            </Border.Effect>
+                                            <StackPanel IsItemsHost="True"/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </ContextMenu.Template>
+
+                                <!-- Header Title -->
+                                <MenuItem IsEnabled="False">
+                                    <MenuItem.Style>
+                                        <Style TargetType="MenuItem">
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="MenuItem">
+                                                        <Border Padding="10,6,10,4">
+                                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                                <TextBlock Text="🌐 " FontSize="12" VerticalAlignment="Center"/>
+                                                                <TextBlock Text="{DynamicResource Loc_Lang_MenuTitle}" Foreground="#38BDF8" FontWeight="Bold" FontSize="11" VerticalAlignment="Center"/>
+                                                            </StackPanel>
+                                                        </Border>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </MenuItem.Style>
+                                </MenuItem>
+
+                                <Separator/>
+
+                                <!-- 5 Language Items -->
+                                <MenuItem Style="{StaticResource LangMenuItemStyle}" Command="{Binding ChangeLanguageCommand}" CommandParameter="Vietnamese">
+                                    <MenuItem.Header>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="🇻🇳" FontSize="13" Margin="0,0,9,0" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="Tiếng Việt (Vietnamese)" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="2" Text="✓" Foreground="#10B981" FontWeight="Bold" FontSize="13" Margin="14,0,2,0" VerticalAlignment="Center" Visibility="{Binding IsVietnamese, Converter={StaticResource BoolToVis}}"/>
+                                        </Grid>
+                                    </MenuItem.Header>
+                                </MenuItem>
+
+                                <MenuItem Style="{StaticResource LangMenuItemStyle}" Command="{Binding ChangeLanguageCommand}" CommandParameter="English">
+                                    <MenuItem.Header>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="🇬🇧" FontSize="13" Margin="0,0,9,0" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="English (English)" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="2" Text="✓" Foreground="#10B981" FontWeight="Bold" FontSize="13" Margin="14,0,2,0" VerticalAlignment="Center" Visibility="{Binding IsEnglish, Converter={StaticResource BoolToVis}}"/>
+                                        </Grid>
+                                    </MenuItem.Header>
+                                </MenuItem>
+
+                                <MenuItem Style="{StaticResource LangMenuItemStyle}" Command="{Binding ChangeLanguageCommand}" CommandParameter="Korean">
+                                    <MenuItem.Header>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="🇰🇷" FontSize="13" Margin="0,0,9,0" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="한국어 (Korean)" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="2" Text="✓" Foreground="#10B981" FontWeight="Bold" FontSize="13" Margin="14,0,2,0" VerticalAlignment="Center" Visibility="{Binding IsKorean, Converter={StaticResource BoolToVis}}"/>
+                                        </Grid>
+                                    </MenuItem.Header>
+                                </MenuItem>
+
+                                <MenuItem Style="{StaticResource LangMenuItemStyle}" Command="{Binding ChangeLanguageCommand}" CommandParameter="Japanese">
+                                    <MenuItem.Header>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="🇯🇵" FontSize="13" Margin="0,0,9,0" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="日本語 (Japanese)" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="2" Text="✓" Foreground="#10B981" FontWeight="Bold" FontSize="13" Margin="14,0,2,0" VerticalAlignment="Center" Visibility="{Binding IsJapanese, Converter={StaticResource BoolToVis}}"/>
+                                        </Grid>
+                                    </MenuItem.Header>
+                                </MenuItem>
+
+                                <MenuItem Style="{StaticResource LangMenuItemStyle}" Command="{Binding ChangeLanguageCommand}" CommandParameter="Chinese">
+                                    <MenuItem.Header>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="🇨🇳" FontSize="13" Margin="0,0,9,0" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" Text="简体中文 (Chinese)" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="2" Text="✓" Foreground="#10B981" FontWeight="Bold" FontSize="13" Margin="14,0,2,0" VerticalAlignment="Center" Visibility="{Binding IsChinese, Converter={StaticResource BoolToVis}}"/>
+                                        </Grid>
+                                    </MenuItem.Header>
+                                </MenuItem>
                             </ContextMenu>
                         </Button.ContextMenu>
                     </Button>

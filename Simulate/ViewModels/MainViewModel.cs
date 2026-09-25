@@ -419,6 +419,12 @@ namespace Simulate.ViewModels
 
         public AppLanguage CurrentLanguage => Language.CurrentLanguage;
 
+        public bool IsVietnamese => CurrentLanguage == AppLanguage.Vietnamese;
+        public bool IsEnglish => CurrentLanguage == AppLanguage.English;
+        public bool IsKorean => CurrentLanguage == AppLanguage.Korean;
+        public bool IsJapanese => CurrentLanguage == AppLanguage.Japanese;
+        public bool IsChinese => CurrentLanguage == AppLanguage.Chinese;
+
         [RelayCommand]
         public void ChangeLanguage(string languageName)
         {
@@ -426,6 +432,11 @@ namespace Simulate.ViewModels
             {
                 Language.ChangeLanguage(lang);
                 OnPropertyChanged(nameof(CurrentLanguage));
+                OnPropertyChanged(nameof(IsVietnamese));
+                OnPropertyChanged(nameof(IsEnglish));
+                OnPropertyChanged(nameof(IsKorean));
+                OnPropertyChanged(nameof(IsJapanese));
+                OnPropertyChanged(nameof(IsChinese));
             }
         }
 

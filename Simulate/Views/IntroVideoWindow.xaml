@@ -1,0 +1,90 @@
+<Window x:Class="Simulate.Views.IntroVideoWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="AFI - Initializing"
+        Width="720" Height="405"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        KeyDown="Window_KeyDown"
+        MouseLeftButtonDown="Window_MouseLeftButtonDown">
+
+    <Window.Resources>
+        <!-- Nút Bỏ qua (Skip) phong cách bán trong suốt hiện đại -->
+        <Style x:Key="SkipButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#A60B101D"/>
+            <Setter Property="Foreground" Value="#CBD5E1"/>
+            <Setter Property="BorderBrush" Value="#475569"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="5"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#E61E293B"/>
+                                <Setter TargetName="border" Property="BorderBrush" Value="#38BDF8"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#2563EB"/>
+                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <!-- Khung chính bo góc có đổ bóng nổi khối -->
+    <Border Margin="12"
+            Background="#0B101D"
+            BorderBrush="#253550"
+            BorderThickness="1.5"
+            CornerRadius="14">
+        <Border.Effect>
+            <DropShadowEffect Color="#000000"
+                              BlurRadius="28"
+                              Opacity="0.7"
+                              Direction="270"
+                              ShadowDepth="4"/>
+        </Border.Effect>
+
+        <Grid>
+            <!-- Vùng hiển thị Video bo góc đều với khung ngoài -->
+            <Border CornerRadius="12.5" ClipToBounds="True" Background="#000000">
+                <MediaElement x:Name="IntroMedia"
+                              LoadedBehavior="Manual"
+                              UnloadedBehavior="Close"
+                              Stretch="UniformToFill"
+                              MediaEnded="IntroMedia_MediaEnded"
+                              MediaFailed="IntroMedia_MediaFailed"/>
+            </Border>
+
+            <!-- Nút Bỏ qua ở góc dưới bên phải -->
+            <Button x:Name="BtnSkip"
+                    Content="Bỏ qua / Skip (ESC)"
+                    Style="{StaticResource SkipButtonStyle}"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Bottom"
+                    Padding="10,4"
+                    Margin="0,0,16,14"
+                    Click="BtnSkip_Click"
+                    ToolTip="Nhấn ESC hoặc nhấp vào đây để vào tool ngay"/>
+        </Grid>
+    </Border>
+</Window>

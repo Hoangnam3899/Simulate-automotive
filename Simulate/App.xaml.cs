@@ -16,6 +16,17 @@ namespace Simulate
 
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
+            // Phát clip mở màn (chạy hết clip hoặc người dùng nhấn phím ESC/Skip)
+            try
+            {
+                var introWindow = new IntroVideoWindow();
+                introWindow.ShowDialog();
+            }
+            catch (Exception)
+            {
+                // Bỏ qua an toàn nếu môi trường không khởi tạo được media
+            }
+
             var licenseService = new LicenseService();
             if (!licenseService.IsLicensed())
             {

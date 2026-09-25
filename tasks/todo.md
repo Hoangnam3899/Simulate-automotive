@@ -1905,3 +1905,18 @@ read-only projection; panel 10 không sở hữu hardware, parser hay engine.
     5. *Verification*:
        - dotnet build Simulate.sln: PASS (0 warning, 0 error).
        - dotnet test Simulate.sln: PASS 100% (2,318 / 2,318 tests).
+
+- [x] **Triển Khai Nhúng Video Mở Đầu (Intro Video Splash Screen) & Tối Ưu Menu Ngôn Ngữ**:
+  - **Mục tiêu**:
+    1. Tối ưu màu sắc ContextMenu nút Settings (⚙) trong MainWindow.xaml: Nền #141E30, viền #334B73, bo góc 8px, đổ bóng mềm, loại bỏ dải trắng mặc định của WPF MenuItem, chữ trắng sáng #F8FAFC, hover xanh lam #2563EB, tiêu đề 🌐 Chọn ngôn ngữ / Select Language, dấu ✓ màu xanh lục #10B981 cho ngôn ngữ kích hoạt.
+    2. Nhúng video mở đầu clipStart.mp4 từ Downloads vào ứng dụng: Khi khởi động sẽ mở cửa sổ video phát hết (hoặc ấn ESC/Space/Enter để bỏ qua) rồi mới vào ứng dụng chính.
+  - **Triển khai Chi tiết**:
+    1. *Tài nguyên*: Sao chép C:\Users\Hnam\Downloads\clipStart.mp4 vào Simulate/Assets/clipStart.mp4, đăng ký trong Simulate.csproj với CopyToOutputDirectory: PreserveNewest.
+    2. *Giao diện IntroVideoWindow*: Kích thước 720x405 (chuẩn 16:9), không viền, trong suốt, bo góc 14px, đổ bóng mềm, hiển thị giữa màn hình (CenterScreen), nút mờ [ Bỏ qua / Skip (ESC) ].
+    3. *Logic điều khiển*: Tự động đóng khi MediaEnded, MediaFailed, phím tắt ESC, Space, Enter và DispatcherTimer timeout an toàn 11s. Bọc 	ry-catch an toàn khi gán DialogResult = true.
+    4. *Tích hợp Startup Flow*: Gọi 
+ew IntroVideoWindow().ShowDialog() trong Simulate/App.xaml.cs trước khi kiểm tra bản quyền LicenseService.IsLicensed().
+    5. *Unit Tests*: Bổ sung Simulate.Tests/IntroVideoTests.cs kiểm tra tồn tại tệp video và khởi tạo/đóng cửa sổ an toàn trên STA thread.
+  - **Verification**:
+    * dotnet build Simulate.sln: **0 warning, 0 error**.
+    * dotnet test Simulate.sln: **PASS 100% (2,320 / 2,320 tests)**.

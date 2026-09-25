@@ -31,4 +31,11 @@
     <Resource Include="Assets\splash.png" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Video intro sao chép ra output directory để MediaElement nạp mượt mà -->
+    <Content Include="Assets\clipStart.mp4">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>
