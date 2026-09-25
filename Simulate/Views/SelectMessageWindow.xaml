@@ -70,7 +70,7 @@
 
             <!-- Title Bar -->
             <Grid Grid.Row="0" Margin="0,0,0,10">
-                <TextBlock Text="Select DBC Messages to Add to TX List" Style="{StaticResource DialogTitle}"/>
+                <TextBlock Text="{DynamicResource Loc_SelMsg_Title}" Style="{StaticResource DialogTitle}"/>
                 <Button Content="✕" Click="BtnCancel_Click" HorizontalAlignment="Right"
                         Style="{StaticResource DialogButton}" Background="Transparent" Width="26" Height="22"
                         Foreground="{StaticResource DlgTextSecondary}"/>
@@ -87,12 +87,12 @@
                          FontSize="10" Height="26" Padding="8,3"
                          Background="{StaticResource DlgInputBg}" Foreground="{StaticResource DlgTextPrimary}"
                          BorderBrush="{StaticResource DlgBorder}" VerticalContentAlignment="Center"/>
-                <TextBlock Text="Search by Name or CAN ID (Hex)..." IsHitTestVisible="False"
+                <TextBlock Text="{DynamicResource Loc_SelMsg_SearchHint}" IsHitTestVisible="False"
                            Foreground="{StaticResource DlgTextMuted}" FontSize="9.5" VerticalAlignment="Center"
                            Margin="10,0,0,0" Visibility="{Binding ElementName=TxtSearch, Path=Text.IsEmpty, Converter={StaticResource BoolToVis}, FallbackValue=Collapsed}"/>
-                <Button Grid.Column="1" Content="Select All" Click="BtnSelectAll_Click"
+                <Button Grid.Column="1" Content="{DynamicResource Loc_SelMsg_BtnSelectAll}" Click="BtnSelectAll_Click"
                         Style="{StaticResource DialogButton}" Margin="6,0,0,0"/>
-                <Button Grid.Column="2" Content="Deselect All" Click="BtnDeselectAll_Click"
+                <Button Grid.Column="2" Content="{DynamicResource Loc_SelMsg_BtnClear}" Click="BtnDeselectAll_Click"
                         Style="{StaticResource DialogButton}" Background="Transparent" Margin="4,0,0,0"/>
             </Grid>
 
@@ -157,12 +157,12 @@
                 <TextBlock x:Name="TxtStatus" Text="0 messages selected"
                            Foreground="{StaticResource DlgTextSecondary}" FontSize="9.5" VerticalAlignment="Center"/>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Button Content="Cancel" Click="BtnCancel_Click"
+                    <Button Content="{DynamicResource Loc_SelMsg_BtnCancel}" Click="BtnCancel_Click"
                             Style="{StaticResource DialogButton}" Background="Transparent"
                             BorderBrush="{StaticResource DlgBorder}" Width="80" Margin="0,0,8,0"/>
-                    <Button Content="Add Selected" Click="BtnAdd_Click"
+                    <Button Content="{DynamicResource Loc_SelMsg_BtnAddSelected}" Click="BtnAdd_Click"
                             Style="{StaticResource DialogButton}" Background="{StaticResource DlgAccentBlue}"
-                            Foreground="White" FontWeight="SemiBold" Width="105"/>
+                            Foreground="White" FontWeight="SemiBold" Width="120"/>
                 </StackPanel>
             </Grid>
         </Grid>

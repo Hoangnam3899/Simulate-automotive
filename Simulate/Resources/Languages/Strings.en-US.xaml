@@ -1,0 +1,196 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+
+    <!-- ═══════════════ 0. GENERAL & TITLE BAR ═══════════════ -->
+    <sys:String x:Key="Loc_App_Title">AFI - Automotive Fault Injector</sys:String>
+    <sys:String x:Key="Loc_App_Subtitle">CAN Injection &amp; Testing</sys:String>
+    <sys:String x:Key="Loc_Tooltip_Help">Help &amp; Documentation</sys:String>
+    <sys:String x:Key="Loc_Tooltip_Settings">Settings &amp; Language</sys:String>
+    <sys:String x:Key="Loc_Tooltip_Minimize">Minimize</sys:String>
+    <sys:String x:Key="Loc_Tooltip_Maximize">Maximize</sys:String>
+    <sys:String x:Key="Loc_Tooltip_Close">Close Application</sys:String>
+    <sys:String x:Key="Loc_Lang_MenuTitle">Language / Ngôn ngữ</sys:String>
+
+    <!-- ═══════════════ 1. BẢNG 1: CONNECTION / SETUP ═══════════════ -->
+    <sys:String x:Key="Loc_Sec_Connection">1. CONNECTION / SETUP</sys:String>
+    <sys:String x:Key="Loc_Conn_Interface">Interface / Driver</sys:String>
+    <sys:String x:Key="Loc_Conn_TxChannel">TX Channel</sys:String>
+    <sys:String x:Key="Loc_Conn_RxChannel">RX Channel</sys:String>
+    <sys:String x:Key="Loc_Conn_CanFd">CAN FD</sys:String>
+    <sys:String x:Key="Loc_Conn_BaudrateTx">Baudrate TX</sys:String>
+    <sys:String x:Key="Loc_Conn_BaudrateRx">Baudrate RX</sys:String>
+    <sys:String x:Key="Loc_Conn_BtnConnect">Connect</sys:String>
+    <sys:String x:Key="Loc_Conn_BtnDisconnect">Disconnect</sys:String>
+    <sys:String x:Key="Loc_Conn_BtnRefresh">Refresh</sys:String>
+    <sys:String x:Key="Loc_Conn_Tooltip_Refresh">Refresh CAN hardware interface list</sys:String>
+
+    <!-- ═══════════════ 2. BẢNG 2: DBC MANAGEMENT ═══════════════ -->
+    <sys:String x:Key="Loc_Sec_Dbc">2. DBC MANAGEMENT</sys:String>
+    <sys:String x:Key="Loc_Dbc_LoadedFile">Loaded DBC File</sys:String>
+    <sys:String x:Key="Loc_Dbc_Messages">Messages</sys:String>
+    <sys:String x:Key="Loc_Dbc_Nodes">Nodes</sys:String>
+    <sys:String x:Key="Loc_Dbc_Signals">Signals</sys:String>
+    <sys:String x:Key="Loc_Dbc_BtnLoad">Load DBC</sys:String>
+    <sys:String x:Key="Loc_Dbc_BtnUnload">Unload DBC</sys:String>
+
+    <!-- ═══════════════ 3. BẢNG 3: TX MESSAGE LIST ═══════════════ -->
+    <sys:String x:Key="Loc_Sec_TxList">3. TX MESSAGE LIST</sys:String>
+    <sys:String x:Key="Loc_Tx_BtnAdd">+ Add</sys:String>
+    <sys:String x:Key="Loc_Tx_BtnDelete">Delete</sys:String>
+    <sys:String x:Key="Loc_Tx_BtnDeleteAll">Delete All</sys:String>
+    <sys:String x:Key="Loc_Tx_BtnMoveUp">Move Up</sys:String>
+    <sys:String x:Key="Loc_Tx_BtnMoveDown">Move Down</sys:String>
+    <sys:String x:Key="Loc_Tx_Col_Index">#</sys:String>
+    <sys:String x:Key="Loc_Tx_Col_Enable">Enable</sys:String>
+    <sys:String x:Key="Loc_Tx_Col_Name">Message Name</sys:String>
+    <sys:String x:Key="Loc_Tx_Col_Id">CAN ID (Hex)</sys:String>
+    <sys:String x:Key="Loc_Tx_Col_Dlc">DLC</sys:String>
+    <sys:String x:Key="Loc_Tx_Col_Cycle">Cycle Time</sys:String>
+    <sys:String x:Key="Loc_Tx_Col_Mode">Mode</sys:String>
+    <sys:String x:Key="Loc_Tx_Col_SendType">Send Type</sys:String>
+    <sys:String x:Key="Loc_Tx_Col_Signals">Signals</sys:String>
+    <sys:String x:Key="Loc_Tx_Col_LastSent">Last Sent</sys:String>
+    <sys:String x:Key="Loc_Tx_Col_Actions">Actions</sys:String>
+
+    <!-- ═══════════════ 4. BẢNG 4: LIVE SIGNAL MONITOR ═══════════════ -->
+    <sys:String x:Key="Loc_Sec_LiveMonitor">4. LIVE SIGNAL MONITOR</sys:String>
+    <sys:String x:Key="Loc_Monitor_SearchHint">Search signal name...</sys:String>
+    <sys:String x:Key="Loc_Monitor_BtnPause">Pause</sys:String>
+    <sys:String x:Key="Loc_Monitor_BtnResume">Resume</sys:String>
+    <sys:String x:Key="Loc_Monitor_BtnClear">Clear</sys:String>
+    <sys:String x:Key="Loc_Monitor_Col_Name">Signal Name</sys:String>
+    <sys:String x:Key="Loc_Monitor_Col_Message">Message</sys:String>
+    <sys:String x:Key="Loc_Monitor_Col_Raw">Raw Value</sys:String>
+    <sys:String x:Key="Loc_Monitor_Col_Physical">Physical Value</sys:String>
+    <sys:String x:Key="Loc_Monitor_Col_Unit">Unit</sys:String>
+    <sys:String x:Key="Loc_Monitor_Col_Status">Status</sys:String>
+    <sys:String x:Key="Loc_Monitor_Col_Updated">Updated</sys:String>
+
+    <!-- ═══════════════ 5. BẢNG 5: FAULT CONFIGURATION ═══════════════ -->
+    <sys:String x:Key="Loc_Sec_FaultConfig">5. FAULT CONFIGURATION</sys:String>
+    <sys:String x:Key="Loc_Fault_Type">Fault Type</sys:String>
+    <sys:String x:Key="Loc_Fault_Cycle">Cycle</sys:String>
+    <sys:String x:Key="Loc_Fault_Interval">Time Interval (ms)</sys:String>
+    <sys:String x:Key="Loc_Fault_Repeat">Repeat Count</sys:String>
+    <sys:String x:Key="Loc_Fault_Mode">Injection Mode</sys:String>
+    <sys:String x:Key="Loc_Fault_Duration">Duration</sys:String>
+    <sys:String x:Key="Loc_Fault_Delay">Delay</sys:String>
+    <sys:String x:Key="Loc_Fault_OverrideControl">Override Control</sys:String>
+    <sys:String x:Key="Loc_Fault_ValInPanel6">Value set in Panel 6</sys:String>
+    <sys:String x:Key="Loc_Fault_OverrideExisting">Override existing</sys:String>
+    <sys:String x:Key="Loc_Fault_RestoreAfterStop">Restore after stop</sys:String>
+    <sys:String x:Key="Loc_Fault_BtnAddToQueue">+ Add to Queue</sys:String>
+    <sys:String x:Key="Loc_Fault_BtnClearQueue">Clear Queue</sys:String>
+    <sys:String x:Key="Loc_Fault_Col_Step">Step</sys:String>
+    <sys:String x:Key="Loc_Fault_Col_Signal">Signal</sys:String>
+    <sys:String x:Key="Loc_Fault_Col_Value">Value</sys:String>
+    <sys:String x:Key="Loc_Fault_Col_Duration">Duration</sys:String>
+    <sys:String x:Key="Loc_Fault_Col_Status">Status</sys:String>
+
+    <!-- ═══════════════ 6. BẢNG 6: SIGNAL VALUE CONFIG ═══════════════ -->
+    <sys:String x:Key="Loc_Sec_SignalVal">6. SIGNAL VALUE CONFIG</sys:String>
+    <sys:String x:Key="Loc_Sig_E2EProtection">E2E Protection</sys:String>
+    <sys:String x:Key="Loc_Sig_BtnClearAll">Clear All</sys:String>
+    <sys:String x:Key="Loc_Sig_ShowOverridden">Show Only Overridden</sys:String>
+    <sys:String x:Key="Loc_SigVal_Target">Target Signal</sys:String>
+    <sys:String x:Key="Loc_SigVal_Physical">Physical Value</sys:String>
+    <sys:String x:Key="Loc_SigVal_Raw">Raw Value</sys:String>
+    <sys:String x:Key="Loc_SigVal_Range">Allowed Range</sys:String>
+    <sys:String x:Key="Loc_SigVal_Override">Enable Signal Override</sys:String>
+    <sys:String x:Key="Loc_SigVal_BtnReset">Reset to Default</sys:String>
+
+    <!-- ═══════════════ 7. BẢNG 7: EXECUTION CONTROL ═══════════════ -->
+    <sys:String x:Key="Loc_Sec_ExecControl">7. EXECUTION CONTROL</sys:String>
+    <sys:String x:Key="Loc_Exec_BtnStart">Start Injection</sys:String>
+    <sys:String x:Key="Loc_Exec_BtnStartInj">▶  Start Injection</sys:String>
+    <sys:String x:Key="Loc_Exec_BtnPause">Pause</sys:String>
+    <sys:String x:Key="Loc_Exec_BtnResume">Resume</sys:String>
+    <sys:String x:Key="Loc_Exec_BtnStop">■  Stop</sys:String>
+    <sys:String x:Key="Loc_Exec_Status">Execution Status</sys:String>
+    <sys:String x:Key="Loc_Exec_QueueStatus">Queue Status</sys:String>
+    <sys:String x:Key="Loc_Exec_QueueItems">Queue Items</sys:String>
+    <sys:String x:Key="Loc_Exec_Running">Running</sys:String>
+
+    <!-- ═══════════════ 8. BẢNG 8: DIAGNOSTIC LOG ═══════════════ -->
+    <sys:String x:Key="Loc_Sec_DiagLog">8. SYSTEM &amp; DIAG LOG</sys:String>
+    <sys:String x:Key="Loc_Log_FilterLevel">Filter Level:</sys:String>
+    <sys:String x:Key="Loc_Log_All">All Levels</sys:String>
+    <sys:String x:Key="Loc_Log_Info">Info</sys:String>
+    <sys:String x:Key="Loc_Log_Warn">Warning</sys:String>
+    <sys:String x:Key="Loc_Log_Error">Error</sys:String>
+    <sys:String x:Key="Loc_Log_BtnClear">Clear Log</sys:String>
+    <sys:String x:Key="Loc_Log_BtnExport">Export</sys:String>
+
+    <!-- ═══════════════ 9. BẢNG 9: BUS MONITOR / HEALTH ═══════════════ -->
+    <sys:String x:Key="Loc_Sec_BusHealth">9. BUS MONITOR / HEALTH</sys:String>
+    <sys:String x:Key="Loc_Health_BusLoad">Bus Load: </sys:String>
+    <sys:String x:Key="Loc_Health_TxRate">TX Rate</sys:String>
+    <sys:String x:Key="Loc_Health_RxRate">RX Rate</sys:String>
+    <sys:String x:Key="Loc_Health_Errors">Errors: </sys:String>
+    <sys:String x:Key="Loc_Health_Lost">Lost: </sys:String>
+    <sys:String x:Key="Loc_Health_Warnings">Warning: </sys:String>
+    <sys:String x:Key="Loc_Health_BtnResetStats">Reset Stats</sys:String>
+
+    <!-- ═══════════════ 10. BẢNG 10: STATUS OVERVIEW ═══════════════ -->
+    <sys:String x:Key="Loc_Sec_Overview">10. STATUS OVERVIEW</sys:String>
+    <sys:String x:Key="Loc_Overview_Connection">Connection</sys:String>
+    <sys:String x:Key="Loc_Overview_Driver">Driver / Interface</sys:String>
+    <sys:String x:Key="Loc_Overview_BusState">Bus State</sys:String>
+    <sys:String x:Key="Loc_Overview_Dbc">DBC Database</sys:String>
+    <sys:String x:Key="Loc_Overview_BusHealth">Bus Health</sys:String>
+    <sys:String x:Key="Loc_Overview_CanFd">CAN FD Mode</sys:String>
+
+    <!-- ═══════════════ FOOTER & STATUS STRINGS ═══════════════ -->
+    <sys:String x:Key="Loc_Status_Connected">● Connected</sys:String>
+    <sys:String x:Key="Loc_Status_Disconnected">○ Disconnected</sys:String>
+    <sys:String x:Key="Loc_Status_Connecting">◐ Connecting...</sys:String>
+    <sys:String x:Key="Loc_Status_Running">● Running</sys:String>
+    <sys:String x:Key="Loc_Status_Paused">⏸ Paused</sys:String>
+    <sys:String x:Key="Loc_Status_Stopped">■ Stopped</sys:String>
+    <sys:String x:Key="Loc_Status_Idle">● Idle</sys:String>
+    <sys:String x:Key="Loc_Status_Standby">● Standby</sys:String>
+    <sys:String x:Key="Loc_Status_Optimal">● Optimal</sys:String>
+    <sys:String x:Key="Loc_Status_Warning">● Warning</sys:String>
+    <sys:String x:Key="Loc_Status_Critical">● Critical</sys:String>
+    <sys:String x:Key="Loc_Status_Offline">● Offline</sys:String>
+    <sys:String x:Key="Loc_Status_Active">● Active</sys:String>
+    <sys:String x:Key="Loc_Status_NoData">● No Data</sys:String>
+    <sys:String x:Key="Loc_Status_Injected">● Injected</sys:String>
+    <sys:String x:Key="Loc_Status_PassThrough">Pass-Through</sys:String>
+    <sys:String x:Key="Loc_Status_Block">Block</sys:String>
+    <sys:String x:Key="Loc_Status_Inject">Inject</sys:String>
+    <sys:String x:Key="Loc_Foot_Reset">↺ Reset</sys:String>
+
+    <!-- ═══════════════ COMMON DIALOGS & MESSAGES ═══════════════ -->
+    <sys:String x:Key="Loc_Msg_ConfirmDeleteAllTitle">Confirm Delete All</sys:String>
+    <sys:String x:Key="Loc_Msg_ConfirmDeleteAll">Are you sure you want to delete all messages from the simulation list?</sys:String>
+    <sys:String x:Key="Loc_Msg_ConfirmClearQueueTitle">Confirm Clear Queue</sys:String>
+    <sys:String x:Key="Loc_Msg_ConfirmClearQueue">Are you sure you want to clear the entire fault sequence queue?</sys:String>
+    <sys:String x:Key="Loc_Msg_NoSignalSelected">Please select a signal before performing this operation.</sys:String>
+    <sys:String x:Key="Loc_Msg_ValueOutOfRange">Entered value is outside allowed range [{0} - {1}].</sys:String>
+    <sys:String x:Key="Loc_Msg_ExportSuccess">Log exported successfully to disk.</sys:String>
+    <sys:String x:Key="Loc_Msg_ExportFailed">Failed to export log: {0}</sys:String>
+
+    <!-- ═══════════════ LICENSE DIALOG ═══════════════ -->
+    <sys:String x:Key="Loc_Lic_Title">Application is Locked</sys:String>
+    <sys:String x:Key="Loc_Lic_Subtitle">Please enter an activation key (License Key) to use&#x0a;all features of the application.</sys:String>
+    <sys:String x:Key="Loc_Lic_MachineIdTitle">Machine ID</sys:String>
+    <sys:String x:Key="Loc_Lic_MachineIdDesc">Your unique device identifier (provide to key issuer).</sys:String>
+    <sys:String x:Key="Loc_Lic_BtnCopy">Copy</sys:String>
+    <sys:String x:Key="Loc_Lic_KeyTitle">License Key</sys:String>
+    <sys:String x:Key="Loc_Lic_KeyDesc">Enter the activation key you received from the issuer.</sys:String>
+    <sys:String x:Key="Loc_Lic_KeyWatermark">Enter or paste license key...</sys:String>
+    <sys:String x:Key="Loc_Lic_BtnPaste">Paste</sys:String>
+    <sys:String x:Key="Loc_Lic_BtnGuide">Activation Guide</sys:String>
+    <sys:String x:Key="Loc_Lic_BtnActivate">Activate</sys:String>
+
+    <!-- ═══════════════ SELECT MESSAGE DIALOG ═══════════════ -->
+    <sys:String x:Key="Loc_SelMsg_Title">Select Messages to Add to Simulation</sys:String>
+    <sys:String x:Key="Loc_SelMsg_SearchHint">Search by message name or CAN ID...</sys:String>
+    <sys:String x:Key="Loc_SelMsg_BtnSelectAll">Select All</sys:String>
+    <sys:String x:Key="Loc_SelMsg_BtnClear">Clear</sys:String>
+    <sys:String x:Key="Loc_SelMsg_BtnAddSelected">Add Selected</sys:String>
+    <sys:String x:Key="Loc_SelMsg_BtnCancel">Cancel</sys:String>
+
+</ResourceDictionary>

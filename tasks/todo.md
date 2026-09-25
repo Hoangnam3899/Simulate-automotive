@@ -1884,3 +1884,24 @@ read-only projection; panel 10 không sở hữu hardware, parser hay engine.
     * Trích xuất tài nguyên Simulate.dll qua PowerShell: Đã xác nhận ssets/license_hacker_art.png hiện diện trong Simulate.g.resources.
     * dotnet build Simulate.sln: 0 warning, 0 error.
     * dotnet test Simulate.sln: 2,309 / 2,309 tests PASS (100%).
+- [x] **Triển Khai Hệ Thống Đa Ngôn Ngữ i18n Toàn Dự Án (5 Ngôn Ngữ: vi-VN, en-US, ko-KR, ja-JP, zh-CN)**:
+  - **Mục tiêu**: Hỗ trợ chuyển đổi ngôn ngữ động thời gian thực (Zero-Restart Live Switching) không cần khởi động lại ứng dụng, đồng bộ 100% từ giao diện tĩnh, tiêu đề, tooltip đến trạng thái động mà không ảnh hưởng code logic vận hành.
+  - **Triển khai Chi tiết**:
+    1. *Tầng Service & Từ điển XAML*:
+       - Simulate/Services/ILanguageService.cs: Định nghĩa enum AppLanguage (Vietnamese, English, Korean, Japanese, Chinese) và interface ILanguageService.
+       - Simulate/Services/LanguageService.cs: Quản lý nạp/hoán đổi MergedDictionaries, lưu/đọc cấu hình ngôn ngữ bền vững tại %LocalAppData%\Simulate\settings.json.
+       - 5 bộ từ điển XAML tại Simulate/Resources/Languages/: Strings.vi-VN.xaml, Strings.en-US.xaml, Strings.ko-KR.xaml, Strings.ja-JP.xaml, Strings.zh-CN.xaml.
+    2. *Tầng Decoupling State from Display & Converters*:
+       - Simulate/Converters/StatusToLocalizedConverter.cs: Map các chuỗi trạng thái runtime (Connected, Running, Paused, Stopped, Idle, No Data, Active, Injected, Optimal, Warning, Critical...) sang Resource Key mà không thay đổi bất kỳ chuỗi literal C# nào dùng trong logic so sánh.
+       - Đăng ký StatusToLocalizedConverter và Strings.vi-VN.xaml làm mặc định trong Simulate/App.xaml.
+    3. *Tầng ViewModel*:
+       - Simulate/ViewModels/MainViewModel.cs: Tích hợp thuộc tính Language, CurrentLanguage, và RelayCommand ChangeLanguageCommand(string languageName).
+    4. *Tầng View & Ánh xạ XAML*:
+       - Simulate/MainWindow.xaml:
+         + Title Bar: Nút Settings (gánh biểu tượng bánh răng) tích hợp ContextMenu chuyển đổi 5 ngôn ngữ trực tiếp kèm indicator tick chọn.
+         + 10 Bảng điều khiển: Bảng 1 (Kết nối), Bảng 2 (DBC), Bảng 3 (TX Message List), Bảng 4 (Live Signal Monitor), Bảng 5 (Fault Configuration), Bảng 6 (Signal Value Configuration), Bảng 7 (Execution Control), Bảng 8 (Diagnostic Log), Bảng 9 (Bus Monitor / Health), Bảng 10 (Status Overview).
+         + Chân trang (Row 5 Footer): Status Badges và nút Đặt lại.
+       - Cửa sổ phụ: SelectMessageWindow.xaml và LicenseLockWindow.xaml đều được ánh xạ DynamicResource.
+    5. *Verification*:
+       - dotnet build Simulate.sln: PASS (0 warning, 0 error).
+       - dotnet test Simulate.sln: PASS 100% (2,318 / 2,318 tests).

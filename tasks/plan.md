@@ -586,10 +586,14 @@ Trước Task 0/1 cần người dùng phê duyệt riêng nếu thực hiện:
 - **Rào chắn an toàn (Guardrails)**:
   1. Bảo vệ code logic: Tuyệt đối không thay đổi các giá trị string nội bộ dùng để so sánh (QueueStatusText == "Running"). Áp dụng quy tắc Decoupling State from Display bằng ValueConverters hoặc Display properties.
   2. Bảo vệ UI: Giữ nguyên toàn bộ cấu trúc Grid, Layout, Dark Theme Styling, chỉ thay thế chuỗi hiển thị tĩnh bằng {DynamicResource Loc_...}.
-  3. Duy trì chất lượng: Build 0 warning / 0 error; 2,309 tests PASS 100%.
+  3. Duy trì chất lượng: Build 0 warning / 0 error; 2,318 tests PASS 100%.
 - **Các giai đoạn thực hiện**:
-  - [ ] **Task 19.1**: Xây dựng Core Service & 5 Bộ Từ Điển XAML đầy đủ (ILanguageService, LanguageService, Strings.vi-VN.xaml, Strings.en-US.xaml, Strings.ko-KR.xaml, Strings.ja-JP.xaml, Strings.zh-CN.xaml, Unit Tests).
-  - [ ] **Task 19.2**: Xây dựng bộ StatusToLocalizedTextConverter và tách biệt State vs Display trong ViewModels (QueueStatusText, HealthStatusText, StatusOverview).
-  - [ ] **Task 19.3**: Đồng bộ hóa toàn bộ Icon Tooltips, Thông báo lỗi (Validation Banners), Hộp thoại (SelectMessageWindow, LicenseLockWindow, IMessageDialogService).
-  - [ ] **Task 19.4**: Tích hợp ContextMenu chọn 5 ngôn ngữ vào nút ⚙ trên Title Bar và liên kết {DynamicResource Loc_...} cho 10 bảng điều khiển.
-  - [ ] **Task 19.5**: Verification Gate (Build, Run test suite 2,309 tests, Test chuyển đổi 5 ngôn ngữ, kiểm tra persistence tại %LocalAppData%\Simulate\settings.json).
+  - [x] **Task 19.1**: Xây dựng Core Service & 5 Bộ Từ Điển XAML đầy đủ (`ILanguageService`, `LanguageService`, `Strings.vi-VN.xaml`, `Strings.en-US.xaml`, `Strings.ko-KR.xaml`, `Strings.ja-JP.xaml`, `Strings.zh-CN.xaml`, Unit Tests).
+  - [x] **Task 19.2**: Xây dựng bộ `StatusToLocalizedConverter` và tách biệt State vs Display trong ViewModels (`QueueStatusText`, `HealthStatusText`, `SimulationStatusText`, Signal `StatusText`).
+  - [x] **Task 19.3**: Đồng bộ hóa toàn bộ Icon Tooltips, Thông báo lỗi (Validation Banners), Hộp thoại (`SelectMessageWindow`, `LicenseLockWindow`).
+  - [x] **Task 19.4**: Tích hợp ContextMenu chọn 5 ngôn ngữ vào nút ⚙ trên Title Bar và liên kết `{DynamicResource Loc_...}` cho 10 bảng điều khiển trên `MainWindow.xaml`.
+  - [x] **Task 19.5**: Verification Gate (Build 0 warning / 0 error, Run test suite 2,318/2,318 tests PASS 100%, Test chuyển đổi 5 ngôn ngữ, kiểm tra persistence tại `%LocalAppData%\Simulate\settings.json`).
+- **Trạng thái**: DONE — Đã hoàn thành và kiểm chứng thành công.
+- **Verification**:
+  - `dotnet build Simulate.sln`: **0 warning, 0 error**.
+  - `dotnet test Simulate.sln`: **2,318 / 2,318 tests PASS (100%)**.

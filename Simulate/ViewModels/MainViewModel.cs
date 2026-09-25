@@ -5,7 +5,9 @@ using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using Simulate.Models;
+using Simulate.Services;
 
 namespace Simulate.ViewModels
 {
@@ -413,6 +415,20 @@ namespace Simulate.ViewModels
 
         public StatusOverviewViewModel StatusOverview { get; }
 
+        public ILanguageService Language { get; }
+
+        public AppLanguage CurrentLanguage => Language.CurrentLanguage;
+
+        [RelayCommand]
+        public void ChangeLanguage(string languageName)
+        {
+            if (Enum.TryParse<AppLanguage>(languageName, true, out var lang))
+            {
+                Language.ChangeLanguage(lang);
+                OnPropertyChanged(nameof(CurrentLanguage));
+            }
+        }
+
         public ObservableCollection<MessageModel> Messages => Simulation.Messages;
         public ObservableCollection<SignalModel> Signals => Simulation.Signals;
         public ObservableCollection<FaultQueueModel> FaultQueue => Simulation.FaultQueue;
@@ -441,7 +457,7 @@ namespace Simulate.ViewModels
         /// <param name="simulation">The simulation projection exposed to existing bindings.</param>
         /// <param name="logging">The logging projection exposed to existing bindings.</param>
         public MainViewModel(ConnectionViewModel connection, DbcManagementViewModel dbc, SimulationViewModel simulation, LoggingViewModel logging)
-            : this(connection, dbc, simulation, logging, null)
+            : this(connection, dbc, simulation, logging, null, null)
         {
         }
 
@@ -449,11 +465,21 @@ namespace Simulate.ViewModels
         /// Initializes a view model with caller-composed connection, dbc, simulation, logging, and bus health dependencies.
         /// </summary>
         public MainViewModel(ConnectionViewModel connection, DbcManagementViewModel dbc, SimulationViewModel simulation, LoggingViewModel logging, BusHealthViewModel? busHealth)
+            : this(connection, dbc, simulation, logging, busHealth, null)
+        {
+        }
+
+        /// <summary>
+        /// Initializes a view model with caller-composed connection, dbc, simulation, logging, bus health, and language service dependencies.
+        /// </summary>
+        public MainViewModel(ConnectionViewModel connection, DbcManagementViewModel dbc, SimulationViewModel simulation, LoggingViewModel logging, BusHealthViewModel? busHealth, ILanguageService? language)
         {
             Connection = connection ?? throw new ArgumentNullException(nameof(connection));
             Dbc = dbc ?? throw new ArgumentNullException(nameof(dbc));
             Simulation = simulation ?? throw new ArgumentNullException(nameof(simulation));
             Logging = logging ?? throw new ArgumentNullException(nameof(logging));
+            Language = language ?? new LanguageService();
+            Language.LanguageChanged += (sender, lang) => OnPropertyChanged(nameof(CurrentLanguage));
 
             BusHealth = busHealth ?? new BusHealthViewModel(
                 () => Connection.IsConnected,
