@@ -17,6 +17,7 @@ namespace Simulate.Services
         private readonly object _echoSync = new();
         private readonly object _eventSync = new();
         private readonly object _baselineSync = new();
+        private readonly Dictionary<(uint CanIdentifier, bool IsExtendedIdentifier), long> _lastRxTimestamps = new();
         private readonly ICanGatewaySession _session;
         private readonly SimulationEngineOptions _options;
         private readonly TimeProvider _timeProvider;
@@ -578,9 +579,11 @@ namespace Simulate.Services
                     {
                         lock (_baselineSync)
                         {
-                            _lastRxFrames[
-                                (routedFrame.Frame.Identifier,
-                                    routedFrame.Frame.IsExtendedIdentifier)] = routedFrame.Frame;
+                            var frameKey = (
+                                routedFrame.Frame.Identifier,
+                                routedFrame.Frame.IsExtendedIdentifier);
+                            _lastRxFrames[frameKey] = routedFrame.Frame;
+                            _lastRxTimestamps[frameKey] = _timeProvider.GetTimestamp();
                         }
                     }
 
@@ -607,7 +610,11 @@ namespace Simulate.Services
                     {
                         bool wasModified = false;
                         CanFrame outboundFrame = rule?.GatewayMode == GatewayMode.Inject
-                            ? CreateInjectedFrame(routedFrame.Frame, rule, out wasModified)
+                            ? CreateInjectedFrame(
+                                routedFrame.Frame,
+                                rule,
+                                out wasModified,
+                                preserveLiveCounter: routedFrame.Source == CanGatewaySide.Rx)
                             : routedFrame.Frame;
                         HardwareOperationResult result = await _session
                             .TransmitAsync(destination, outboundFrame, cancellationToken)
@@ -745,11 +752,29 @@ namespace Simulate.Services
                         waitForResume = _isSchedulingPaused;
                         if (!waitForResume)
                         {
-                            DbcMessage message =
-                                _messages[(rule.CanIdentifier, rule.IsExtendedIdentifier)];
+                            var msgKey = (rule.CanIdentifier, rule.IsExtendedIdentifier);
+                            if (rule.SendType == SimulationSendType.Cyclic && rule.GatewayMode is GatewayMode.Inject or GatewayMode.PassThrough)
+                            {
+                                long now = _timeProvider.GetTimestamp();
+                                lock (_baselineSync)
+                                {
+                                    if (_lastRxTimestamps.TryGetValue(msgKey, out long lastRxTime))
+                                    {
+                                        TimeSpan elapsedSinceRx = _timeProvider.GetElapsedTime(lastRxTime, now);
+                                        // If live traffic is actively flowing on Rx (within 500ms), let the gateway loop handle it
+                                        // directly to avoid double transmission and phase jitter.
+                                        if (elapsedSinceRx < TimeSpan.FromMilliseconds(500))
+                                        {
+                                            return;
+                                        }
+                                    }
+                                }
+                            }
+
+                            DbcMessage message = _messages[msgKey];
                             CanFrame baseline = GetScheduledBaseline(message);
                             outboundFrame = rule.GatewayMode == GatewayMode.Inject
-                                ? CreateInjectedFrame(baseline, rule, out wasModified)
+                                ? CreateInjectedFrame(baseline, rule, out wasModified, preserveLiveCounter: false)
                                 : baseline;
                             transmission = _session.TransmitAsync(
                                 CanGatewaySide.Tx,
@@ -913,7 +938,8 @@ namespace Simulate.Services
         private CanFrame CreateInjectedFrame(
             CanFrame liveFrame,
             SimulationMessageRule rule,
-            out bool wasModified)
+            out bool wasModified,
+            bool preserveLiveCounter = false)
         {
             var key = (
                 CanIdentifier: rule.CanIdentifier,
@@ -935,16 +961,30 @@ namespace Simulate.Services
                 SignalCodec.PackPhysical(payload, signal, signalOverride.PhysicalValue);
             }
 
-            int previousCounter = _e2eCounters.TryGetValue(key, out int currentCounter)
-                ? currentCounter
-                : -1;
-            E2eProtectionResult e2eResult = E2eProtector.Apply(
-                payload,
-                rule.E2eProtection,
-                previousCounter);
-            if (e2eResult.IsApplied)
+            E2eProtectionResult e2eResult;
+            if (preserveLiveCounter && rule.E2eProtection.IsEnabled)
             {
-                _e2eCounters[key] = e2eResult.Counter;
+                e2eResult = E2eProtector.ApplyPreservingCounter(
+                    payload,
+                    rule.E2eProtection);
+                if (e2eResult.IsApplied)
+                {
+                    _e2eCounters[key] = e2eResult.Counter;
+                }
+            }
+            else
+            {
+                int previousCounter = _e2eCounters.TryGetValue(key, out int currentCounter)
+                    ? currentCounter
+                    : -1;
+                e2eResult = E2eProtector.Apply(
+                    payload,
+                    rule.E2eProtection,
+                    previousCounter);
+                if (e2eResult.IsApplied)
+                {
+                    _e2eCounters[key] = e2eResult.Counter;
+                }
             }
 
             wasModified = (signalOverrides?.Length ?? 0) > 0 || e2eResult.IsApplied;

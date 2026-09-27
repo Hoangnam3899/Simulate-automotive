@@ -114,5 +114,21 @@ namespace Simulate.Tests
             Assert.ThrowsException<ArgumentOutOfRangeException>(
                 () => new E2eProtectionConfiguration(isEnabled: true, counterMask: 0x05));
         }
+
+        [TestMethod]
+        public void ApplyPreservingCounter_preserves_existing_counter_and_calculates_checksum()
+        {
+            var configuration = new E2eProtectionConfiguration(isEnabled: true);
+            // Payload ban đầu có Counter = 7 (ở byte 1, nibble thấp: 0xF7)
+            byte[] payload = [0x00, 0xF7, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66];
+
+            E2eProtectionResult result = E2eProtector.ApplyPreservingCounter(payload, configuration);
+
+            Assert.IsTrue(result.IsApplied);
+            Assert.AreEqual(7, result.Counter, "Alive counter phải được giữ nguyên là 7.");
+            Assert.AreEqual((byte)0xF7, payload[1], "Byte counter không bị thay đổi.");
+            Assert.IsNotNull(result.Checksum);
+            Assert.AreEqual(result.Checksum.Value, payload[0], "Checksum được cập nhật vào byte 0.");
+        }
     }
 }

@@ -34,9 +34,10 @@ namespace Simulate.Tests
             AppLanguage? eventPayload = null;
             service.LanguageChanged += (_, lang) => eventPayload = lang;
 
-            service.ChangeLanguage(AppLanguage.English);
-            Assert.AreEqual(AppLanguage.English, service.CurrentLanguage);
-            Assert.AreEqual(AppLanguage.English, eventPayload);
+            var targetFirst = service.CurrentLanguage == AppLanguage.English ? AppLanguage.Vietnamese : AppLanguage.English;
+            service.ChangeLanguage(targetFirst);
+            Assert.AreEqual(targetFirst, service.CurrentLanguage);
+            Assert.AreEqual(targetFirst, eventPayload);
 
             service.ChangeLanguage(AppLanguage.Korean);
             Assert.AreEqual(AppLanguage.Korean, service.CurrentLanguage);

@@ -620,3 +620,16 @@ Trước Task 0/1 cần người dùng phê duyệt riêng nếu thực hiện:
 - **Verification**:
   - `dotnet build Simulate.sln`: **0 warning, 0 error**.
   - `dotnet test Simulate.sln`: **PASS 100% (2,320 / 2,320 tests)**.
+## 21. Sửa Lỗi Sóng Vuông & Xung Lên Xuống Khi Inject Tín Hiệu SS_Fault (E2E & Double Transmission) (2026-09-27)
+- **Triệu chứng**: Khi inject tín hiệu SS_Fault trên xe thật (mô hình Breakout Box ngắt đôi đường CAN), trên đồ thị TSMaster tín hiệu SS_Fault bị dao động dạng xung vuông lên/xuống giữa normal (0) và Shifter failure (1), không giữ được mức cao. Trong khi các tín hiệu khác không có E2E thì chạy bình thường.
+- **Nguyên nhân gốc rễ**:
+  1. *Double Transmission (Xung đột phát kép)*: Khi message SS_DriveReq_0x108 được kích hoạt rule Inject và SendType Cyclic, cả luồng Gateway (RunReceiveLoopAsync) và luồng Scheduler (RunCyclicAsync) cùng phát frame 0x108 ra Tx sang xe. Xe nhận gấp đôi số lượng frame, vi phạm Cycle Time và gây xung nhấp nháy.
+  2. *Alive Counter bị ghi đè thay vì bảo toàn nhịp Cần số thật*: Hàm E2eProtector.Apply tự sinh counter riêng thay vì kế thừa Alive Counter của frame gốc Cần số. Khi counter bị lệch nhịp hoặc nhảy cóc, hộp điều khiển CVC trên xe phát hiện E2E Sequence Error nên drop 1 frame và fallback về normal, rồi frame sau lại nhận Shifter failure -> tạo thành xung vuông 50/50.
+- **Khắc phục**:
+  1. *E2eProtector.cs*: Bổ sung phương thức ApplyPreservingCounter(payload, configuration) để bảo toàn 100% Alive Counter gốc của ECU thật trên live frame và chỉ tính toán lại mã kiểm tra toàn vẹn CRC8 trên payload mới.
+  2. *SimulationEngine.cs*:
+     - Trong RunReceiveLoopAsync: Khi nhận live frame từ Rx chuyển tiếp sang Tx, gọi CreateInjectedFrame với cờ preserveLiveCounter: true để giữ nguyên nhịp Alive Counter phần cứng của Cần số thật.
+     - Trong TransmitScheduledFrameAsync: Thêm cơ chế kiểm tra _lastRxTimestamps. Nếu luồng live traffic từ Rx đang chảy (< 500ms), Scheduler Loop sẽ tự động bỏ qua (skip) không phát lặp Cyclic để triệt tiêu hoàn toàn hiện tượng Double Transmission.
+- **Verification**:
+  - dotnet build Simulate.sln: **0 warning, 0 error**.
+  - dotnet test Simulate.sln: **PASS 100% (2,321 / 2,321 tests)**.

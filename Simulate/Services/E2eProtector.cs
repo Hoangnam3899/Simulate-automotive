@@ -35,6 +35,30 @@ namespace Simulate.Services
             return new E2eProtectionResult(isApplied: true, counter, checksum);
         }
 
+        public static E2eProtectionResult ApplyPreservingCounter(
+            Span<byte> payload,
+            E2eProtectionConfiguration configuration)
+        {
+            ArgumentNullException.ThrowIfNull(configuration);
+
+            if (!configuration.IsEnabled)
+            {
+                return new E2eProtectionResult(isApplied: false, counter: -1, checksum: null);
+            }
+
+            ValidateEnabledConfiguration(payload, configuration, previousCounter: 0);
+
+            byte existingCounterByte = payload[configuration.CounterByteIndex];
+            int currentCounter = (existingCounterByte & configuration.CounterMask) >> configuration.CounterShift;
+
+            int crcLength = configuration.CrcEndByteIndex - configuration.CrcStartByteIndex + 1;
+            byte checksum = Crc8SaeJ1850.Calculate(
+                payload.Slice(configuration.CrcStartByteIndex, crcLength));
+            payload[configuration.ChecksumByteIndex] = checksum;
+
+            return new E2eProtectionResult(isApplied: true, currentCounter, checksum);
+        }
+
         private static void ValidateEnabledConfiguration(
             ReadOnlySpan<byte> payload,
             E2eProtectionConfiguration configuration,

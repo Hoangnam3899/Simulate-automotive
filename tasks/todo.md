@@ -1920,3 +1920,15 @@ ew IntroVideoWindow().ShowDialog() trong Simulate/App.xaml.cs trước khi kiể
   - **Verification**:
     * dotnet build Simulate.sln: **0 warning, 0 error**.
     * dotnet test Simulate.sln: **PASS 100% (2,320 / 2,320 tests)**.
+- [x] **Khắc Phục Hiện Tượng Xung Dao Động SS_Fault Khi Inject Qua Gateway MITM**:
+  - **Mục tiêu**: Loại bỏ triệt để hiện tượng sóng vuông chập chờn giữa normal (0) và Shifter failure (1) trên TSMaster/CANoe khi inject SS_Fault; đảm bảo tín hiệu giữ phẳng lì ở mức lỗi liên tục theo đúng thời gian cấu hình.
+  - **Triển khai Chi tiết**:
+    1. *E2eProtector.cs*: Triển khai ApplyPreservingCounter bảo toàn Alive Counter phần cứng từ live frame của Cần số thật, chỉ tính lại Checksum CRC8 theo dữ liệu mới.
+    2. *SimulationEngine.cs*:
+       - Theo dõi timestamp _lastRxTimestamps của các frame nhận từ Rx.
+       - Tích hợp preserveLiveCounter: true trên luồng Gateway chuyển tiếp để kế thừa nhịp đếm vòng Alive của Cần số.
+       - Chặn Scheduler phát lặp Cyclic khi Gateway đang chuyển tiếp live traffic từ Rx, triệt tiêu 100% Double Transmission.
+    3. *Unit Tests*: Thêm test ApplyPreservingCounter_preserves_existing_counter_and_calculates_checksum trong E2eProtectionTests.cs (2,321 tests PASS).
+  - **Verification**:
+    * dotnet build Simulate.sln: **0 warning, 0 error**.
+    * dotnet test Simulate.sln: **PASS 100% (2,321 / 2,321 tests)**.
