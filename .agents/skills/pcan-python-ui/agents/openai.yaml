@@ -1,0 +1,3 @@
+display_name: PCAN Python UI
+short_description: PCAN/CANoe Python UI guidance.
+default_prompt: Use the PCAN Python UI skill to inspect project status, UI specs, and the ICanoeService boundary before making a change.
