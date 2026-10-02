@@ -633,3 +633,19 @@ Trước Task 0/1 cần người dùng phê duyệt riêng nếu thực hiện:
 - **Verification**:
   - dotnet build Simulate.sln: **0 warning, 0 error**.
   - dotnet test Simulate.sln: **PASS 100% (2,321 / 2,321 tests)**.
+
+## 22. Khắc Phục Các Lỗi Tiềm Ẩn & Nâng Cấp Hệ Thống Bộ Định Thì 1ms (F-01 đến F-05) (2026-10-02)
+- **Mục tiêu**: Xử lý triệt để 5 điểm Required từ đợt Review toàn diện:
+  1. **F-01**: Bọc try-catch phòng thủ quanh `CreateInjectedFrame` trong `RunReceiveLoopAsync`, tăng `_droppedFrames` khi gặp frame DLC ngắn hoặc giá trị ngoài biên, loại bỏ hoàn toàn nguy cơ sập ngầm Worker Task.
+  2. **F-02**: Phòng thủ `KeyNotFoundException` khi Scheduler chạy ở chế độ Raw (`Document == null`) hoặc CAN ID ngoài DBC; tự động fallback tạo baseline payload 8-byte chuẩn qua `GetRawScheduledBaseline`.
+  3. **F-03**: Dọn dẹp sạch `_lastRxTimestamps.Clear()` trong `StartAsync()` để ngăn chặn stale timestamp từ phiên trước.
+  4. **F-04**: Tái kích hoạt (dynamically spawn) các task cyclic / oneshot trong `UpdatePlan()` khi đang chạy scheduling, cho phép thay đổi chu kỳ và thêm rule tức thì trong runtime.
+  5. **F-05**: P/Invoke `timeBeginPeriod(1)` và `timeEndPeriod(1)` từ `winmm.dll` tuân thủ quy chuẩn `vector-hardware-mitm.md`, đưa độ phân giải timer Windows từ 15.6ms xuống 1ms.
+- **Verification**:
+  - Bổ sung 4 unit test trong `Simulate.Tests/SimulationEngineTests.cs`:
+    + `Malformed_frame_with_short_payload_is_dropped_safely_without_crashing_gateway_worker`
+    + `Scheduler_runs_with_raw_plan_without_dbc_document`
+    + `StartAsync_clears_stale_rx_timestamps_from_previous_session`
+    + `UpdatePlan_dynamically_schedules_new_cyclic_rule_while_scheduling_is_active`
+  - `dotnet build Simulate.sln`: **0 warning, 0 error**.
+  - `dotnet test Simulate.sln`: **PASS 100% (2,325 / 2,325 tests)**.

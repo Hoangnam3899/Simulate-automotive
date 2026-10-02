@@ -1931,4 +1931,14 @@ ew IntroVideoWindow().ShowDialog() trong Simulate/App.xaml.cs trước khi kiể
     3. *Unit Tests*: Thêm test ApplyPreservingCounter_preserves_existing_counter_and_calculates_checksum trong E2eProtectionTests.cs (2,321 tests PASS).
   - **Verification**:
     * dotnet build Simulate.sln: **0 warning, 0 error**.
-    * dotnet test Simulate.sln: **PASS 100% (2,321 / 2,321 tests)**.
+    * dotnet test Simulate.sln: **PASS 100% (2,321 / 2,321 tests)**.- [x] **Khắc Phục 5 Lỗi Tiềm Ẩn (F-01 Đến F-05) & Timer Resolution 1ms (2026-10-02)**:
+  - **Mục tiêu**: Xử lý triệt để 5 điểm Required từ đợt Review toàn diện hệ thống:
+    1. *F-01*: Bọc try-catch phòng vệ quanh CreateInjectedFrame trong RunReceiveLoopAsync để bắt ngoại lệ DLC ngắn hoặc signal ngoài biên, tăng _droppedFrames, bảo vệ worker task không bị crash.
+    2. *F-02*: Thêm GetRawScheduledBaseline và kiểm tra TryGetValue cho _messages trong TransmitScheduledFrameAsync và ValidateScheduledBaselineCompatibility để hỗ trợ Raw mode không cần DBC.
+    3. *F-03*: Bổ sung _lastRxTimestamps.Clear() trong StartAsync() bên trong lock (_baselineSync).
+    4. *F-04*: Cập nhật dynamic scheduling trong UpdatePlan(), cho phép thêm mới hoặc đổi chu kỳ cyclic rule khi scheduling đang hoạt động.
+    5. *F-05*: P/Invoke timeBeginPeriod(1) và timeEndPeriod(1) từ winmm.dll chuẩn hóa độ phân giải timer Windows về 1ms theo quy chuẩn vector-hardware-mitm.md.
+  - **Verification**:
+    * Bổ sung 4 unit test trong Simulate.Tests/SimulationEngineTests.cs (2,325 tests PASS 100%).
+    * dotnet build Simulate.sln: **0 warning, 0 error**.
+    * dotnet test Simulate.sln: **PASS 100% (2,325 / 2,325 tests)**.

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Simulate.Models;
@@ -26,6 +27,15 @@ namespace Simulate.Services
         private readonly SemaphoreSlim _transmitGate = new(1, 1);
         public event Action<RoutedCanFrame>? FrameRouted;
         public event Action<HardwareFailure>? EngineFaulted;
+
+        [DllImport("winmm.dll", EntryPoint = "timeBeginPeriod", SetLastError = true)]
+        private static extern uint TimeBeginPeriod(uint uMilliseconds);
+
+        [DllImport("winmm.dll", EntryPoint = "timeEndPeriod", SetLastError = true)]
+        private static extern uint TimeEndPeriod(uint uMilliseconds);
+
+        private bool _isTimePeriodActive;
+        private readonly HashSet<(uint CanIdentifier, bool IsExtendedIdentifier)> _activeScheduledRules = new();
 
         private Dictionary<
             (uint CanIdentifier, bool IsExtendedIdentifier),
@@ -268,6 +278,30 @@ namespace Simulate.Services
                         entry => entry.Value.SignalOverrides.ToArray());
                 Volatile.Write(ref _overrideSnapshot, newOverrideSnapshot);
             }
+
+            lock (_lifecycleSync)
+            {
+                if (_schedulerTask is { IsCompleted: false } && _scheduleCancellation is { IsCancellationRequested: false } scheduleCts)
+                {
+                    Dictionary<(uint CanIdentifier, bool IsExtendedIdentifier), SimulationMessageRule> currentEnabled = Volatile.Read(ref _enabledRules);
+                    foreach (SimulationMessageRule rule in currentEnabled.Values)
+                    {
+                        var ruleKey = (rule.CanIdentifier, rule.IsExtendedIdentifier);
+                        if (rule.GatewayMode != GatewayMode.Block
+                            && rule.SendType == SimulationSendType.Cyclic
+                            && !_activeScheduledRules.Contains(ruleKey))
+                        {
+                            _ = Task.Run(() => RunCyclicAsync(rule, scheduleCts.Token), CancellationToken.None);
+                        }
+                        else if (rule.GatewayMode != GatewayMode.Block
+                            && rule.SendType == SimulationSendType.OneShot
+                            && !_activeScheduledRules.Contains(ruleKey))
+                        {
+                            _ = Task.Run(() => RunOneShotAsync(rule, scheduleCts.Token), CancellationToken.None);
+                        }
+                    }
+                }
+            }
         }
 
         /// <inheritdoc />
@@ -301,6 +335,12 @@ namespace Simulate.Services
                 lock (_baselineSync)
                 {
                     _lastRxFrames.Clear();
+                    _lastRxTimestamps.Clear();
+                }
+
+                if (OperatingSystem.IsWindows() && !_isTimePeriodActive)
+                {
+                    _isTimePeriodActive = TimeBeginPeriod(1) == 0;
                 }
 
                 _runCancellation =
@@ -557,6 +597,13 @@ namespace Simulate.Services
 
             _session.FrameLossDetected -= OnSessionFrameLossDetected;
             await StopAsync().ConfigureAwait(false);
+
+            if (OperatingSystem.IsWindows() && _isTimePeriodActive)
+            {
+                _ = TimeEndPeriod(1);
+                _isTimePeriodActive = false;
+            }
+
             GC.SuppressFinalize(this);
         }
 
@@ -609,13 +656,25 @@ namespace Simulate.Services
                     try
                     {
                         bool wasModified = false;
-                        CanFrame outboundFrame = rule?.GatewayMode == GatewayMode.Inject
-                            ? CreateInjectedFrame(
-                                routedFrame.Frame,
-                                rule,
-                                out wasModified,
-                                preserveLiveCounter: routedFrame.Source == CanGatewaySide.Rx)
-                            : routedFrame.Frame;
+                        CanFrame outboundFrame;
+                        try
+                        {
+                            outboundFrame = rule?.GatewayMode == GatewayMode.Inject
+                                ? CreateInjectedFrame(
+                                    routedFrame.Frame,
+                                    rule,
+                                    out wasModified,
+                                    preserveLiveCounter: routedFrame.Source == CanGatewaySide.Rx)
+                                : routedFrame.Frame;
+                        }
+                        catch (Exception)
+                        {
+                            // Malformed payload or signal packing error: drop this frame safely
+                            // to preserve gateway availability without crashing the receive worker task.
+                            Interlocked.Increment(ref _droppedFrames);
+                            continue;
+                        }
+
                         HardwareOperationResult result = await _session
                             .TransmitAsync(destination, outboundFrame, cancellationToken)
                             .ConfigureAwait(false);
@@ -689,44 +748,98 @@ namespace Simulate.Services
             SimulationMessageRule rule,
             CancellationToken cancellationToken)
         {
-            if (rule.Timing.StartDelay > TimeSpan.Zero)
+            var key = (rule.CanIdentifier, rule.IsExtendedIdentifier);
+            lock (_lifecycleSync)
             {
-                await Task.Delay(
-                    rule.Timing.StartDelay,
-                    _timeProvider,
-                    cancellationToken).ConfigureAwait(false);
+                _activeScheduledRules.Add(key);
             }
 
-            await TransmitScheduledFrameAsync(rule, cancellationToken).ConfigureAwait(false);
+            try
+            {
+                if (rule.Timing.StartDelay > TimeSpan.Zero)
+                {
+                    await Task.Delay(
+                        rule.Timing.StartDelay,
+                        _timeProvider,
+                        cancellationToken).ConfigureAwait(false);
+                }
+
+                await TransmitScheduledFrameAsync(rule, cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                lock (_lifecycleSync)
+                {
+                    _activeScheduledRules.Remove(key);
+                }
+            }
         }
 
         private async Task RunCyclicAsync(
             SimulationMessageRule rule,
             CancellationToken cancellationToken)
         {
-            if (rule.Timing.StartDelay > TimeSpan.Zero)
+            var key = (rule.CanIdentifier, rule.IsExtendedIdentifier);
+            lock (_lifecycleSync)
             {
-                await Task.Delay(
-                    rule.Timing.StartDelay,
-                    _timeProvider,
-                    cancellationToken).ConfigureAwait(false);
+                _activeScheduledRules.Add(key);
             }
 
-            int sentFrames = 0;
-            while (rule.Timing.RepeatCount == 0 || sentFrames < rule.Timing.RepeatCount)
+            try
             {
-                await TransmitScheduledFrameAsync(rule, cancellationToken).ConfigureAwait(false);
-                sentFrames++;
-                if (rule.Timing.RepeatCount != 0
-                    && sentFrames >= rule.Timing.RepeatCount)
+                if (rule.Timing.StartDelay > TimeSpan.Zero)
                 {
-                    break;
+                    await Task.Delay(
+                        rule.Timing.StartDelay,
+                        _timeProvider,
+                        cancellationToken).ConfigureAwait(false);
                 }
 
-                await Task.Delay(
-                    rule.Timing.CycleInterval!.Value,
-                    _timeProvider,
-                    cancellationToken).ConfigureAwait(false);
+                int sentFrames = 0;
+                while (true)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    Dictionary<(uint CanIdentifier, bool IsExtendedIdentifier), SimulationMessageRule> currentRules =
+                        Volatile.Read(ref _enabledRules);
+                    if (!currentRules.TryGetValue(key, out SimulationMessageRule? activeRule)
+                        || activeRule.GatewayMode == GatewayMode.Block
+                        || activeRule.SendType != SimulationSendType.Cyclic)
+                    {
+                        break;
+                    }
+
+                    if (activeRule.Timing.RepeatCount != 0 && sentFrames >= activeRule.Timing.RepeatCount)
+                    {
+                        break;
+                    }
+
+                    await TransmitScheduledFrameAsync(activeRule, cancellationToken).ConfigureAwait(false);
+                    sentFrames++;
+
+                    if (activeRule.Timing.RepeatCount != 0 && sentFrames >= activeRule.Timing.RepeatCount)
+                    {
+                        break;
+                    }
+
+                    TimeSpan interval = activeRule.Timing.CycleInterval ?? TimeSpan.FromMilliseconds(100);
+                    if (interval <= TimeSpan.Zero)
+                    {
+                        interval = TimeSpan.FromMilliseconds(100);
+                    }
+
+                    await Task.Delay(
+                        interval,
+                        _timeProvider,
+                        cancellationToken).ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                lock (_lifecycleSync)
+                {
+                    _activeScheduledRules.Remove(key);
+                }
             }
         }
 
@@ -771,11 +884,30 @@ namespace Simulate.Services
                                 }
                             }
 
-                            DbcMessage message = _messages[msgKey];
-                            CanFrame baseline = GetScheduledBaseline(message);
-                            outboundFrame = rule.GatewayMode == GatewayMode.Inject
-                                ? CreateInjectedFrame(baseline, rule, out wasModified, preserveLiveCounter: false)
-                                : baseline;
+                            CanFrame baseline;
+                            Dictionary<(uint CanIdentifier, bool IsExtendedIdentifier), DbcMessage> messages =
+                                Volatile.Read(ref _messages);
+                            if (messages.TryGetValue(msgKey, out DbcMessage? message))
+                            {
+                                baseline = GetScheduledBaseline(message);
+                            }
+                            else
+                            {
+                                baseline = GetRawScheduledBaseline(rule);
+                            }
+
+                            try
+                            {
+                                outboundFrame = (rule.GatewayMode == GatewayMode.Inject && message is not null)
+                                    ? CreateInjectedFrame(baseline, rule, out wasModified, preserveLiveCounter: false)
+                                    : baseline;
+                            }
+                            catch (Exception)
+                            {
+                                // Malformed payload or signal packing error: skip this scheduled frame safely
+                                return;
+                            }
+
                             transmission = _session.TransmitAsync(
                                 CanGatewaySide.Tx,
                                 outboundFrame,
@@ -834,23 +966,57 @@ namespace Simulate.Services
 
         private void ValidateScheduledBaselineCompatibility()
         {
+            Dictionary<(uint CanIdentifier, bool IsExtendedIdentifier), DbcMessage> messages =
+                Volatile.Read(ref _messages);
             foreach (SimulationMessageRule rule in _enabledRules.Values.Where(rule =>
                 rule.GatewayMode != GatewayMode.Block))
             {
-                DbcMessage message = _messages[
-                    (rule.CanIdentifier, rule.IsExtendedIdentifier)];
-                if (_session.Options.BusMode == CanBusMode.Classic
-                    && message.PayloadLength > CanFrame.MaximumClassicPayloadLength)
+                if (messages.TryGetValue(
+                    (rule.CanIdentifier, rule.IsExtendedIdentifier),
+                    out DbcMessage? message))
                 {
-                    throw new InvalidOperationException(
-                        "Classic CAN scheduling requires a DBC payload length from 0 to 8 bytes.");
-                }
+                    if (_session.Options.BusMode == CanBusMode.Classic
+                        && message.PayloadLength > CanFrame.MaximumClassicPayloadLength)
+                    {
+                        throw new InvalidOperationException(
+                            "Classic CAN scheduling requires a DBC payload length from 0 to 8 bytes.");
+                    }
 
-                if (_session.Options.BusMode == CanBusMode.FlexibleDataRate)
-                {
-                    _ = GetDataLengthCode(message.PayloadLength);
+                    if (_session.Options.BusMode == CanBusMode.FlexibleDataRate)
+                    {
+                        _ = GetDataLengthCode(message.PayloadLength);
+                    }
                 }
             }
+        }
+
+        private CanFrame GetRawScheduledBaseline(SimulationMessageRule rule)
+        {
+            lock (_baselineSync)
+            {
+                if (_lastRxFrames.TryGetValue(
+                    (rule.CanIdentifier, rule.IsExtendedIdentifier),
+                    out CanFrame? baseline))
+                {
+                    return baseline;
+                }
+            }
+
+            byte[] payload = new byte[8];
+            if (_session.Options.BusMode == CanBusMode.Classic)
+            {
+                return CanFrame.CreateClassic(
+                    rule.CanIdentifier,
+                    rule.IsExtendedIdentifier,
+                    payload);
+            }
+
+            return CanFrame.CreateFlexibleDataRate(
+                rule.CanIdentifier,
+                rule.IsExtendedIdentifier,
+                CanDataLengthCode.Bytes8,
+                isBitRateSwitchEnabled: true,
+                payload);
         }
 
         private static CanDataLengthCode GetDataLengthCode(int payloadLength)
@@ -1060,7 +1226,14 @@ namespace Simulate.Services
                         _scheduleGate.Set();
                         _scheduleCancellation?.Dispose();
                         _scheduleCancellation = null;
+                        _activeScheduledRules.Clear();
                     }
+                }
+
+                if (OperatingSystem.IsWindows() && _isTimePeriodActive)
+                {
+                    _ = TimeEndPeriod(1);
+                    _isTimePeriodActive = false;
                 }
 
                 runCancellation.Dispose();
@@ -1129,6 +1302,7 @@ namespace Simulate.Services
                         _scheduleCancellation = null;
                         _scheduleStopTask = null;
                         _isSchedulingPaused = false;
+                        _activeScheduledRules.Clear();
                     }
                 }
 

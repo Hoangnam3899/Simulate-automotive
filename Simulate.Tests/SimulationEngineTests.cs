@@ -848,6 +848,152 @@ namespace Simulate.Tests
             await engine.StopAsync();
         }
 
+        [TestMethod]
+        public async Task Malformed_frame_with_short_payload_is_dropped_safely_without_crashing_gateway_worker()
+        {
+            await using MockCanGatewaySession session = await OpenSessionAsync();
+            const string documentText = """
+                BO_ 291 VehicleData: 8 Gateway
+                 SG_ VehicleSpeed : 16|8@1+ (1,0) [0|255] "km/h" Gateway
+                """;
+            DbcDocument document = DbcParser.Parse(documentText).Document!;
+            var rule = new SimulationMessageRule(
+                canIdentifier: 0x123,
+                isExtendedIdentifier: false,
+                isEnabled: true,
+                gatewayMode: GatewayMode.Inject,
+                sendType: SimulationSendType.Cyclic,
+                timing: new SimulationTiming(TimeSpan.Zero, TimeSpan.FromMilliseconds(100), 0),
+                signalOverrides: [new SignalOverride("VehicleSpeed", 50)],
+                e2eProtection: new E2eProtectionConfiguration(
+                    isEnabled: true,
+                    checksumByteIndex: 0,
+                    counterByteIndex: 1,
+                    counterMask: 0x0F,
+                    counterMaximumValue: 14,
+                    crcStartByteIndex: 1,
+                    crcEndByteIndex: 7));
+            var plan = new SimulationPlan(document, [rule]);
+            await using var engine = new SimulationEngine(session, plan);
+
+            await engine.StartAsync();
+            Assert.IsTrue(engine.IsRunning);
+
+            // Inbound frame with only 2 bytes payload (too short for 8-byte E2E range)
+            CanFrame malformedFrame = CanFrame.CreateClassic(0x123, false, new byte[] { 0xAA, 0xBB });
+            Assert.IsTrue((await session.EnqueueReceivedAsync(CanGatewaySide.Rx, malformedFrame)).IsSuccess);
+
+            // Verify dropped frames incremented and worker loop is still running healthy
+            await WaitUntilAsync(() => engine.Statistics.DroppedFrames == 1);
+            Assert.IsTrue(engine.IsRunning);
+
+            // Now send a valid unconfigured frame and verify it passes through cleanly
+            CanFrame validFrame = CanFrame.CreateClassic(0x456, false, new byte[] { 0x11, 0x22 });
+            Assert.IsTrue((await session.EnqueueReceivedAsync(CanGatewaySide.Rx, validFrame)).IsSuccess);
+            RoutedCanFrame transmitted = await ReadNextAsync(session.ReceiveTransmittedAsync());
+            Assert.AreEqual(0x456U, transmitted.Frame.Identifier);
+            Assert.AreEqual(1L, engine.Statistics.PassedFrames);
+
+            await engine.StopAsync();
+        }
+
+        [TestMethod]
+        public async Task Scheduler_runs_with_raw_plan_without_dbc_document()
+        {
+            await using MockCanGatewaySession session = await OpenSessionAsync();
+            var rule = new SimulationMessageRule(
+                canIdentifier: 0x300,
+                isExtendedIdentifier: false,
+                isEnabled: true,
+                gatewayMode: GatewayMode.PassThrough,
+                sendType: SimulationSendType.OneShot,
+                timing: new SimulationTiming(TimeSpan.Zero, null, 1),
+                signalOverrides: [],
+                e2eProtection: new E2eProtectionConfiguration(isEnabled: false));
+            var rawPlan = new SimulationPlan(document: null, [rule]);
+            await using var engine = new SimulationEngine(session, rawPlan);
+
+            await engine.StartAsync();
+            await engine.StartSchedulingAsync();
+
+            RoutedCanFrame transmitted = await ReadNextAsync(session.ReceiveTransmittedAsync());
+            Assert.AreEqual(0x300U, transmitted.Frame.Identifier);
+            Assert.AreEqual(8, transmitted.Frame.Data.Length);
+            Assert.AreEqual(1L, engine.Statistics.ScheduledFrames);
+
+            await engine.StopAsync();
+        }
+
+        [TestMethod]
+        public async Task StartAsync_clears_stale_rx_timestamps_from_previous_session()
+        {
+            await using MockCanGatewaySession session = await OpenSessionAsync();
+            var engine = new SimulationEngine(session, CreatePlan());
+
+            await engine.StartAsync();
+            Assert.IsTrue((await session.EnqueueReceivedAsync(
+                CanGatewaySide.Rx,
+                CanFrame.CreateClassic(0x123, false, new byte[] { 0x01 }))).IsSuccess);
+            _ = await ReadNextAsync(session.ReceiveTransmittedAsync());
+
+            await engine.StopAsync();
+            // Start again and ensure clean state
+            await engine.StartAsync();
+            Assert.IsTrue(engine.IsRunning);
+            await engine.StopAsync();
+        }
+
+        [TestMethod]
+        public async Task UpdatePlan_dynamically_schedules_new_cyclic_rule_while_scheduling_is_active()
+        {
+            await using MockCanGatewaySession session = await OpenSessionAsync();
+            const string docText = """
+                BO_ 291 MsgA: 8 Gateway
+                 SG_ SigA : 0|8@1+ (1,0) [0|255] "" Gateway
+                BO_ 292 MsgB: 8 Gateway
+                 SG_ SigB : 0|8@1+ (1,0) [0|255] "" Gateway
+                """;
+            DbcDocument doc = DbcParser.Parse(docText).Document!;
+
+            var ruleA = new SimulationMessageRule(
+                0x123, false, true, GatewayMode.PassThrough, SimulationSendType.Cyclic,
+                new SimulationTiming(TimeSpan.Zero, TimeSpan.FromMilliseconds(50), 0),
+                [], new E2eProtectionConfiguration(false));
+            var planA = new SimulationPlan(doc, [ruleA]);
+
+            await using var engine = new SimulationEngine(session, planA);
+            await engine.StartAsync();
+            await engine.StartSchedulingAsync();
+
+            // First rule produces frames
+            RoutedCanFrame frameA = await ReadNextAsync(session.ReceiveTransmittedAsync());
+            Assert.AreEqual(0x123U, frameA.Frame.Identifier);
+
+            // Dynamically update plan to include MsgB
+            var ruleB = new SimulationMessageRule(
+                0x124, false, true, GatewayMode.PassThrough, SimulationSendType.Cyclic,
+                new SimulationTiming(TimeSpan.Zero, TimeSpan.FromMilliseconds(50), 0),
+                [], new E2eProtectionConfiguration(false));
+            var planB = new SimulationPlan(doc, [ruleA, ruleB]);
+
+            engine.UpdatePlan(planB);
+
+            // Read until frameB is received
+            bool receivedB = false;
+            for (int i = 0; i < 5; i++)
+            {
+                RoutedCanFrame next = await ReadNextAsync(session.ReceiveTransmittedAsync());
+                if (next.Frame.Identifier == 0x124U)
+                {
+                    receivedB = true;
+                    break;
+                }
+            }
+
+            Assert.IsTrue(receivedB, "New cyclic rule added via UpdatePlan should transmit while scheduling is active.");
+            await engine.StopAsync();
+        }
+
         private static SimulationPlan CreatePlan()
         {
             const string documentText = """
