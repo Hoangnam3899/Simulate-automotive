@@ -58,6 +58,45 @@
                 </Setter.Value>
             </Setter>
         </Style>
+    
+        <Style x:Key="DialogToggleSwitch" TargetType="ToggleButton">
+            <Setter Property="Height" Value="26"/>
+            <Setter Property="FontSize" Value="9.5"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="8,2"/>
+            <Setter Property="Background" Value="{StaticResource DlgCardBg}"/>
+            <Setter Property="Foreground" Value="{StaticResource DlgTextSecondary}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource DlgBorder}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="3" Padding="{TemplateBinding Padding}">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                <Border x:Name="Dot" Width="6" Height="6" CornerRadius="3" Background="#64748B" Margin="0,0,5,0"/>
+                                <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{StaticResource DlgHeaderBg}"/>
+                                <Setter Property="Foreground" Value="{StaticResource DlgTextPrimary}"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#1E3A5F"/>
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource DlgAccentCyan}"/>
+                                <Setter TargetName="Dot" Property="Background" Value="{StaticResource DlgAccentCyan}"/>
+                                <Setter Property="Foreground" Value="{StaticResource DlgAccentCyan}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
     <Border BorderBrush="{StaticResource DlgBorder}" BorderThickness="1" Background="{StaticResource DlgBg}" CornerRadius="4">
         <Grid Margin="14">
@@ -82,21 +121,30 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBox x:Name="TxtSearch" TextChanged="TxtSearch_TextChanged"
-                         FontSize="10" Height="26" Padding="8,3"
-                         Background="{StaticResource DlgInputBg}" Foreground="{StaticResource DlgTextPrimary}"
-                         BorderBrush="{StaticResource DlgBorder}" VerticalContentAlignment="Center"/>
-                <TextBlock Text="{DynamicResource Loc_SelMsg_SearchHint}" IsHitTestVisible="False"
-                           Foreground="{StaticResource DlgTextMuted}" FontSize="9.5" VerticalAlignment="Center"
-                           Margin="10,0,0,0" Visibility="{Binding ElementName=TxtSearch, Path=Text.IsEmpty, Converter={StaticResource BoolToVis}, FallbackValue=Collapsed}"/>
-                <Button Grid.Column="1" Content="{DynamicResource Loc_SelMsg_BtnSelectAll}" Click="BtnSelectAll_Click"
+                <Grid Grid.Column="0">
+                    <TextBox x:Name="TxtSearch" TextChanged="TxtSearch_TextChanged"
+                             FontSize="10" Height="26" Padding="8,3"
+                             Background="{StaticResource DlgInputBg}" Foreground="{StaticResource DlgTextPrimary}"
+                             BorderBrush="{StaticResource DlgBorder}" VerticalContentAlignment="Center"/>
+                    <TextBlock x:Name="TxtSearchHint" Text="{DynamicResource Loc_SelMsg_SearchHint}" IsHitTestVisible="False"
+                               Foreground="{StaticResource DlgTextMuted}" FontSize="9.5" VerticalAlignment="Center"
+                               Margin="10,0,0,0" Visibility="{Binding ElementName=TxtSearch, Path=Text.IsEmpty, Converter={StaticResource BoolToVis}, FallbackValue=Collapsed}"/>
+                </Grid>
+                <ToggleButton Grid.Column="1" x:Name="TglSearchBySignal"
+                              Content="{DynamicResource Loc_SelMsg_SearchBySignal}"
+                              Click="TglSearchBySignal_Click"
+                              Style="{StaticResource DialogToggleSwitch}"
+                              Margin="6,0,0,0"
+                              ToolTip="{DynamicResource Loc_SelMsg_SearchBySignal_Tooltip}"/>
+                <Button Grid.Column="2" Content="{DynamicResource Loc_SelMsg_BtnSelectAll}" Click="BtnSelectAll_Click"
                         Style="{StaticResource DialogButton}" Margin="6,0,0,0"/>
-                <Button Grid.Column="2" Content="{DynamicResource Loc_SelMsg_BtnClear}" Click="BtnDeselectAll_Click"
+                <Button Grid.Column="3" Content="{DynamicResource Loc_SelMsg_BtnClear}" Click="BtnDeselectAll_Click"
                         Style="{StaticResource DialogButton}" Background="Transparent" Margin="4,0,0,0"/>
             </Grid>
 
-            <!-- Messages DataGrid -->
+            <!-- Messages DataGrid (Shown when By Signal is OFF) -->
             <DataGrid Grid.Row="2" x:Name="DgMessages"
                       AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
                       CanUserSortColumns="True" HeadersVisibility="Column"
@@ -104,7 +152,11 @@
                       BorderBrush="{StaticResource DlgBorder}" BorderThickness="1"
                       RowBackground="{StaticResource DlgCardBg}" AlternatingRowBackground="{StaticResource DlgAltRowBg}"
                       GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="{StaticResource DlgBorder}"
-                      FontSize="9.5" SelectionMode="Single">
+                      FontSize="9.5" SelectionMode="Single"
+                      EnableRowVirtualization="True"
+                      VirtualizingPanel.IsVirtualizing="True"
+                      VirtualizingPanel.VirtualizationMode="Recycling"
+                      ScrollViewer.CanContentScroll="True">
                 <DataGrid.Columns>
                     <DataGridCheckBoxColumn Header="Select" Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="52"/>
                     <DataGridTextColumn Header="CAN ID (Hex)" Binding="{Binding FormattedId}" IsReadOnly="True" Width="95">
@@ -142,6 +194,83 @@
                         </DataGridTextColumn.ElementStyle>
                     </DataGridTextColumn>
                     <DataGridTextColumn Header="Transmitter" Binding="{Binding Transmitter}" IsReadOnly="True" Width="95">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{StaticResource DlgTextSecondary}"/>
+                                <Setter Property="VerticalAlignment" Value="Center"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <!-- Signals DataGrid (Shown when By Signal is ON) -->
+            <DataGrid Grid.Row="2" x:Name="DgSignals" Visibility="Collapsed"
+                      AutoGenerateColumns="False" CanUserAddRows="False" CanUserDeleteRows="False"
+                      CanUserSortColumns="True" HeadersVisibility="Column"
+                      Background="{StaticResource DlgCardBg}" Foreground="{StaticResource DlgTextPrimary}"
+                      BorderBrush="{StaticResource DlgBorder}" BorderThickness="1"
+                      RowBackground="{StaticResource DlgCardBg}" AlternatingRowBackground="{StaticResource DlgAltRowBg}"
+                      GridLinesVisibility="Horizontal" HorizontalGridLinesBrush="{StaticResource DlgBorder}"
+                      FontSize="9.5" SelectionMode="Single"
+                      EnableRowVirtualization="True"
+                      VirtualizingPanel.IsVirtualizing="True"
+                      VirtualizingPanel.VirtualizationMode="Recycling"
+                      ScrollViewer.CanContentScroll="True">
+                <DataGrid.Columns>
+                    <DataGridCheckBoxColumn Header="Select" Binding="{Binding IsSelected, UpdateSourceTrigger=PropertyChanged}" Width="52"/>
+                    <DataGridTextColumn Header="Signal Name" Binding="{Binding Name}" IsReadOnly="True" Width="1.4*">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{StaticResource DlgAccentCyan}"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                <Setter Property="VerticalAlignment" Value="Center"/>
+                                <Setter Property="ToolTip" Value="{Binding TooltipSummary}"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Header="Parent Message" Binding="{Binding ParentMessageName}" IsReadOnly="True" Width="*">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{StaticResource DlgTextPrimary}"/>
+                                <Setter Property="FontWeight" Value="Medium"/>
+                                <Setter Property="VerticalAlignment" Value="Center"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Header="CAN ID (Hex)" Binding="{Binding FormattedId}" IsReadOnly="True" Width="90">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{StaticResource DlgTextSecondary}"/>
+                                <Setter Property="VerticalAlignment" Value="Center"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Header="StartBit" Binding="{Binding StartBit}" IsReadOnly="True" Width="55">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{StaticResource DlgTextSecondary}"/>
+                                <Setter Property="VerticalAlignment" Value="Center"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Header="Bits" Binding="{Binding BitLength}" IsReadOnly="True" Width="45">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{StaticResource DlgTextSecondary}"/>
+                                <Setter Property="VerticalAlignment" Value="Center"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Header="Unit" Binding="{Binding Unit}" IsReadOnly="True" Width="55">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{StaticResource DlgTextSecondary}"/>
+                                <Setter Property="VerticalAlignment" Value="Center"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Header="Transmitter" Binding="{Binding Transmitter}" IsReadOnly="True" Width="85">
                         <DataGridTextColumn.ElementStyle>
                             <Style TargetType="TextBlock">
                                 <Setter Property="Foreground" Value="{StaticResource DlgTextSecondary}"/>

@@ -1,0 +1,28 @@
+﻿================================================================================
+BAO CAO CODE REVIEW TOAN DIEN HE THONG (CODE REVIEW & QUALITY AUDIT)
+Ngay review: 2026-10-01
+Pham vi: Simulate.sln (.NET 8 WPF MVVM, Vector XL API, E2E Diagnostics, Localization)
+Tieu chuan ap dung: Two-Axis Review (Spec vs Standards), Automotive Rules, Review Severity
+================================================================================
+
+I. KET QUA KIEM TRA HE THONG (BUILD & TEST VERIFICATION)
+- dotnet build: 0 Warning, 0 Error (Thanh cong).
+- dotnet test: 2,321 / 2,321 Unit Tests PASS 100% (Thoi gian chay ~9s).
+- Resource String Parity: 5/5 ngon ngu dong bo chinh xac 161/161 keys (Diff = 0).
+
+II. BANG TONG HOP CAC DIEM CAN LUU Y VA LOI TIEM AN (REVIEW FINDINGS)
+
+| ID | Phan Loai (Axis) | Muc Do (Severity) | Vi Tri (File / Line) | Mo Ta Chi Tiet | Huong Khac Phuc De Xuat |
+|---|---|---|---|---|---|
+| F-01 | Standards (Correctness / Exception Handling) | Required | Simulate/Services/SimulationEngine.cs (563-665, 938-990) | RunReceiveLoopAsync chi bat HardwareOperationException. Neu CreateInjectedFrame hoac PackPhysical gap DLC bat thuong hoac min/max ngoai le, ArgumentException lam sap ngam toan bo worker thread khong kich hoat EngineFaulted. | Boc try-catch bao quanh CreateInjectedFrame / route, log loi, danh dau dropped frame de giu gateway luon song. |
+| F-02 | Standards (Correctness / Edge Cases) | Required | Simulate/Services/SimulationEngine.cs (774, 840) | KeyNotFoundException khi Scheduler chay o che do Raw (Document == null) hoac rule chua CAN ID ngoai DBC: _messages[msgKey] khong kiem tra TryGetValue. | Dung TryGetValue va co co che fallback tao frame baseline tu RAW ID hoac bo qua an toan. |
+| F-03 | Standards (State Management) | Required | Simulate/Services/SimulationEngine.cs (301-304) | _lastRxTimestamps khong duoc clear trong StartAsync() giong nhu _lastRxFrames, dan den giu lai timestamp cu neu khoi dong lai nhanh. | Bo sung _lastRxTimestamps.Clear() trong khoi lock (_baselineSync) tai StartAsync(). |
+| F-04 | Spec (Dynamic Behavior) | Required | Simulate/Services/SimulationEngine.cs (227-271, 667-686) | UpdatePlan() chi cap nhat dictionary rule/overrides nhung khong cap nhat hoac tai khoi dong cac task phat chu ky (RunCyclicAsync) dang chay cua Scheduler. | Tai tao hoac cap nhat dynamic token / cycle delay cho cac task cyclic khi plan thay doi. |
+| F-05 | Spec (Automotive Timing) | Required | Simulate/Services/SimulationEngine.cs, VectorCanGatewaySession.cs | Chua goi timeBeginPeriod(1) tu winmm.dll theo quy chuan vector-hardware-mitm.md, khien Task.Delay phu thuoc resolution 15.6ms cua Windows gay jitter chu ky CAN. | P/Invoke timeBeginPeriod(1) khi Start va timeEndPeriod(1) khi Stop engine. |
+| F-06 | Standards (Performance & Latency) | Optional | Simulate/Services/VectorCanGatewaySession.cs (586) | Task.Delay(2ms) khi hang doi Vector trong gay tre polling. | Co the toi uu bang Vector XL Notification Event (xlSetNotification) de danh thuc tuc thi. |
+| F-07 | Standards (Security) | Optional | Simulate/Services/LicenseService.cs (12-13) | MasterKey va SecretSalt van con duoi dang plaintext trong code. | Can nhac loai bo hoac ma hoa trong ban Release de tuan thu triet de user_global. |
+| F-08 | Standards (Logic Edge Case) | Optional | Simulate/Services/SimulationEngine.cs (719) | sentFrames++ tang ngay ca khi frame bi skip boi live traffic, gay het som voi RepeatCount > 0. | Chi tang sentFrames khi frame thuc su duoc truyen. |
+| F-09 | Spec (DBC Capability) | FYI | Simulate/Services/DbcParser.cs (216-225) | Chua ho tro Multiplexed Signals (m0, m1, M), hien bo qua kem warning. | Thiet ke them SG_MUL_VAL_ parser trong cac phien ban mo rong tuong lai. |
+| F-10 | Standards (Localization) | FYI | Simulate/Resources/Languages/ | 5 file Strings.*.xaml da dong bo 100% (161/161 keys). | He thong da hoan thien rat tot. |
+
+================================================================================

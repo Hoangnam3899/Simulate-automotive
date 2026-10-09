@@ -1,0 +1,13 @@
+﻿[2026-10-02 14:32:00]
+CHANGE LOG - DU AN SIMULATE
+Nhanh: chore/merge-agent-skills
+1. Sua Simulate/Services/SimulationEngine.cs:
+   - F-01: Boc try-catch bao ve RunReceiveLoopAsync va TransmitScheduledFrameAsync truoc ngoai le frame malformed / DLC ngan.
+   - F-02: Ho tro Raw mode cho Scheduler qua GetRawScheduledBaseline va TryGetValue cho _messages.
+   - F-03: Xoa sach _lastRxTimestamps trong StartAsync().
+   - F-04: Dynamic schedule update cho phep doi chu ky phat va them rule moi khi dang chay scheduling.
+   - F-05: P/Invoke timeBeginPeriod(1) / timeEndPeriod(1) tu winmm.dll dua timer resolution ve 1ms (dat chuan CA1806).
+2. Sua Simulate.Tests/SimulationEngineTests.cs:
+   - Bo sung 4 unit test bao phu 100% cho 5 tinh nang tren.
+3. Cap nhat tasks/plan.md, tasks/todo.md.
+Ket qua build & test: dotnet build thanh cong 0 warning 0 error, dotnet test 2,325/2,325 PASS 100%.

@@ -1,0 +1,54 @@
+﻿================================================================================
+BAO CAO XU LY CAC DIEM CAN KHAC PHUC TU CODE REVIEW (F-01 DEN F-05)
+Ngay thuc hien: 2026-10-02
+Pham vi: Simulate.sln - Simulate/Services/SimulationEngine.cs & Simulate.Tests
+Trang thai: HOAN TAT (Build 0 warning 0 error, 2,325/2,325 Unit Tests PASS)
+================================================================================
+
+1. DANH SACH TEP TIN THAY DOI
+--------------------------------------------------------------------------------
+- Sua doi:
+  + Simulate/Services/SimulationEngine.cs
+  + Simulate.Tests/SimulationEngineTests.cs
+  + tasks/plan.md
+  + tasks/todo.md
+
+2. CHI TIET CAC MUC DA KHAC PHUC
+--------------------------------------------------------------------------------
+- F-01 (Exception Handling & Gateway Worker Resilience):
+  Boc try-catch bao quanh CreateInjectedFrame trong RunReceiveLoopAsync va
+  TransmitScheduledFrameAsync. Neu frame nhan duoc co payload ngan hon E2E range (DLC bat thuong)
+  hoac gia tri tin hieu bi loi ngoai bien, ham se bat loi, tang _droppedFrames va tiep tuc
+  nhan frame tiep theo, triet tieu hoan toan nguy co unhandled exception lam sap Worker Task.
+
+- F-02 (Raw Mode & Missing DBC Message Fallback):
+  Bo sung phuong thuc GetRawScheduledBaseline de tao baseline 8-byte frame khi can Identifier
+  khong co trong DBC (hoac SimulationPlan chay o che do Raw Document == null).
+  Thay the truy cap _messages[msgKey] bang TryGetValue de tranh KeyNotFoundException.
+
+- F-03 (State Lifecycle Cleanup):
+  Bo sung _lastRxTimestamps.Clear() ben trong khoi lock (_baselineSync) tai StartAsync(),
+  loai bo triet de nguy co stale timestamps tu phien chay cu anh huong den phien moi.
+
+- F-04 (Dynamic Plan Scheduler Reactivity):
+  Cap nhat RunCyclicAsync de doc dong activeRule tu _enabledRules tai moi chu ky lap (cho phep
+  doi chu ky phat ngay lap tuc) va thoat an toan khi rule bi disable.
+  Cap nhat UpdatePlan() de tu dong khoi chay task phat cho cac rule Cyclic / OneShot moi duoc
+  them vao trong khi scheduler dang hoat dong.
+
+- F-05 (WinMM Multimedia Timer Resolution 1ms):
+  P/Invoke timeBeginPeriod(1) va timeEndPeriod(1) tu winmm.dll theo quy chuan
+  vector-hardware-mitm.md. Kich hoat khi StartAsync() va giai phong an toan khi StopCoreAsync()
+  hoac DisposeAsync(). Da kiem tra va su dung ma tra ve de thoa man tuyet doi quy tac CA1806.
+
+3. KET QUA KIEM CHUNG & XAC MINH (VERIFICATION)
+--------------------------------------------------------------------------------
+- Bổ sung 4 Unit Tests trong Simulate.Tests/SimulationEngineTests.cs:
+  1. Malformed_frame_with_short_payload_is_dropped_safely_without_crashing_gateway_worker
+  2. Scheduler_runs_with_raw_plan_without_dbc_document
+  3. StartAsync_clears_stale_rx_timestamps_from_previous_session
+  4. UpdatePlan_dynamically_schedules_new_cyclic_rule_while_scheduling_is_active
+- Ket qua Bien dich: dotnet build Simulate.sln -> 0 Warning, 0 Error.
+- Ket qua Kiem thu: dotnet test Simulate.sln -> 2,325 / 2,325 Tests PASS (100%).
+- Bao toan Giao dien (UI Protection): Khong sua doi bat ky tep tin XAML nao.
+================================================================================

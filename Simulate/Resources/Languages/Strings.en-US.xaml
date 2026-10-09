@@ -193,4 +193,7 @@
     <sys:String x:Key="Loc_SelMsg_BtnAddSelected">Add Selected</sys:String>
     <sys:String x:Key="Loc_SelMsg_BtnCancel">Cancel</sys:String>
 
+    <sys:String x:Key="Loc_SelMsg_SearchBySignal">⚡ By Signal</sys:String>
+    <sys:String x:Key="Loc_SelMsg_SearchBySignal_Tooltip">Toggle search across signal names</sys:String>
+    <sys:String x:Key="Loc_SelMsg_SearchHint_WithSignals">Search by message, CAN ID, or signal name...</sys:String>
 </ResourceDictionary>

@@ -1,0 +1,14 @@
+﻿[2026-10-01 21:15:00]
+CHANGE LOG - DU AN SIMULATE
+Nhanh: chore/merge-agent-skills
+Thuc hien code review toan dien he thong theo ky thuat Two-Axis (Spec vs Standards):
+1. Kiem tra build & test: dotnet build 0 warning 0 error, dotnet test 2,321/2,321 PASS 100%.
+2. Kiem tra localization: 5 ngon ngu dat dong bo 100% (161/161 keys).
+3. Phat hien 10 diem danh gia bao gom:
+   - F-01 (Required): Thieu catch ArgumentException / ngoai le du lieu bat thuong trong RunReceiveLoopAsync gay sap ngam gateway.
+   - F-02 (Required): KeyNotFoundException trong TransmitScheduledFrameAsync khi chay raw mode khong co DBC.
+   - F-03 (Required): _lastRxTimestamps khong duoc clear trong StartAsync().
+   - F-04 (Required): UpdatePlan() khong cap nhat task scheduler dang chay.
+   - F-05 (Required): Thieu timeBeginPeriod(1) tu winmm.dll gay timer jitter 15.6ms.
+   - F-06..F-10 (Optional / FYI): Tre polling 2ms, MasterKey plaintext, sentFrames tang khi skip, Multiplexed DBC.
+Bao cao chi tiet da luu tai: D:\Analysis Log\report\review_findings_report_2026-10-01.txt

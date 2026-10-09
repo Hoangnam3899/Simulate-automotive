@@ -1,0 +1,14 @@
+﻿[2026-09-27 15:18:00]
+CHANGE LOG - DU AN SIMULATE
+Nhanh: chore/merge-agent-skills
+1. Sua Simulate/Services/E2eProtector.cs:
+   - Bo sung ApplyPreservingCounter de giu nguyen Alive Counter goc tu hardware can so, chi tinh lai Checksum CRC8 theo SAE J1850.
+2. Sua Simulate/Services/SimulationEngine.cs:
+   - Tich hop preserveLiveCounter khi Gateway chuyen tiep frame RX sang TX voi rule Inject / PassThrough.
+   - Bo sung co che tu dong skip TransmitScheduledFrameAsync khi dang co live traffic tu RX (< 500ms), triet tieu Double Transmission.
+3. Sua Simulate.Tests/E2eProtectionTests.cs & LanguageServiceTests.cs:
+   - Bo sung unit test cho ApplyPreservingCounter.
+   - Co lap moi truong chay test cho LanguageServiceTests.
+4. Cap nhat tasks/plan.md, tasks/todo.md.
+5. Merge Agent Skills & Rules (.agents/rules, .agents/skills).
+Ket qua build & test: dotnet build thanh cong 0 warning 0 error, dotnet test 2,321/2,321 PASS 100%.

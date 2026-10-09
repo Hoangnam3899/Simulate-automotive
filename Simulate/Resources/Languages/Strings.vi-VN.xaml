@@ -193,4 +193,7 @@
     <sys:String x:Key="Loc_SelMsg_BtnAddSelected">Thêm bản tin đã chọn</sys:String>
     <sys:String x:Key="Loc_SelMsg_BtnCancel">Hủy bỏ</sys:String>
 
+    <sys:String x:Key="Loc_SelMsg_SearchBySignal">⚡ By Signal</sys:String>
+    <sys:String x:Key="Loc_SelMsg_SearchBySignal_Tooltip">Bật/Tắt tìm kiếm theo tên tín hiệu (Signal)</sys:String>
+    <sys:String x:Key="Loc_SelMsg_SearchHint_WithSignals">Tìm theo bản tin, CAN ID, hoặc signal...</sys:String>
 </ResourceDictionary>

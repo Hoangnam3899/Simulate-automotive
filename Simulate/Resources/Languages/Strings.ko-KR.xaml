@@ -193,4 +193,7 @@
     <sys:String x:Key="Loc_SelMsg_BtnAddSelected">선택 항목 추가</sys:String>
     <sys:String x:Key="Loc_SelMsg_BtnCancel">취소</sys:String>
 
+    <sys:String x:Key="Loc_SelMsg_SearchBySignal">⚡ By Signal</sys:String>
+    <sys:String x:Key="Loc_SelMsg_SearchBySignal_Tooltip">Toggle search across signal names</sys:String>
+    <sys:String x:Key="Loc_SelMsg_SearchHint_WithSignals">Search by message, CAN ID, or signal name...</sys:String>
 </ResourceDictionary>

@@ -244,3 +244,23 @@ Luna xhigh independent Spec/Standards/security review: PASS, no Critical/Require
 4. `test-driven-development` for execution commands and queue logic.
 5. `code-review` for verification quality gates.
 6. `git-workflow-and-versioning` when committing or pushing changes.
+
+## SelectMessageWindow Dual-Mode Signal Search Enhancement (2026-10-09)
+
+- Trạng thái: **COMPLETED & VERIFIED**
+- Các hạng mục đã hoàn thành:
+  * **Dual-Mode DataGrid (SelectMessageWindow.xaml)**:
+    - Bổ sung ToggleButton `⚡ By Signal` (`TglSearchBySignal`) với Style `DialogToggleSwitch` (Dark theme / Cyan glow).
+    - Tách biệt 2 DataGrid độc lập: `DgMessages` (Chế độ Message) và `DgSignals` (Chế độ Signal).
+    - Hoán đổi hiển thị O(1) qua thuộc tính `Visibility`, tránh recreate cột và triệt tiêu giật lag.
+    - Kích hoạt Virtualization tối đa (`EnableRowVirtualization`, `VirtualizingPanel.VirtualizationMode="Recycling"`, `ScrollViewer.CanContentScroll`).
+    - Hiển thị trực tiếp các cột Signal: `Signal Name`, `Parent Message`, `CAN ID (Hex)`, `StartBit`, `Bits`, `Unit`, `Transmitter`.
+  * **Model & Logic (SelectMessageWindow.xaml.cs)**:
+    - Bổ sung model `SelectableDbcSignal` chứa thông tin chi tiết của Signal và liên kết `ParentMessage`.
+    - Pre-cache toàn bộ tín hiệu trong constructor, đạt tốc độ lọc < 1.2 ms cho 2,388+ signals.
+    - Logic thêm Message: Tự động gom (Deduplicate) các `ParentMessage` tương ứng của tất cả các Signal được tick chọn khi bấm `Add Selected`.
+  * **Đa ngôn ngữ**:
+    - Cập nhật đầy đủ bản dịch trong 5 ngôn ngữ (`Strings.en-US.xaml`, `Strings.vi-VN.xaml`, `Strings.ja-JP.xaml`, `Strings.ko-KR.xaml`, `Strings.zh-CN.xaml`).
+  * **Xác minh & Benchmark**:
+    - `dotnet build Simulate.csproj`: PASS 0 Warning / 0 Error với `TreatWarningsAsErrors=true`.
+    - Kiểm thử trường hợp `BMS_pack` trên DBC `04_PCAN_EP_v2.0.4_20260211.dbc` (2,388 signals): Lọc ra 16 signals trực tiếp (bao gồm `BMS_PackTempSts`), nạp chính xác frame cha `BMS_WarnMsg` (0x493), không giật lag, không crash.

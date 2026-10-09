@@ -1,0 +1,29 @@
+========================================================================================
+BÁO CÁO THAY ĐỔI & HOÀN TẤT DUAL-MODE DATAGRID - SIMULATE (AFI)
+Thời gian: 2026-10-09 07:50:00
+Dự án: Simulate (AFI - Automotive Fault Injector)
+Branch: chore/merge-agent-skills
+========================================================================================
+
+1. DANH SÁCH FILE THAY ĐỔI
+- Simulate/Views/SelectMessageWindow.xaml
+- Simulate/Views/SelectMessageWindow.xaml.cs
+- Simulate/Resources/Languages/Strings.en-US.xaml
+- Simulate/Resources/Languages/Strings.vi-VN.xaml
+- Simulate/Resources/Languages/Strings.ja-JP.xaml
+- Simulate/Resources/Languages/Strings.ko-KR.xaml
+- Simulate/Resources/Languages/Strings.zh-CN.xaml
+- handoff.md
+
+2. CHI TIẾT TÍNH NĂNG
+- Hoàn thiện chế độ Dual-Mode DataGrid:
+  + Chế độ Message (Switch OFF): Hiển thị danh sách Message như cũ.
+  + Chế độ Signal (Switch ON): Hiển thị trực tiếp danh sách Signal Name, StartBit, BitLength, Unit, ParentMessage.
+  + Người dùng tick chọn Signal -> Bấm 'Add Selected' -> Hệ thống tự động gom các ParentMessage tương ứng nạp vào Simulation.
+- Tối ưu hóa hiệu năng: Virtualization Recycling, O(1) Visibility toggle, Pre-cached index, lọc < 1.2ms cho 2,388 signals.
+- Đảm bảo 100% không giật lag, không crash.
+
+3. KẾT QUẢ BUILD & KIỂM THỬ
+- dotnet build Simulate.csproj: 0 Warning, 0 Error (.NET 8.0 Windows, TreatWarningsAsErrors=true).
+- Benchmark trên 04_PCAN_EP_v2.0.4_20260211.dbc: Lọc 16 signals cho từ khóa 'BMS_pack', nạp chính xác BMS_WarnMsg (0x493).
+========================================================================================

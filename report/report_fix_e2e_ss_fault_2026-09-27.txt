@@ -1,0 +1,68 @@
+﻿================================================================================
+BAO CAO THAY DOI DU AN SIMULATE
+Ngay thuc hien: 2026-09-27
+Tac vu: Khac phuc loi SS_Fault chap chon (song vuong 50/50) & Dong bo Alive Counter E2E tren xe that
+Trang thai xac minh: OK (Build 0 warning 0 error, 2,321/2,321 Unit Tests PASS)
+================================================================================
+
+1. DANH SACH TEP TIN THAY DOI VA TAO MOI
+--------------------------------------------------------------------------------
+- Sua doi:
+  + Simulate/Services/E2eProtector.cs
+  + Simulate/Services/SimulationEngine.cs
+  + Simulate.Tests/E2eProtectionTests.cs
+  + Simulate.Tests/LanguageServiceTests.cs
+  + tasks/plan.md
+  + tasks/todo.md
+- Tao moi (merge agent skills & rules):
+  + .agents/rules/project-rules.md
+  + .agents/rules/savedata.md
+  + .agents/rules/uds-diagnostics-dtc-did.md
+  + .agents/rules/ui-protection.md
+  + .agents/rules/vector-hardware-mitm.md
+  + .agents/skills/idea-refine/SKILL.md
+  + .agents/skills/pcan-python-ui/SKILL.md
+  + .agents/skills/uds-dtc-did-diagnostics/SKILL.md
+  + .agents/skills/vector-can-wpf/SKILL.md
+
+2. MO TA CHI TIET MUC DICH VA LOGIC THAY DOI
+--------------------------------------------------------------------------------
+- Van de thuc te tren xe:
+  Khi cam CAN qua Breakout Box (BOB) ngat doi duong CAN (Can so -> CH2 RX, CH1 TX -> Xe/CVC_S),
+  tin hieu SS_Fault (Message SS_DriveReq_0x108) khi inject gia tri 1 (Shifter failure) bi chap
+  chon, hien thi dang song vuong 50/50 tren TSMaster giua normal (0) va Shifter failure (1).
+- Nguyen nhan goc re:
+  + Nguyen nhan 1 (Double Transmission): Luong Gateway (RunReceiveLoopAsync) nhan frame tu CH2,
+    ghi de tin hieu va ban ngay sang CH1. Dong thoi, luong TransmitScheduledFrameAsync do co rule
+    SendType = Cyclic nen cung ban chu ky 50ms sang CH1. Hai luong cung ban dan den 100 frame/giay,
+    lech pha du lieu.
+  + Nguyen nhan 2 (Alive Counter de-sync): Luong TransmitScheduledFrameAsync tu sinh bo dem counter
+    rieng biet tu 0..14 doc lap voi Can so that, khien CVC nhan 2 chuoi counter nhay coc, bao loi
+    Sequence Error va drop frame hoac luan phien fallback ve normal.
+- Giai phap ky thuat:
+  + Trong E2eProtector: Bo sung phuong thuc ApplyPreservingCounter. Phuong thuc nay bao luu 100%
+    4-bit Alive Counter goc cua Can so phan cung, sau do tinh toan lai Checksum CRC8 theo chuan
+    SAE J1850 (Data ID = 0x82) tren payload da inject tin hieu moi.
+  + Trong SimulationEngine:
+    * Them _lastRxTimestamps theo doi live traffic theo CAN ID tu cong RX.
+    * Trong RunReceiveLoopAsync: Khi chuyen tiep tu RX sang TX voi rule Inject/PassThrough, goi
+      ApplyE2eProtection(..., preserveLiveCounter: true) de ke thua nguyen ven Alive Counter.
+    * Trong TransmitScheduledFrameAsync: Kiem tra neu rule la Cyclic va dang co live traffic tu RX
+      trong vong 500ms, ham se tu dong bo qua (skip), loai bo hoan toan hien tuong Double Transmission.
+      Neu xe tat may hoac ngat can so (> 500ms khong co Rx), scheduler se tu dong tiep quan ban chu ky.
+  + Bo sung unit test ApplyPreservingCounter_preserves_existing_counter_and_calculates_checksum
+    dat 100% do phu cho ham moi.
+  + Cap nhat LanguageServiceTests dam bao tinh co lap va doc lap moi truong test.
+
+3. KET QUA KIEM TRA VA XAC MINH (VERIFICATION)
+--------------------------------------------------------------------------------
+- dotnet build Simulate.sln: THANH CONG (0 Error, 0 Warning).
+- dotnet test Simulate.sln: THANH CONG (2,321/2,321 tests passed - 100%).
+- Trang thai: OK.
+
+4. DIEM LUU Y KY THUAT
+--------------------------------------------------------------------------------
+- Dam bao co che E2E hop chuan AUTOSAR Profile 1 / Profile 2: Checksum luon khop voi Alive Counter
+  thuc te tren bus, loai bo triet de loi DTC do E2E Checksum mismatch.
+- UI hoan toan duoc bao ve nguyen trang, khong co bat ky sua doi nao trong cac tep XAML.
+================================================================================
