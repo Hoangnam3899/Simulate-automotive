@@ -1,14 +1,16 @@
-using System;
+﻿using System;
 using System.ComponentModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Simulate.Models;
+using Simulate.Services;
 
 namespace Simulate.ViewModels
 {
     /// <summary>
     /// ViewModel quản lý dữ liệu tổng hợp cho Bảng 10 (STATUS OVERVIEW).
     /// Tổng hợp và đồng bộ trạng thái thời gian thực từ Connection, DBC, Simulation và BusHealth.
+    /// Hỗ trợ hiển thị cảnh báo đảo chiều kết nối cổng phần cứng.
     /// </summary>
     public partial class StatusOverviewViewModel : ObservableObject, IDisposable
     {
@@ -16,6 +18,8 @@ namespace Simulate.ViewModels
         private readonly DbcManagementViewModel _dbc;
         private readonly SimulationViewModel _simulation;
         private readonly BusHealthViewModel _busHealth;
+        private readonly CanChannelDirectionAnalyzer? _directionAnalyzer;
+        private DirectionEvaluationResult? _lastDirectionResult;
         private bool _disposed;
 
         [ObservableProperty]
@@ -23,6 +27,9 @@ namespace Simulate.ViewModels
 
         [ObservableProperty]
         private string _connectionColor = "#64748B";
+
+        [ObservableProperty]
+        private string _connectionToolTip = "Chưa kết nối cổng CAN / Disconnected";
 
         [ObservableProperty]
         private string _driverText = "None Selected";
@@ -49,12 +56,14 @@ namespace Simulate.ViewModels
             ConnectionViewModel connection,
             DbcManagementViewModel dbc,
             SimulationViewModel simulation,
-            BusHealthViewModel busHealth)
+            BusHealthViewModel busHealth,
+            CanChannelDirectionAnalyzer? directionAnalyzer = null)
         {
             _connection = connection ?? throw new ArgumentNullException(nameof(connection));
             _dbc = dbc ?? throw new ArgumentNullException(nameof(dbc));
             _simulation = simulation ?? throw new ArgumentNullException(nameof(simulation));
             _busHealth = busHealth ?? throw new ArgumentNullException(nameof(busHealth));
+            _directionAnalyzer = directionAnalyzer;
 
             _connection.PropertyChanged += OnDependencyPropertyChanged;
             _dbc.PropertyChanged += OnDependencyPropertyChanged;
@@ -63,7 +72,26 @@ namespace Simulate.ViewModels
             _simulation.PropertyChanged += OnDependencyPropertyChanged;
             _busHealth.PropertyChanged += OnDependencyPropertyChanged;
 
+            if (_directionAnalyzer != null)
+            {
+                _directionAnalyzer.DirectionEvaluated += OnDirectionEvaluated;
+                _directionAnalyzer.DirectionReset += OnDirectionReset;
+                _lastDirectionResult = _directionAnalyzer.LastResult;
+            }
+
             UpdateOverviewCore();
+        }
+
+        private void OnDirectionEvaluated(DirectionEvaluationResult result)
+        {
+            _lastDirectionResult = result;
+            UpdateOverview();
+        }
+
+        private void OnDirectionReset()
+        {
+            _lastDirectionResult = null;
+            UpdateOverview();
         }
 
         private void OnDependencyPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -100,16 +128,34 @@ namespace Simulate.ViewModels
                 return;
             }
 
-            // 1. Connection Status
+            // 1. Connection Status & Direction Warning
             if (_connection.IsConnected)
             {
-                ConnectionText = "● Connected";
-                ConnectionColor = "#10B981";
+                var currentDirection = _lastDirectionResult ?? _directionAnalyzer?.LastResult;
+                if (currentDirection?.Status == ChannelDirectionStatus.SuspectedInverted)
+                {
+                    ConnectionText = !string.IsNullOrWhiteSpace(currentDirection.SampleMessageName)
+                        ? $"⚠ Inverted: [{currentDirection.SampleMessageName}]"
+                        : "⚠ Inverted";
+                    ConnectionColor = "#F59E0B";
+                    ConnectionToolTip = !string.IsNullOrWhiteSpace(currentDirection.Details)
+                        ? currentDirection.Details
+                        : $"Cảnh báo chiều kết nối: Bản tin [{currentDirection.SampleMessageName} (0x{currentDirection.SampleCanId:X})] của [{currentDirection.TransmitterNode}] xuất hiện ở Kênh TX thay vì Kênh RX. Hãy kiểm tra xem dây nối phần cứng có bị cắm ngược không.";
+                }
+                else
+                {
+                    ConnectionText = "● Connected";
+                    ConnectionColor = "#10B981";
+                    ConnectionToolTip = currentDirection?.Status == ChannelDirectionStatus.Normal
+                        ? $"Xác nhận chiều kết nối: Kênh RX nhận đúng các bản tin từ [{currentDirection.TransmitterNode}]."
+                        : "Đã kết nối cổng CAN / Connected";
+                }
             }
             else
             {
                 ConnectionText = "○ Disconnected";
                 ConnectionColor = "#64748B";
+                ConnectionToolTip = "Chưa kết nối cổng CAN / Disconnected";
             }
 
             // 2. Driver / Interface
@@ -196,6 +242,12 @@ namespace Simulate.ViewModels
                 _dbc.DocumentUnloaded -= OnDocumentUnloaded;
                 _simulation.PropertyChanged -= OnDependencyPropertyChanged;
                 _busHealth.PropertyChanged -= OnDependencyPropertyChanged;
+
+                if (_directionAnalyzer != null)
+                {
+                    _directionAnalyzer.DirectionEvaluated -= OnDirectionEvaluated;
+                    _directionAnalyzer.DirectionReset -= OnDirectionReset;
+                }
             }
             GC.SuppressFinalize(this);
         }

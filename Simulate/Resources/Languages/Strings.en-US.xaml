@@ -144,6 +144,7 @@
     <!-- ═══════════════ FOOTER & STATUS STRINGS ═══════════════ -->
     <sys:String x:Key="Loc_Status_Connected">● Connected</sys:String>
     <sys:String x:Key="Loc_Status_Disconnected">○ Disconnected</sys:String>
+    <sys:String x:Key="Loc_Status_Inverted">⚠ Inverted (Reversed)</sys:String>
     <sys:String x:Key="Loc_Status_Connecting">◐ Connecting...</sys:String>
     <sys:String x:Key="Loc_Status_Running">● Running</sys:String>
     <sys:String x:Key="Loc_Status_Paused">⏸ Paused</sys:String>

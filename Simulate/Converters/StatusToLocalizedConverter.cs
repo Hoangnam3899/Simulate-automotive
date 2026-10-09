@@ -21,12 +21,13 @@ namespace Simulate.Converters
             string clean = rawStatus.Trim();
             string prefix = string.Empty;
 
-            // Xử lý các tiền tố ký tự biểu tượng thông dụng (●, ○, ♡, ⏸, ■)
+            // Xử lý các tiền tố ký tự biểu tượng thông dụng (●, ○, ♡, ⏸, ■, ⚠)
             if (clean.StartsWith("● ", StringComparison.Ordinal) ||
                 clean.StartsWith("○ ", StringComparison.Ordinal) ||
                 clean.StartsWith("♡ ", StringComparison.Ordinal) ||
                 clean.StartsWith("⏸ ", StringComparison.Ordinal) ||
-                clean.StartsWith("■ ", StringComparison.Ordinal))
+                clean.StartsWith("■ ", StringComparison.Ordinal) ||
+                clean.StartsWith("⚠ ", StringComparison.Ordinal))
             {
                 prefix = clean[..2];
                 clean = clean[2..].Trim();
@@ -36,6 +37,7 @@ namespace Simulate.Converters
             {
                 "CONNECTED" => "Loc_Status_Connected",
                 "DISCONNECTED" => "Loc_Status_Disconnected",
+                "INVERTED" => "Loc_Status_Inverted",
                 "CONNECTING" => "Loc_Status_Connecting",
                 "CONNECTING..." => "Loc_Status_Connecting",
                 "RUNNING" => "Loc_Status_Running",

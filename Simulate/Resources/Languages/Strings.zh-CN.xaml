@@ -144,6 +144,7 @@
     <!-- ═══════════════ FOOTER & STATUS STRINGS ═══════════════ -->
     <sys:String x:Key="Loc_Status_Connected">● 已连接</sys:String>
     <sys:String x:Key="Loc_Status_Disconnected">○ 未连接</sys:String>
+    <sys:String x:Key="Loc_Status_Inverted">⚠ 反向连接 (Inverted)</sys:String>
     <sys:String x:Key="Loc_Status_Connecting">◐ 连接中...</sys:String>
     <sys:String x:Key="Loc_Status_Running">● 运行中</sys:String>
     <sys:String x:Key="Loc_Status_Paused">⏸ 已暂停</sys:String>

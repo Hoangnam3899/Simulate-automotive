@@ -144,6 +144,7 @@
     <!-- ═══════════════ FOOTER & STATUS STRINGS ═══════════════ -->
     <sys:String x:Key="Loc_Status_Connected">● Đã kết nối</sys:String>
     <sys:String x:Key="Loc_Status_Disconnected">○ Chưa kết nối</sys:String>
+    <sys:String x:Key="Loc_Status_Inverted">⚠ Cắm ngược (Inverted)</sys:String>
     <sys:String x:Key="Loc_Status_Connecting">◐ Đang kết nối...</sys:String>
     <sys:String x:Key="Loc_Status_Running">● Đang chạy</sys:String>
     <sys:String x:Key="Loc_Status_Paused">⏸ Tạm dừng</sys:String>

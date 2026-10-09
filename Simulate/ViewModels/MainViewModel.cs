@@ -415,6 +415,8 @@ namespace Simulate.ViewModels
 
         public StatusOverviewViewModel StatusOverview { get; }
 
+        public CanChannelDirectionAnalyzer DirectionAnalyzer { get; } = new();
+
         public ILanguageService Language { get; }
 
         public AppLanguage CurrentLanguage => Language.CurrentLanguage;
@@ -500,7 +502,20 @@ namespace Simulate.ViewModels
                 () => Connection.LastFailure ?? Simulation.CurrentEngine?.LastFailure ?? Simulation.LastFailure,
                 () => 0);
 
-            StatusOverview = new StatusOverviewViewModel(Connection, Dbc, Simulation, BusHealth);
+            StatusOverview = new StatusOverviewViewModel(Connection, Dbc, Simulation, BusHealth, DirectionAnalyzer);
+
+            Simulation.FrameRouted += frame => DirectionAnalyzer.ProcessFrame(frame);
+            DirectionAnalyzer.DirectionEvaluated += result =>
+            {
+                if (result.Status == ChannelDirectionStatus.SuspectedInverted)
+                {
+                    Logging.LogService.LogWarning("Connection", $"Cảnh báo chiều kết nối: Bản tin [{result.SampleMessageName} (0x{result.SampleCanId:X})] của [{result.TransmitterNode}] xuất hiện ở Kênh TX thay vì Kênh RX. Hãy kiểm tra xem dây nối phần cứng có bị cắm ngược không.");
+                }
+                else if (result.Status == ChannelDirectionStatus.Normal)
+                {
+                    Logging.LogService.LogInfo("Connection", $"Xác nhận chiều kết nối: Kênh RX nhận đúng các bản tin từ [{result.TransmitterNode}].");
+                }
+            };
 
             Logging.LogService.LogAdded += (sender, entry) =>
             {
@@ -543,9 +558,15 @@ namespace Simulate.ViewModels
                         string fd = Connection.IsCanFdEnabled ? "FD Enabled" : "Classic";
                         Logging.LogService.LogInfo("Connection", $"Connected to {iface} (TX: {tx}, RX: {rx}, {baud}, {fd}).");
                         BusHealth.UpdateTelemetry();
+
+                        if (Dbc.LoadedDocument is not null)
+                        {
+                            DirectionAnalyzer.StartSampling(Dbc.LoadedDocument);
+                        }
                     }
                     else
                     {
+                        DirectionAnalyzer.Reset();
                         Logging.LogService.LogInfo("Connection", "CAN gateway session disconnected.");
                         BusHealth.Reset();
                     }
@@ -595,10 +616,16 @@ namespace Simulate.ViewModels
                 {
                     await Simulation.StartBaselineGatewayAsync();
                 }
+
+                if (Connection.IsConnected)
+                {
+                    DirectionAnalyzer.StartSampling(document);
+                }
             };
 
             Dbc.DocumentUnloaded += (sender, args) =>
             {
+                DirectionAnalyzer.Reset();
                 Logging.LogService.LogInfo("DBC", "DBC document unloaded.");
                 Simulation.ClearDocument();
             };
@@ -705,6 +732,7 @@ namespace Simulate.ViewModels
             }
             finally
             {
+                DirectionAnalyzer.Reset();
                 StatusOverview.Dispose();
                 await Connection.ShutdownAsync();
             }

@@ -265,7 +265,7 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel>
                             <TextBlock Text="{DynamicResource Loc_Overview_Connection}" Style="{StaticResource TinyLabel}"/>
-                            <TextBlock Text="{Binding StatusOverview.ConnectionText, Converter={StaticResource StatusToLocalizedConverter}}" Foreground="{Binding StatusOverview.ConnectionColor}" FontSize="9" Margin="0,1,0,6"/>
+                            <TextBlock Text="{Binding StatusOverview.ConnectionText, Converter={StaticResource StatusToLocalizedConverter}}" ToolTip="{Binding StatusOverview.ConnectionToolTip}" Foreground="{Binding StatusOverview.ConnectionColor}" FontSize="9" Margin="0,1,0,6" TextTrimming="CharacterEllipsis"/>
                             <TextBlock Text="{DynamicResource Loc_Overview_Driver}" Style="{StaticResource TinyLabel}"/>
                             <TextBlock Text="{Binding StatusOverview.DriverText, Converter={StaticResource StatusToLocalizedConverter}}" Style="{StaticResource TinyText}" Margin="0,1,0,6" TextTrimming="CharacterEllipsis"/>
                             <TextBlock Text="{DynamicResource Loc_Overview_BusState}" Style="{StaticResource TinyLabel}"/>

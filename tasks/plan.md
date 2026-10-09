@@ -649,3 +649,36 @@ Trước Task 0/1 cần người dùng phê duyệt riêng nếu thực hiện:
     + `UpdatePlan_dynamically_schedules_new_cyclic_rule_while_scheduling_is_active`
   - `dotnet build Simulate.sln`: **0 warning, 0 error**.
   - `dotnet test Simulate.sln`: **PASS 100% (2,325 / 2,325 tests)**.
+## 23. Phát Hiện Cắm Ngược Cổng CAN (Direction Inversion Detection) & 1,009 TCs (VF Wild Routing) (2026-10-09)
+- **Mục tiêu**:
+  1. Tự động nhận diện khi người dùng cắm ngược chiều cổng RX (CH1) và TX (CH2) dựa trên danh sách bản tin (Transmitter) trong file DBC.
+  2. Đảm bảo Idempotency tuyệt đối khi Connect / Disconnect nhiều lần liên tiếp khi DBC vẫn nạp sẵn trong bộ nhớ.
+  3. Tuân thủ triệt để UI Protection: Giữ nguyên 100% XAML, KHÔNG thêm nút 1-Click Swap theo chỉ đạo của người dùng.
+  4. Xây dựng 1,009 Test Cases từ 9 file DBC tại C:\Users\Hnam\Downloads\VF_Wild_v4.0.0_20260825_final\Routing.
+- **Triển khai**:
+  1. CanChannelDirectionAnalyzer.cs: Phân tích luồng frame theo cửa sổ trượt (30 frames), đối chiếu Node nguồn trong DBC, xác định trạng thái Normal, SuspectedInverted, hoặc Unknown. Cung cấp phương thức Reset() thread-safe.
+  2. SimulationViewModel.cs: Bổ sung event public event Action<RoutedCanFrame>? FrameRouted; trong OnEngineFrameRouted.
+  3. MainViewModel.cs: Tích hợp CanChannelDirectionAnalyzer, điều khiển vòng đời qua ConnectCommand, DisconnectCommand, LoadDbcCommand, UnloadDbcCommand. Đưa ra cảnh báo LogWarning (màu Vàng) duy nhất 1 lần khi phát hiện cắm ngược, không spam log.
+  4. VfWildRoutingDirectionThousandTests.cs: 1,009 unit test cases:
+     + 9 TCs: Nạp và kiểm tra tính hợp lệ của 9 file DBC VF Wild ( 1_ICAN đến  9_C2_CAN).
+     + 350 TCs: Kiểm tra nhận diện cắm đúng chiều (Normal).
+     + 350 TCs: Kiểm tra nhận diện cắm ngược chiều (SuspectedInverted).
+     + 250 TCs: Kiểm tra chu trình lặp đa vòng Connect -> Feed -> Disconnect -> Reconnect.
+     + 50 TCs: Kiểm tra các tình huống biên (null frame, frame ngoài DBC, nhiễu bus, reset giữa chừng, lưu lượng hỗn hợp 80/20).
+- **Verification**:
+  - dotnet build Simulate.sln: **0 warning, 0 error**.
+  - dotnet test Simulate.sln: **PASS 100% (3,333 / 3,334 tests, 1 skipped)**.
+  - UI Diff: **0% (Không sửa bất kỳ file XAML nào)**.
+  - Báo cáo đã lưu: D:\Analysis Log\report\report_reverse_channel_detection_1000tcs_2026-10-09.txt và D:\Analysis Log\newconvert\change_log_2026-10-09.txt.
+
+## 24. Hiển Thị Cảnh Báo Đảo Chiều Kết Nối Trên Bảng 10 (STATUS OVERVIEW) (2026-10-09)
+- **Mục tiêu**: Phản ánh cảnh báo đảo chiều cổng CAN phần cứng (⚠ Inverted: [Tên_Bản_Tin], màu #F59E0B, kèm tooltip chi tiết) trực tiếp trên mục Connection của Bảng 10 theo Phương án 1 đã được người dùng phê duyệt tường minh.
+- **Triển khai**:
+  1. StatusOverviewViewModel.cs: Nhận CanChannelDirectionAnalyzer, lắng nghe DirectionEvaluated và DirectionReset, cập nhật ConnectionText, ConnectionColor, ConnectionToolTip.
+  2. MainWindow.xaml: Bổ sung ToolTip="{Binding StatusOverview.ConnectionToolTip}" và TextTrimming="CharacterEllipsis" cho TextBlock Connection trong Bảng 10.
+  3. StatusToLocalizedConverter.cs và 5 bộ từ điển ngôn ngữ (Strings.*.xaml): Hỗ trợ tiền tố ⚠  và từ khóa Loc_Status_Inverted.
+  4. StatusOverviewViewModelTests.cs: Bổ sung 3 unit tests mới.
+- **Verification**:
+  - dotnet build Simulate.sln: **0 warning, 0 error**.
+  - dotnet test Simulate.sln: **PASS 100% (3,336 / 3,337 tests, 1 skipped)**.
+  - Báo cáo đã lưu: D:\Analysis Log\report\report_ui10_channel_direction_warning_2026-10-09.txt và D:\Analysis Log\newconvert\change_log_2026-10-09.txt.

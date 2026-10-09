@@ -174,5 +174,105 @@ namespace Simulate.Tests
             Assert.AreEqual("Offline", main.StatusOverview.BusStateText);
             Assert.AreEqual("— None Loaded —", main.StatusOverview.DbcText);
         }
+
+        [TestMethod]
+        public void SuspectedInverted_updates_connection_status_to_warning_and_tooltip()
+        {
+            var driver = new MockHardwareService();
+            var connection = new ConnectionViewModel(driver);
+            var dbc = new DbcManagementViewModel();
+            var simulation = new SimulationViewModel();
+            var busHealth = new BusHealthViewModel();
+            var analyzer = new CanChannelDirectionAnalyzer();
+
+            using var overview = new StatusOverviewViewModel(connection, dbc, simulation, busHealth, analyzer);
+
+            connection.IsConnected = true;
+            overview.UpdateOverview();
+            Assert.AreEqual("● Connected", overview.ConnectionText);
+            Assert.AreEqual("#10B981", overview.ConnectionColor);
+
+            // Tạo mock DbcDocument với node CVC_C và message CVC_WCBS02 (0x120 = 288)
+            string dbcText = "BO_ 288 CVC_WCBS02: 8 CVC_C\n SG_ Dummy : 0|8@1+ (1,0) [0|255] \"\" Vector__XXX";
+            var doc = DbcParser.Parse(dbcText).Document!;
+            analyzer.StartSampling(doc);
+
+            var frame = CanFrame.CreateClassic(0x120, false, new byte[8]);
+
+            // Giả lập 20 frames đến từ Kênh TX (Inverted)
+            for (int i = 0; i < 20; i++)
+            {
+                analyzer.ProcessFrame(new RoutedCanFrame(CanGatewaySide.Tx, frame, DateTimeOffset.UtcNow));
+            }
+
+            Assert.AreEqual(ChannelDirectionStatus.SuspectedInverted, analyzer.CurrentStatus);
+            Assert.AreEqual("⚠ Inverted: [CVC_WCBS02]", overview.ConnectionText);
+            Assert.AreEqual("#F59E0B", overview.ConnectionColor);
+            StringAssert.Contains(overview.ConnectionToolTip, "CVC_WCBS02");
+            StringAssert.Contains(overview.ConnectionToolTip, "CVC_C");
+        }
+
+        [TestMethod]
+        public void Normal_direction_confirms_valid_channel_orientation()
+        {
+            var driver = new MockHardwareService();
+            var connection = new ConnectionViewModel(driver);
+            var dbc = new DbcManagementViewModel();
+            var simulation = new SimulationViewModel();
+            var busHealth = new BusHealthViewModel();
+            var analyzer = new CanChannelDirectionAnalyzer();
+
+            using var overview = new StatusOverviewViewModel(connection, dbc, simulation, busHealth, analyzer);
+
+            connection.IsConnected = true;
+            string dbcText = "BO_ 533 BMS_Sts: 8 CVC_C\n SG_ Dummy : 0|8@1+ (1,0) [0|255] \"\" Vector__XXX";
+            var doc = DbcParser.Parse(dbcText).Document!;
+            analyzer.StartSampling(doc);
+
+            var frame = CanFrame.CreateClassic(0x215, false, new byte[8]);
+
+            // Giả lập 20 frames đến từ Kênh RX (Đúng chiều)
+            for (int i = 0; i < 20; i++)
+            {
+                analyzer.ProcessFrame(new RoutedCanFrame(CanGatewaySide.Rx, frame, DateTimeOffset.UtcNow));
+            }
+
+            Assert.AreEqual(ChannelDirectionStatus.Normal, analyzer.CurrentStatus);
+            Assert.AreEqual("● Connected", overview.ConnectionText);
+            Assert.AreEqual("#10B981", overview.ConnectionColor);
+            StringAssert.Contains(overview.ConnectionToolTip, "CVC_C");
+        }
+
+        [TestMethod]
+        public void Reset_clears_direction_warning_and_returns_to_connected()
+        {
+            var driver = new MockHardwareService();
+            var connection = new ConnectionViewModel(driver);
+            var dbc = new DbcManagementViewModel();
+            var simulation = new SimulationViewModel();
+            var busHealth = new BusHealthViewModel();
+            var analyzer = new CanChannelDirectionAnalyzer();
+
+            using var overview = new StatusOverviewViewModel(connection, dbc, simulation, busHealth, analyzer);
+
+            connection.IsConnected = true;
+            string dbcText = "BO_ 288 CVC_WCBS02: 8 CVC_C\n SG_ Dummy : 0|8@1+ (1,0) [0|255] \"\" Vector__XXX";
+            var doc = DbcParser.Parse(dbcText).Document!;
+            analyzer.StartSampling(doc);
+
+            var frame = CanFrame.CreateClassic(0x120, false, new byte[8]);
+
+            for (int i = 0; i < 20; i++)
+            {
+                analyzer.ProcessFrame(new RoutedCanFrame(CanGatewaySide.Tx, frame, DateTimeOffset.UtcNow));
+            }
+            Assert.AreEqual("⚠ Inverted: [CVC_WCBS02]", overview.ConnectionText);
+
+            // Reset phiên kết nối
+            analyzer.Reset();
+
+            Assert.AreEqual("● Connected", overview.ConnectionText);
+            Assert.AreEqual("#10B981", overview.ConnectionColor);
+        }
     }
 }

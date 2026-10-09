@@ -58,6 +58,7 @@ namespace Simulate.ViewModels
         public ISimulationEngine? CurrentEngine => _engine;
 
         public event Action<HardwareFailure>? EngineFaulted;
+        public event Action<RoutedCanFrame>? FrameRouted;
 
         public void SetSessionProvider(Func<ICanGatewaySession?> sessionProvider)
         {
@@ -867,6 +868,8 @@ namespace Simulate.ViewModels
 
         private void OnEngineFrameRouted(RoutedCanFrame routedFrame)
         {
+            FrameRouted?.Invoke(routedFrame);
+
             if (IsSignalMonitorPaused)
             {
                 return;
