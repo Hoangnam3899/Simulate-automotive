@@ -12,13 +12,16 @@ namespace Simulate.Services
     {
         public const int InvalidPortHandle = -1;
 
-        private readonly object _sync = new object();
+        private readonly object _lifecycleSync = new object();
+        private readonly object _txSync = new object();
+        private readonly object _rxSync = new object();
         private readonly IVectorXlApi _api;
         private bool _driverIsOpen;
         private bool _portIsOpen;
         private bool _channelsAreActive;
         private int _portHandle = InvalidPortHandle;
         private ulong _accessMask;
+        private int _notificationEventHandle = -1;
         private HardwareOperationResult? _cleanupResult;
 
         public VectorNativeSessionResources(IVectorXlApi api)
@@ -30,7 +33,7 @@ namespace Simulate.Services
         {
             get
             {
-                lock (_sync)
+                lock (_lifecycleSync)
                 {
                     return _channelsAreActive && _cleanupResult is null;
                 }
@@ -39,19 +42,63 @@ namespace Simulate.Services
 
         public void OwnDriver()
         {
-            _driverIsOpen = true;
+            lock (_lifecycleSync)
+            {
+                _driverIsOpen = true;
+            }
         }
 
         public void OwnPort(int portHandle, ulong accessMask)
         {
-            _portHandle = portHandle;
-            _accessMask = accessMask;
-            _portIsOpen = true;
+            lock (_lifecycleSync)
+            {
+                _portHandle = portHandle;
+                _accessMask = accessMask;
+                _portIsOpen = true;
+            }
         }
 
         public void MarkChannelsActive()
         {
-            _channelsAreActive = true;
+            lock (_lifecycleSync)
+            {
+                _channelsAreActive = true;
+            }
+        }
+
+        public VectorNativeStatus RegisterNotification(ref int eventHandle, int queueLevel = 1)
+        {
+            lock (_lifecycleSync)
+            {
+                if (!_channelsAreActive || _cleanupResult is not null)
+                {
+                    return new VectorNativeStatus(-1, "XL_ERR_INVALID_PORT");
+                }
+
+                VectorNativeStatus status = _api.SetNotification(_portHandle, ref eventHandle, queueLevel);
+                if (status.IsSuccess)
+                {
+                    _notificationEventHandle = eventHandle;
+                }
+
+                return status;
+            }
+        }
+
+        public VectorWaitResult WaitForNotification(int timeoutMs)
+        {
+            int handle;
+            lock (_lifecycleSync)
+            {
+                handle = _notificationEventHandle;
+            }
+
+            if (handle <= 0)
+            {
+                return VectorWaitResult.Failed;
+            }
+
+            return _api.WaitForSingleObject(handle, timeoutMs);
         }
 
         public VectorNativeStatus? TransmitClassicCanFrame(
@@ -59,14 +106,25 @@ namespace Simulate.Services
             CanFrame frame,
             CancellationToken cancellationToken)
         {
-            lock (_sync)
+            lock (_lifecycleSync)
             {
                 if (!_channelsAreActive || _cleanupResult is not null)
                 {
                     return null;
                 }
+            }
 
-                cancellationToken.ThrowIfCancellationRequested();
+            cancellationToken.ThrowIfCancellationRequested();
+
+            lock (_txSync)
+            {
+                lock (_lifecycleSync)
+                {
+                    if (!_channelsAreActive || _cleanupResult is not null)
+                    {
+                        return null;
+                    }
+                }
 
                 return _api.TransmitClassicCanFrame(
                     _portHandle,
@@ -81,14 +139,25 @@ namespace Simulate.Services
             int maximumEventCount,
             CancellationToken cancellationToken)
         {
-            lock (_sync)
+            lock (_lifecycleSync)
             {
                 if (!_channelsAreActive || _cleanupResult is not null)
                 {
                     return null;
                 }
+            }
 
-                cancellationToken.ThrowIfCancellationRequested();
+            cancellationToken.ThrowIfCancellationRequested();
+
+            lock (_rxSync)
+            {
+                lock (_lifecycleSync)
+                {
+                    if (!_channelsAreActive || _cleanupResult is not null)
+                    {
+                        return null;
+                    }
+                }
 
                 return _api.ReceiveClassicCanEvents(_portHandle, maximumEventCount);
             }
@@ -99,21 +168,32 @@ namespace Simulate.Services
             CanFrame frame,
             CancellationToken cancellationToken)
         {
-            lock (_sync)
+            lock (_lifecycleSync)
             {
                 if (!_channelsAreActive || _cleanupResult is not null)
                 {
                     return null;
                 }
+            }
 
-                cancellationToken.ThrowIfCancellationRequested();
+            cancellationToken.ThrowIfCancellationRequested();
 
-                VectorCanFdEventFlags flags = frame.Format == CanFrameFormat.FlexibleDataRate
-                    ? VectorCanFdEventFlags.FlexibleDataRate
-                    : VectorCanFdEventFlags.None;
-                if (frame.IsBitRateSwitchEnabled)
+            VectorCanFdEventFlags flags = frame.Format == CanFrameFormat.FlexibleDataRate
+                ? VectorCanFdEventFlags.FlexibleDataRate
+                : VectorCanFdEventFlags.None;
+            if (frame.IsBitRateSwitchEnabled)
+            {
+                flags |= VectorCanFdEventFlags.BitRateSwitch;
+            }
+
+            lock (_txSync)
+            {
+                lock (_lifecycleSync)
                 {
-                    flags |= VectorCanFdEventFlags.BitRateSwitch;
+                    if (!_channelsAreActive || _cleanupResult is not null)
+                    {
+                        return null;
+                    }
                 }
 
                 return _api.TransmitCanFdFrame(
@@ -131,14 +211,25 @@ namespace Simulate.Services
             int maximumEventCount,
             CancellationToken cancellationToken)
         {
-            lock (_sync)
+            lock (_lifecycleSync)
             {
                 if (!_channelsAreActive || _cleanupResult is not null)
                 {
                     return null;
                 }
+            }
 
-                cancellationToken.ThrowIfCancellationRequested();
+            cancellationToken.ThrowIfCancellationRequested();
+
+            lock (_rxSync)
+            {
+                lock (_lifecycleSync)
+                {
+                    if (!_channelsAreActive || _cleanupResult is not null)
+                    {
+                        return null;
+                    }
+                }
 
                 return _api.ReceiveCanFdEvents(_portHandle, maximumEventCount);
             }
@@ -147,90 +238,103 @@ namespace Simulate.Services
         public VectorCanFlushResult? FlushCanQueues(
             CancellationToken cancellationToken)
         {
-            lock (_sync)
+            lock (_lifecycleSync)
             {
                 if (!_channelsAreActive || _cleanupResult is not null)
                 {
                     return null;
                 }
-
-                cancellationToken.ThrowIfCancellationRequested();
-
-                VectorNativeStatus receiveStatus = _api.FlushReceiveQueue(_portHandle);
-                VectorNativeStatus transmitStatus =
-                    _api.FlushCanTransmitQueue(_portHandle, _accessMask);
-                return new VectorCanFlushResult(receiveStatus, transmitStatus);
             }
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            VectorNativeStatus receiveStatus;
+            lock (_rxSync)
+            {
+                receiveStatus = _api.FlushReceiveQueue(_portHandle);
+            }
+
+            VectorNativeStatus transmitStatus;
+            lock (_txSync)
+            {
+                transmitStatus = _api.FlushCanTransmitQueue(_portHandle, _accessMask);
+            }
+
+            return new VectorCanFlushResult(receiveStatus, transmitStatus);
         }
 
         public HardwareOperationResult Cleanup()
         {
-            lock (_sync)
+            lock (_lifecycleSync)
             {
                 if (_cleanupResult is not null)
                 {
                     return _cleanupResult;
                 }
 
-                var diagnostics = new List<string>();
-                int? firstNativeStatus = null;
+                _channelsAreActive = false;
 
-                void CaptureStatus(string apiName, Func<VectorNativeStatus> nativeCall)
+                lock (_txSync)
                 {
-                    try
+                    lock (_rxSync)
                     {
-                        VectorNativeStatus status = nativeCall();
-                        if (!status.IsSuccess)
+                        var diagnostics = new List<string>();
+                        int? firstNativeStatus = null;
+
+                        void CaptureStatus(string apiName, Func<VectorNativeStatus> nativeCall)
                         {
-                            firstNativeStatus ??= status.Code;
-                            diagnostics.Add(
-                                $"{apiName} returned XL_Status {status.Name} ({status.Code}).");
+                            try
+                            {
+                                VectorNativeStatus status = nativeCall();
+                                if (!status.IsSuccess)
+                                {
+                                    firstNativeStatus ??= status.Code;
+                                    diagnostics.Add(
+                                        $"{apiName} returned XL_Status {status.Name} ({status.Code}).");
+                                }
+                            }
+                            catch (Exception exception)
+                            {
+                                diagnostics.Add($"{apiName} threw {exception.Message}.");
+                            }
                         }
+
+                        if (_portIsOpen)
+                        {
+                            CaptureStatus(
+                                "XL_DeactivateChannel",
+                                () => _api.DeactivateChannels(_portHandle, _accessMask));
+
+                            CaptureStatus("XL_ClosePort", () => _api.ClosePort(_portHandle));
+                            _portIsOpen = false;
+                            _portHandle = InvalidPortHandle;
+                        }
+
+                        if (_driverIsOpen)
+                        {
+                            CaptureStatus("XL_CloseDriver", _api.CloseDriver);
+                            _driverIsOpen = false;
+                        }
+
+                        _notificationEventHandle = -1;
+
+                        if (diagnostics.Count == 0)
+                        {
+                            _cleanupResult = HardwareOperationResult.Succeeded();
+                        }
+                        else
+                        {
+                            var failure = new HardwareFailure(
+                                HardwareOperation.Stop,
+                                HardwareErrorCode.StopFailed,
+                                $"Vector session cleanup failed: {string.Join(" ", diagnostics)}",
+                                firstNativeStatus);
+                            _cleanupResult = HardwareOperationResult.Failed(failure);
+                        }
+
+                        return _cleanupResult;
                     }
-                    catch (Exception exception)
-                    {
-                        diagnostics.Add($"{apiName} threw {exception.Message}.");
-                    }
                 }
-
-                if (_channelsAreActive)
-                {
-                    // The Vector CAN FD flowchart (manual 20.30, p. 103) closes in this
-                    // order: deactivate channels, close port, then close driver.
-                    CaptureStatus(
-                        "XL_DeactivateChannel",
-                        () => _api.DeactivateChannels(_portHandle, _accessMask));
-                    _channelsAreActive = false;
-                }
-
-                if (_portIsOpen)
-                {
-                    CaptureStatus("XL_ClosePort", () => _api.ClosePort(_portHandle));
-                    _portIsOpen = false;
-                    _portHandle = InvalidPortHandle;
-                }
-
-                if (_driverIsOpen)
-                {
-                    CaptureStatus("XL_CloseDriver", _api.CloseDriver);
-                    _driverIsOpen = false;
-                }
-
-                if (diagnostics.Count == 0)
-                {
-                    _cleanupResult = HardwareOperationResult.Succeeded();
-                }
-                else
-                {
-                    var failure = new HardwareFailure(
-                        HardwareOperation.Stop,
-                        HardwareErrorCode.StopFailed,
-                        $"Vector session cleanup failed: {string.Join(" ", diagnostics)}",
-                        firstNativeStatus);
-                    _cleanupResult = HardwareOperationResult.Failed(failure);
-                }
-
-                return _cleanupResult;
             }
         }
     }
@@ -270,6 +374,10 @@ namespace Simulate.Services
 
                 yield break;
             }
+
+            int eventHandle = -1;
+            VectorNativeStatus notifStatus = _resources.RegisterNotification(ref eventHandle, queueLevel: 1);
+            bool hasNotification = notifStatus.IsSuccess && eventHandle > 0;
 
             while (true)
             {
@@ -335,8 +443,17 @@ namespace Simulate.Services
 
                 if (receivedBatch.Status.IsQueueEmpty)
                 {
-                    await Task.Delay(TimeSpan.FromMilliseconds(2), cancellationToken)
-                        .ConfigureAwait(false);
+                    if (hasNotification)
+                    {
+                        await Task.Run(
+                            () => _resources.WaitForNotification(timeoutMs: 50),
+                            cancellationToken).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await Task.Delay(TimeSpan.FromMilliseconds(1), cancellationToken)
+                            .ConfigureAwait(false);
+                    }
                 }
             }
         }
@@ -521,6 +638,10 @@ namespace Simulate.Services
         private async IAsyncEnumerable<RoutedCanFrame> ReceiveCanFdAsync(
             [EnumeratorCancellation] CancellationToken cancellationToken)
         {
+            int eventHandle = -1;
+            VectorNativeStatus notifStatus = _resources.RegisterNotification(ref eventHandle, queueLevel: 1);
+            bool hasNotification = notifStatus.IsSuccess && eventHandle > 0;
+
             while (true)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -583,8 +704,17 @@ namespace Simulate.Services
 
                 if (receivedBatch.Status.IsQueueEmpty)
                 {
-                    await Task.Delay(TimeSpan.FromMilliseconds(2), cancellationToken)
-                        .ConfigureAwait(false);
+                    if (hasNotification)
+                    {
+                        await Task.Run(
+                            () => _resources.WaitForNotification(timeoutMs: 50),
+                            cancellationToken).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await Task.Delay(TimeSpan.FromMilliseconds(1), cancellationToken)
+                            .ConfigureAwait(false);
+                    }
                 }
             }
         }

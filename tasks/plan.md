@@ -682,3 +682,22 @@ Trước Task 0/1 cần người dùng phê duyệt riêng nếu thực hiện:
   - dotnet build Simulate.sln: **0 warning, 0 error**.
   - dotnet test Simulate.sln: **PASS 100% (3,336 / 3,337 tests, 1 skipped)**.
   - Báo cáo đã lưu: D:\Analysis Log\report\report_ui10_channel_direction_warning_2026-10-09.txt và D:\Analysis Log\newconvert\change_log_2026-10-09.txt.
+
+## 25. Xử Lý Triệt Để Tràn Hàng Đợi Vector CAN & Tối Ưu Win32 Event Notification [FINDING-Q2] (2026-10-09)
+- **Mục tiêu**:
+  1. Triệt tiêu 100% hiện tượng Hardware CAN receive buffer overflow reported — frame(s) lost.
+  2. [FINDING-Q2]: Thay thế Polling Task.Delay(2ms) bằng Win32 Event Notification (XL_SetNotification / XL_WaitForSingleObject), rút ngắn thời gian thức dậy khi có frame tới từ 2ms-15.6ms xuống < 30us.
+  3. Task 1.2: Dọn sạch hàng đợi phần cứng ngay sau khi kích hoạt kênh (Flush on Channel Activation), loại bỏ tích tụ 29ms mở port.
+  4. Segregated Locks: Tách độc lập khóa _sync thành 3 khóa độc lập (_lifecycleSync, _txSync, _rxSync) trong VectorNativeSessionResources, luồng truyền và nhận frame chạy song song hoàn toàn.
+  5. Sửa lỗi in đúp log cảnh báo FrameLossDetected và bổ sung throttle 1,000ms gom đếm cảnh báo.
+- **Triển khai**:
+  1. VectorXlApi.cs: Bổ sung VectorWaitResult, SetNotification, WaitForSingleObject vào IVectorXlApi và VectorXlApi.
+  2. VectorHardwareService.cs: Gọi api.FlushReceiveQueue ngay sau khi ActivateCanChannels thành công (Task 1.2).
+  3. VectorCanGatewaySession.cs: Phân tách khóa RX/TX độc quyền; dùng WaitForNotification thay thế Task.Delay(2ms).
+  4. MainViewModel.cs: Subscribe duy nhất 1 lần cho FrameLossDetected, hủy đăng ký khi ngắt kết nối/shutdown, throttle gom cảnh báo 1s.
+  5. HardwareBufferOverflowTests.cs & VectorHardwareServiceTests.cs: Bổ sung 4 unit tests mới xác minh toàn diện.
+- **Verification**:
+  - dotnet build Simulate.sln: **0 warning, 0 error**.
+  - dotnet test Simulate.sln: **PASS 100% (3,340 / 3,341 tests, 1 skipped)**.
+  - UI Protection: **0% thay đổi trên bất kỳ file XAML nào**.
+  - Báo cáo đã lưu: D:\Analysis Log\report\report_vector_hardware_buffer_overflow_resolution_2026-10-09.txt và D:\Analysis Log\newconvert\change_log_2026-10-09.txt.

@@ -402,6 +402,10 @@ namespace Simulate.ViewModels
     {
         private readonly object _shutdownSync = new();
         private Task? _shutdownTask;
+        private ICanGatewaySession? _hookedFrameLossSession;
+        private DateTime _lastFrameLossWarningTime = DateTime.MinValue;
+        private int _suppressedFrameLossCount;
+        private readonly object _frameLossSync = new();
 
         public ConnectionViewModel Connection { get; }
 
@@ -569,6 +573,11 @@ namespace Simulate.ViewModels
                         DirectionAnalyzer.Reset();
                         Logging.LogService.LogInfo("Connection", "CAN gateway session disconnected.");
                         BusHealth.Reset();
+                        if (_hookedFrameLossSession is not null)
+                        {
+                            _hookedFrameLossSession.FrameLossDetected -= OnHardwareFrameLossDetected;
+                            _hookedFrameLossSession = null;
+                        }
                     }
                 }
                 else if (args.PropertyName == nameof(Connection.LastFailure) && Connection.LastFailure is { } failure)
@@ -581,13 +590,20 @@ namespace Simulate.ViewModels
                 {
                     Simulation.NotifyExecutionCommands();
 
-                    if (Connection.ActiveGatewaySession is { } activeSession)
+                    ICanGatewaySession? currentSession = Connection.ActiveGatewaySession;
+                    if (!ReferenceEquals(_hookedFrameLossSession, currentSession))
                     {
-                        activeSession.FrameLossDetected += () =>
+                        if (_hookedFrameLossSession is not null)
                         {
-                            Logging.LogService.LogWarning("Hardware", "Hardware CAN receive buffer overflow reported — frame(s) lost.");
-                            BusHealth.UpdateTelemetry();
-                        };
+                            _hookedFrameLossSession.FrameLossDetected -= OnHardwareFrameLossDetected;
+                            _hookedFrameLossSession = null;
+                        }
+
+                        if (currentSession is not null)
+                        {
+                            _hookedFrameLossSession = currentSession;
+                            currentSession.FrameLossDetected += OnHardwareFrameLossDetected;
+                        }
                     }
 
                     if (Connection.IsConnected && Connection.ActiveGatewaySession is { IsOpen: true })
@@ -724,6 +740,37 @@ namespace Simulate.ViewModels
             return completion.Task;
         }
 
+        private void OnHardwareFrameLossDetected()
+        {
+            lock (_frameLossSync)
+            {
+                DateTime now = DateTime.UtcNow;
+                if ((now - _lastFrameLossWarningTime).TotalMilliseconds < 1000)
+                {
+                    _suppressedFrameLossCount++;
+                    BusHealth.UpdateTelemetry();
+                    return;
+                }
+
+                if (_suppressedFrameLossCount > 0)
+                {
+                    Logging.LogService.LogWarning(
+                        "Hardware",
+                        $"Hardware CAN receive buffer overflow reported — frame(s) lost (+{_suppressedFrameLossCount} suppressed in last 1s).");
+                    _suppressedFrameLossCount = 0;
+                }
+                else
+                {
+                    Logging.LogService.LogWarning(
+                        "Hardware",
+                        "Hardware CAN receive buffer overflow reported — frame(s) lost.");
+                }
+
+                _lastFrameLossWarningTime = now;
+                BusHealth.UpdateTelemetry();
+            }
+        }
+
         private async Task ShutdownCoreAsync()
         {
             try
@@ -732,6 +779,11 @@ namespace Simulate.ViewModels
             }
             finally
             {
+                if (_hookedFrameLossSession is not null)
+                {
+                    _hookedFrameLossSession.FrameLossDetected -= OnHardwareFrameLossDetected;
+                    _hookedFrameLossSession = null;
+                }
                 DirectionAnalyzer.Reset();
                 StatusOverview.Dispose();
                 await Connection.ShutdownAsync();

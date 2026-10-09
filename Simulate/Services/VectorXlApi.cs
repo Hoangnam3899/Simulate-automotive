@@ -68,6 +68,13 @@ namespace Simulate.Services
         NonIso
     }
 
+    internal enum VectorWaitResult
+    {
+        Object0 = 0,
+        Timeout = 258,
+        Failed = -1
+    }
+
     internal readonly record struct VectorPortOpenResult(
         VectorNativeStatus Status,
         int PortHandle,
@@ -228,6 +235,10 @@ namespace Simulate.Services
         VectorNativeStatus FlushReceiveQueue(int portHandle);
 
         VectorNativeStatus FlushCanTransmitQueue(int portHandle, ulong accessMask);
+
+        VectorNativeStatus SetNotification(int portHandle, ref int eventHandle, int queueLevel);
+
+        VectorWaitResult WaitForSingleObject(int handle, int timeoutMs);
 
         VectorNativeStatus DeactivateChannels(int portHandle, ulong accessMask);
 
@@ -545,6 +556,23 @@ namespace Simulate.Services
             // Manual 20.30, section 4.3.14 (p. 91).
             return VectorNativeStatus.From(
                 _driver.XL_CanFlushTransmitQueue(portHandle, accessMask));
+        }
+
+        public VectorNativeStatus SetNotification(int portHandle, ref int eventHandle, int queueLevel)
+        {
+            // Manual 20.30, section 3.2.14 (p. 47).
+            return VectorNativeStatus.From(_driver.XL_SetNotification(portHandle, ref eventHandle, queueLevel));
+        }
+
+        public VectorWaitResult WaitForSingleObject(int handle, int timeoutMs)
+        {
+            XLDefine.WaitResults nativeResult = _driver.XL_WaitForSingleObject(handle, timeoutMs);
+            return nativeResult switch
+            {
+                XLDefine.WaitResults.WAIT_OBJECT_0 => VectorWaitResult.Object0,
+                XLDefine.WaitResults.WAIT_TIMEOUT => VectorWaitResult.Timeout,
+                _ => VectorWaitResult.Failed
+            };
         }
 
         private static VectorClassicCanEventFlags MapClassicEventFlags(

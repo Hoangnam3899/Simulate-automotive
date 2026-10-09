@@ -277,6 +277,9 @@ namespace Simulate.Services
                             }
                             else
                             {
+                                // Flush receive queue immediately upon channel activation to clear any
+                                // stale frames that accumulated during driver configuration (~29ms delay).
+                                _ = api.FlushReceiveQueue(openPortResult.PortHandle);
                                 resources.MarkChannelsActive();
                             }
                         }

@@ -1971,3 +1971,22 @@ ew IntroVideoWindow().ShowDialog() trong Simulate/App.xaml.cs trước khi kiể
     * dotnet build: **0 Warning, 0 Error**.
     * dotnet test: **3,336 / 3,337 tests PASS (100%)**.
     * Báo cáo đã lưu: D:\Analysis Log\report\report_ui10_channel_direction_warning_2026-10-09.txt và D:\Analysis Log\newconvert\change_log_2026-10-09.txt.
+
+- [x] **Xử Lý Triệt Để Tràn Hàng Đợi Vector CAN (Vấn Đề A) & Win32 Event Notification [FINDING-Q2] (2026-10-09)**:
+  - **Mục tiêu**:
+    1. Triệt tiêu 100% hiện tượng tràn hàng đợi phần cứng (Hardware CAN receive buffer overflow reported — frame(s) lost).
+    2. [FINDING-Q2]: Thay thế Polling Task.Delay(2ms) bằng Win32 Event Notification (XL_SetNotification / XL_WaitForSingleObject), giảm độ trễ đánh thức từ 2ms-15.6ms xuống < 30us.
+    3. Task 1.2: Dọn sạch hàng đợi phần cứng ngay sau khi kích hoạt kênh (Flush on Channel Activation) để xóa trễ 29ms ban đầu.
+    4. Segregated Locks: Tách khóa _sync thành 3 khóa độc lập (_lifecycleSync, _txSync, _rxSync) trong VectorNativeSessionResources, luồng truyền và nhận frame chạy song song hoàn toàn.
+    5. Sửa lỗi in đúp log cảnh báo FrameLossDetected do gán lặp lại khi kết nối; bổ sung cơ chế throttle 1,000ms gom đếm frame loss.
+  - **Triển khai Chi tiết**:
+    1. *VectorXlApi.cs*: Định nghĩa VectorWaitResult enum; bổ sung SetNotification và WaitForSingleObject vào IVectorXlApi và VectorXlApi.
+    2. *VectorHardwareService.cs*: Gọi api.FlushReceiveQueue(openPortResult.PortHandle) ngay sau ActivateCanChannels thành công (Task 1.2).
+    3. *VectorCanGatewaySession.cs*: Tách khóa độc quyền RX/TX; đăng ký Win32 event notification và thay thế Task.Delay(2ms) bằng WaitForNotification(50ms) trong cả Classic CAN và CAN FD.
+    4. *MainViewModel.cs*: Quản lý _hookedFrameLossSession duy nhất 1 lần, unhook khi disconnect/shutdown, throttle 1,000ms (+N suppressed in last 1s).
+    5. *HardwareBufferOverflowTests.cs & VectorHardwareServiceTests.cs*: Bổ sung 4 unit test mới xác minh notification, startup flush, single subscription và throttling.
+  - **Verification**:
+    * dotnet build Simulate.sln: **0 warning, 0 error**.
+    * dotnet test Simulate.sln: **PASS 100% (3,340 / 3,341 tests, 1 skipped)**.
+    * UI Protection: **0% thay đổi trên bất kỳ file XAML nào**.
+    * Báo cáo lưu trữ: Đã ghi D:\Analysis Log\report\report_vector_hardware_buffer_overflow_resolution_2026-10-09.txt và D:\Analysis Log\newconvert\change_log_2026-10-09.txt.

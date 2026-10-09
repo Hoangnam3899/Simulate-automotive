@@ -513,6 +513,31 @@ namespace Simulate.Tests
         }
 
         [TestMethod]
+        public async Task ReceiveAsync_registers_notification_and_uses_kernel_event_waiting()
+        {
+            var api = new FakeVectorXlApi();
+            var service = new VectorHardwareService(() => api);
+            HardwareOperationResult<ICanGatewaySession> openResult =
+                await service.OpenGatewaySessionAsync(CreateFlexibleDataRateOptions());
+            Assert.IsTrue(openResult.IsSuccess);
+            await using ICanGatewaySession session = openResult.Value!;
+
+            using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
+            try
+            {
+                await foreach (RoutedCanFrame _ in session.ReceiveAsync(cts.Token))
+                {
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+
+            Assert.IsTrue(api.SetNotificationCallCount >= 1, "SetNotification should be called on receive startup.");
+            Assert.IsTrue(api.WaitForSingleObjectCallCount >= 1, "WaitForSingleObject should be called when queue is empty.");
+        }
+
+        [TestMethod]
         public async Task CAN_FD_session_flushes_native_receive_and_transmit_queues()
         {
             var api = new FakeVectorXlApi();
@@ -525,7 +550,7 @@ namespace Simulate.Tests
             HardwareOperationResult flushResult = await session.FlushAsync();
 
             Assert.IsTrue(flushResult.IsSuccess);
-            Assert.AreEqual(1, api.FlushReceiveCallCount);
+            Assert.AreEqual(2, api.FlushReceiveCallCount);
             Assert.AreEqual(1, api.FlushTransmitCallCount);
             Assert.AreEqual(3UL, api.LastFlushTransmitAccessMask);
         }
@@ -959,9 +984,26 @@ namespace Simulate.Tests
             HardwareOperationResult flushResult = await session.FlushAsync();
 
             Assert.IsTrue(flushResult.IsSuccess);
-            Assert.AreEqual(1, api.FlushReceiveCallCount);
+            Assert.AreEqual(2, api.FlushReceiveCallCount);
             Assert.AreEqual(1, api.FlushTransmitCallCount);
             Assert.AreEqual(3UL, api.LastFlushTransmitAccessMask);
+        }
+
+        [TestMethod]
+        public async Task Activating_CAN_channels_flushes_receive_queue_immediately()
+        {
+            var api = new FakeVectorXlApi();
+            var service = new VectorHardwareService(() => api);
+
+            HardwareOperationResult<ICanGatewaySession> openResult =
+                await service.OpenGatewaySessionAsync(CreateClassicOptions());
+
+            Assert.IsTrue(openResult.IsSuccess);
+            await using ICanGatewaySession session = openResult.Value!;
+
+            // Verify that startup flush occurred immediately upon activation without manual FlushAsync call
+            Assert.AreEqual(1, api.FlushReceiveCallCount);
+            Assert.AreEqual(0, api.FlushTransmitCallCount);
         }
 
         [TestMethod]
@@ -1129,7 +1171,7 @@ namespace Simulate.Tests
             StringAssert.Contains(result.Failure.Message, "XL_ERR_INVALID_PORTHANDLE");
             StringAssert.Contains(result.Failure.Message, "XL_CanFlushTransmitQueue");
             StringAssert.Contains(result.Failure.Message, "XL_ERR_QUEUE_IS_FULL");
-            Assert.AreEqual(1, api.FlushReceiveCallCount);
+            Assert.AreEqual(2, api.FlushReceiveCallCount);
             Assert.AreEqual(1, api.FlushTransmitCallCount);
         }
 
@@ -1450,6 +1492,26 @@ namespace Simulate.Tests
 
             public ulong? LastFlushTransmitAccessMask { get; private set; }
 
+            public int SetNotificationCallCount { get; private set; }
+
+            public int LastSetNotificationPortHandle { get; private set; }
+
+            public int LastSetNotificationQueueLevel { get; private set; }
+
+            public int FakeAssignedEventHandle { get; set; } = 42;
+
+            public VectorNativeStatus SetNotificationStatus { get; init; } =
+                new VectorNativeStatus(0, "XL_SUCCESS");
+
+            public int WaitForSingleObjectCallCount { get; private set; }
+
+            public int LastWaitForSingleObjectHandle { get; private set; }
+
+            public int LastWaitForSingleObjectTimeoutMs { get; private set; }
+
+            public VectorWaitResult WaitResult { get; set; } =
+                VectorWaitResult.Object0;
+
             public void EnqueueCanFdReceiveEvent(
                 int channelIndex,
                 uint rawIdentifier,
@@ -1640,6 +1702,36 @@ namespace Simulate.Tests
                 FlushTransmitCallCount++;
                 LastFlushTransmitAccessMask = accessMask;
                 return FlushTransmitStatus;
+            }
+
+            public VectorNativeStatus SetNotification(
+                int portHandle,
+                ref int eventHandle,
+                int queueLevel)
+            {
+                SetNotificationCallCount++;
+                LastSetNotificationPortHandle = portHandle;
+                LastSetNotificationQueueLevel = queueLevel;
+                if (eventHandle <= 0)
+                {
+                    eventHandle = FakeAssignedEventHandle;
+                }
+
+                return SetNotificationStatus;
+            }
+
+            public VectorWaitResult WaitForSingleObject(int handle, int timeoutMs)
+            {
+                WaitForSingleObjectCallCount++;
+                LastWaitForSingleObjectHandle = handle;
+                LastWaitForSingleObjectTimeoutMs = timeoutMs;
+                if (_canFdReceiveEvents.Count > 0 || ReceiveEvents.Count > 0)
+                {
+                    return VectorWaitResult.Object0;
+                }
+
+                Thread.Sleep(Math.Min(timeoutMs, 5));
+                return WaitResult;
             }
 
             public VectorNativeStatus DeactivateChannels(int portHandle, ulong accessMask)
