@@ -1,0 +1,66 @@
+﻿====================================================================================================
+BAO CAO KY THUAT: KHAC PHUC LOGIC KHOI PHAT CAN VA HIEU UNG THI GIAC QUICK ACTION (SIMULATE)
+Ngay thuc hien: 2026-10-06
+Du an: CANForge / Tool Doc DTC DID EBUS - Module Mo Phong Gateway (SIMULATE)
+Quy chuan ap dung: C# 7.3 (.NET Framework 4.8), AGENTS.md, vector-hardware-mitm.md, ui-protection.md, build-verification.md
+====================================================================================================
+
+1. MO TA VAN DE & YEU CAU CUA NGUOI DUNG:
+   - Van de 1 (Ban frame som): Khi nguoi dung tich chon checkbox Ghi de (Override) trong bang THIET LAP GIA TRI TIN HIEU (Signal Value Setup), he thong lap tuc can thiep va phat frame sua doi ra bus CH2 lien tuc theo chu ky xe that, hoan toan bo qua bang THAO TAC NHANH (Quick Action).
+   - Van de 2 (Treo / Treo lap khi Gui mot lan): Nut GUI MOT LAN (One-Shot) khi bam bi treo trong Task.Delay(-1), khoa luoi SignalValueGrid, va khong hoan thanh duoc 1 lan ban duy nhat.
+   - Van de 3 (Thieu hieu ung thi giac): Cac nut trong bang Quick Action (GUI MOT LAN, GUI TAT CA MOT LAN, DUNG TAT CA TUAN HOAN, XOA BO DEM, DUNG KHAN CAP) thieu trigger IsPressed (khi nhan chuot khong lun xuong / khong doi mau nhan), va trang thai IsEnabled=False khong hien thi ro rang lam nguoi dung khong phan biet duoc nut co bam duoc hay khong.
+
+2. NGUYEN NHAN GOC RE (ROOT CAUSE ANALYSIS):
+   - Root Cause 1: Trong SIMULATE.xaml.cs (su kien OnSignalPropertyChanged va SyncOverridesFromUi), khi co bat ky signal nao co Override = true, code tu dong gan:
+       selectedTx.Mode = GatewayMode.Inject;
+       _mitmEngine.UpdateTxList(_txMessages);
+     Dieu nay lam cho GatewayLoop trong MitmEngine.cs ngay lap tuc bat moi frame CH1 trung ID, dong goi signal ghi de va phat ra CH2 lien tuc ma khong can lenh tu Quick Action.
+   - Root Cause 2: Trong ExecuteSingleStepAsync, nhanh One-Shot co doan code:
+       if (typeName == One-Shot) {
+           SignalValueGrid.IsEnabled = false;
+           await Task.Delay(-1, token);
+           return;
+       }
+     Doan code nay khien thao tac One-Shot bi bien thanh infinite wait, lam do UI grid va chi dung khi bi cancel ngoai le.
+   - Root Cause 3: ControlTemplate cua HeaderButtonStyle, GreenButtonStyle, RedButtonStyle, BlueButtonStyle, SendOnceButtonStyle, ActionButtonStyle, ToolbarButtonStyle trong SIMULATE.xaml chi co trigger IsMouseOver. Hoan toan thieu:
+       + Trigger Property=IsPressed Value=True
+       + Trigger Property=IsEnabled Value=False
+     Khi nut bi vo hieu hoa hoac khi duoc click, giao dien giu nguyen khong phan hoi.
+
+3. GIAI PHAP & CHI TIET SUA DOI:
+   - Tach biet Cau hinh (Setup) va Kich hoat (Execution):
+     + Trong OnSignalPropertyChanged: Khi nguoi dung tich Override hoac doi gia tri tin hieu, chi cap nhat _mitmEngine.SetSignalOverride(...) va co selectedTx.Override de hien thi UI. Tuyet doi KHONG tu y chuyen selectedTx.Mode sang GatewayMode.Inject.
+     + Giu nguyen selectedTx.Mode = GatewayMode.PassThrough de cac frame tu xe that van pass qua CH2 nguyen ven.
+     + Kich hoat nut BtnSendOnce thong qua UpdateQuickActionState().
+   - Sua logic One-Shot (Gui mot lan):
+     + Khi bam BtnSendOnce voi SendType == One-Shot:
+       Cho startDelay (neu co), goi truc tiep _mitmEngine.SendOnce(canId) de ban DUNG 1 FRAME duy nhat ra CH2.
+       Cap nhat ngay bo dem thong ke va ghi nhat ky su kien Event Log.
+       Giu Mode = PassThrough va SignalValueGrid luon san sang tuong tac.
+     + Khong chay Task.Delay(-1) va khong khoa luoi tin hieu.
+   - Bo sung Hieu ung Thi giac Tactile & Pulse Animation:
+     + Trong SIMULATE.xaml: Them cac trigger IsPressed (mau sam nhan lun, Margin content lui 1px), IsEnabled=False (nen toi, chu mo mo #555E72, Opacity 0.45, con tro Arrow) cho toan bo 7 style nut.
+     + Them SendTypeToggleStyle cho cac nut chon kieu gui (Cyclic, One-Shot, Event) voi hieu ung sang xanh #0070D0 khi IsChecked=True.
+     + Trong SIMULATE.xaml.cs: Them ham TriggerButtonPulse(Button btn) su dung DoubleAnimation (Opacity 0.4 -> 1.0 trong 200ms) tao hieu ung phan hoi nhap nhay tuc thi khi nguoi dung click vao bat ky nut nao trong Quick Action va Simulation Control.
+
+4. DANH SACH FILE THAY DOI:
+   - File 1: TreeViews and Value Converters/SIMULATE.xaml
+     + Nang cap HeaderButtonStyle, GreenButtonStyle, RedButtonStyle, BlueButtonStyle, SendOnceButtonStyle, ActionButtonStyle, ToolbarButtonStyle voi visual states IsPressed va IsEnabled.
+     + Bo sung SendTypeToggleStyle va gan vao BtnSendCyclic, BtnSendOneShot, BtnSendEvent.
+   - File 2: TreeViews and Value Converters/SIMULATE.xaml.cs
+     + Sua OnSignalPropertyChanged: Bo viec tu dong ep selectedTx.Mode = GatewayMode.Inject.
+     + Sua SyncOverridesFromUi: Bo ep Mode = Inject khi bat dau mo phong.
+     + Them TriggerButtonPulse(Button btn).
+     + Sua BtnSendOnce_Click va ExecuteSingleStepAsync: Xu ly One-Shot ban dung 1 frame sach se, khong delay vo tan, cap nhat Event Log.
+     + Gan TriggerButtonPulse vao BtnSendOnce, BtnSendAllOnce, BtnStopAll, BtnClearCounter, BtnEmergencyStop, BtnStartSimulation, BtnStopSimulation.
+
+5. KET QUA BIEN DICH & XAC MINH (BUILD & VERIFICATION):
+   - Lenh bien dich:
+     MSBuild.exe TreeViews and Value Converters/TreeViews and Value Converters.csproj /t:Build /p:Configuration=Debug
+   - Ket qua:
+     Build succeeded.
+     0 Warning(s)
+     0 Error(s)
+     Output: CANForge_ebus.exe
+   - Trang thai xac minh: OK (Da trace luong End-to-End tu UI Event -> MitmEngine -> SendOnce -> Hardware Output -> UI Feedback).
+====================================================================================================

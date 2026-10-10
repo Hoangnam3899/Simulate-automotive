@@ -1,0 +1,52 @@
+﻿====================================================================================================
+BÁO CÁO KỸ THUẬT GIT COMMIT & PUSH - DTC SNAPSHOT & CVC RESOLUTION
+Thời gian thực hiện: 2026-10-06 06:12:00
+Dự án: CANForge / Tool Đọc DTC DID EBUS (.NET Framework 4.8, C# 7.3)
+Skill áp dụng: .agents/skills/git-workflow-and-versioning/SKILL.md & .agents/skills/vector-can-wpf/SKILL.md
+Quy chuẩn tuân thủ: AGENTS.md, savedata.md, security-secrets.md, build-verification.md
+====================================================================================================
+
+1. THÔNG TIN COMMIT & PUSH:
+   - Branch: main
+   - Commit Hash: b41ef994df18c94ffdc5b59644ff924301fa4d69
+   - Remote: https://github.com/Hoangnam3899/Read-DID-DTC-DIAG-SIMULATE-using-C-.git (origin/main)
+   - Trạng thái Push: THÀNH CÔNG (bed6a44..b41ef99  main -> main)
+
+2. NỘI DUNG COMMIT MESSAGE:
+   -------------------------------------------------------------------------------------------------
+   fix(dtc): resolve missing TX snapshot visibility and sanitize CVC Excel definedNames
+
+   Root Cause Analysis:
+   1. Snapshot Display & Export (ISO 14229 causality):
+      - Cause: txtDetailFullFrame in DTC.xaml has MaxHeight="80" (~2-3 visible lines).
+      - The legacy format string placed Received before Transmitted ("{0}: {1}\n\n{2}: {3}").
+      - Long Received snapshot payloads (59 04 ...) spanned 3-4 lines, pushing the Transmitted frame below the vertical scroll fold and creating the impression that Transmitted was missing.
+      - For 19 02 frames without snapshots, only the raw received frame was stored without recording the TX request frame (19 02 <maskByte>).
+
+   2. CVC DTC Resolution ('not defined'):
+      - Cause: General/DTC/VF9NP/CVC.xlsx contained invalid Defined Names ([388]他材料費, \, \\).
+      - ClosedXML v0.105.0 automatically invokes FormulaParser upon opening, throwing ClosedXML.Parser.ParsingException.
+      - An empty catch { } block swallowed the exception, resulting in an empty dictionary (Count = 0).
+      - Consequently, all CVC DTC codes (e.g., U1881-83) failed candidate lookup and rendered as 'not defined'.
+
+   Solutions Implemented:
+   1. Snapshot Standardization:
+      - Reordered snapshot formatting to strictly place Transmitted before Received across both UI and Excel export.
+      - Added NormalizeSnapshotOrder supporting multilingual prefixes (vi, en, zh, ko, ar) to reorder legacy snapshots.
+      - Enhanced 19 02 fallback to include both TX request ("19 02 <maskByte>") and RX response ("59 02 <maskByte> <FullFrame>").
+   2. Excel Stream Sanitization:
+      - Added OpenSanitizedExcelStream using System.IO.Compression.ZipArchive to strip <definedNames> nodes from xl/workbook.xml in RAM (< 1ms) prior to ClosedXML parsing.
+      - Preserves original vendor Excel files on disk while eliminating FormulaParser crashes.
+      - Verified 797 rows and 2,727 DTC keys loaded successfully (U1881-83 resolved to 'Incorrect CRC  FCAM_ESA_Sts(0x13a)').
+   3. Additional MITM & Gateway Enhancements:
+      - Synced live AliveCounter for E2E-protected frames in MitmEngine.
+      - Synchronized UI override states and auto-switched to Inject mode upon signal override in SIMULATE.
+      - Added hardware TX queue flush handling and settling delays for Vector CAN/CAN-FD drivers.
+   -------------------------------------------------------------------------------------------------
+
+3. KIỂM SOÁT BẢO MẬT & KIỂM THỬ:
+   - Secret Leak Audit: Passed (Không có file .pem, .key, .pfx, credentials lọt vào commit).
+   - UI Preservation: 100% nguyên vẹn (Không sửa bất kỳ control/layout XAML nào).
+   - MSBuild Verification: 0 Warning(s), 0 Error(s).
+   - Runtime Verification: OK.
+====================================================================================================

@@ -115,14 +115,16 @@ Khi có mâu thuẫn, áp dụng thứ tự ưu tiên giảm dần:
 Mọi thay đổi code phải truy xuất được theo chuỗi:
 `Nguồn Vector SDK (Doc/) -> Yêu cầu (tasks/plan.md) -> Code C# (Services/ViewModels) -> Build (dotnet build) -> Task Checkpoint (tasks/todo.md)`
 
-### 6.2. Quy tắc Work Log bắt buộc sau mỗi phiên (End-of-Session Work Log)
+### 6.2. Quy tắc Work Log & Viết Báo Cáo Bắt Buộc (Mandatory Report & Work Log)
 Sau mỗi phiên làm việc hoặc khi hoàn thành một task, AI Agent **BẮT BUỘC** phải:
-1. **Cập nhật tiến độ nhiệm vụ:** Đánh dấu hoàn thành/cập nhật trạng thái công việc trong [tasks/todo.md](file:///c:/Users/Hnam/Desktop/Simulate/tasks/todo.md) và [tasks/plan.md](file:///c:/Users/Hnam/Desktop/Simulate/tasks/plan.md).
-2. **Tạo/Báo cáo Work Log chi tiết:** Báo cáo tóm tắt phiên làm việc bao gồm các thông tin:
-   - **Nhiệm vụ đã thực hiện:** Mục tiêu và các bước đã hoàn thành.
-   - **Danh sách file đã sửa/tạo mới:** Đính kèm đường dẫn dạng clickable link `[filename](file:///...)`.
-   - **Kết quả kiểm tra (Verification):** Kết quả biên dịch `dotnet build` và kiểm thử `dotnet test`.
-   - **Các vấn đề tồn đọng / `NEEDS_VERIFY`:** Những điều cần lưu ý hoặc xác minh thêm trong phiên tiếp theo.
+1. **Cập nhật tiến độ nhiệm vụ:** Đánh dấu hoàn thành/cập nhật trạng thái công việc trong [tasks/todo.md](file:///d:/Automotive%20dev/Simulate/tasks/todo.md) và [tasks/plan.md](file:///d:/Automotive%20dev/Simulate/tasks/plan.md).
+2. **Ghi nhận và đồng bộ báo cáo chi tiết theo `.agents/rules/report-standards.md` và `.agents/rules/savedata.md`**:
+   - Lưu trữ đồng thời vào cả 3 thư mục:
+     * `D:\Analysis Log\report\` (báo cáo kỹ thuật chi tiết `report_<chu_de>_<YYYY-MM-DD>.txt`)
+     * `D:\Analysis Log\newconvert\` (change log ngày `change_log_<YYYY-MM-DD>.txt`)
+     * `d:\Automotive dev\Simulate\report\` (thư mục `report/` trong repository)
+   - Lưu trữ bản sao Conversation Transcripts (`transcript_full.jsonl`, `transcript.jsonl`) và ảnh tải lên vào `conversation_archives/` tại cả `D:\Analysis Log\` và `report/`.
+   - Cấu trúc báo cáo chuẩn hóa 5 phần: Header (Metadata/ISO standards) -> Tổng quan -> Phân tích Root Cause -> Chi tiết triển khai file -> Verification (build 0/0, test 100%, UI protection 0% XAML change).
 
 ---
 
@@ -140,6 +142,6 @@ Task được coi là HOÀN THÀNH khi:
 1. `dotnet build` thành công 0 Error, 0 Warning.
 2. `dotnet test` vượt qua 100% tests (nếu có).
 3. Đúng kiến trúc MVVM (`CommunityToolkit.Mvvm`), tách biệt View và Hardware Logic.
-4. Cập nhật tiến độ vào [tasks/todo.md](file:///c:/Users/Hnam/Desktop/Simulate/tasks/todo.md) và [tasks/plan.md](file:///c:/Users/Hnam/Desktop/Simulate/tasks/plan.md).
-5. Ghi nhận Work Log tóm tắt công việc đã làm và kết quả verification.
-6. Không vi phạm bất kỳ quy tắc UI hay User Boundary nào.
+4. Cập nhật tiến độ vào [tasks/todo.md](file:///d:/Automotive%20dev/Simulate/tasks/todo.md) và [tasks/plan.md](file:///d:/Automotive%20dev/Simulate/tasks/plan.md).
+5. Xuất và đồng bộ đầy đủ báo cáo `.txt` theo chuẩn `.agents/rules/report-standards.md` vào cả 3 vị trí (`D:\Analysis Log\report\`, `D:\Analysis Log\newconvert\`, `report/`).
+6. Không vi phạm bất kỳ quy tắc UI hay User Boundary nào (100% bảo toàn UI/XAML).

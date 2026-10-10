@@ -1,0 +1,41 @@
+================================================================================
+BAO CAO THAY DOI: NANG CAP NUT XUAT EXCEL SANG XANH KHI DOC XONG DTC
+Du an: CAN Bus MITM Simulator / Tool Doc DTC DID EBUS (CANForge)
+Ngay thuc hien: 2026-10-02
+Trang thai xac minh: OK (Bien dich 0 Error / 0 Warning, 1000/1000 TCs Passed)
+================================================================================
+
+I. YEU CAU NGUOI DUNG
+- Nut "Xuat Excel" can phai xanh len khi doc xong DTC de thong bao ro rang cho ky su kiem thu biet du lieu da san sang xuat bao cao.
+- Ap dung nghiem ngat Skill frontend-ui-engineering, vector-can-wpf va cac quy chuan giao dien, bao ton 100% bo cuc, kich thuoc, font chu va vi tri cua cac thanh phan UI khac.
+
+II. CHI TIET THAY DOI MA NGUON
+
+1. TreeViews and Value Converters/DTC.xaml:
+   - Dinh nghia Style "BtnGreen" moi mang phong cach Emerald Green (nen #16A34A, chu trang #FFFFFF, hover #15803D, bo goc CornerRadius=5, FontWeight=SemiBold, Height=28) an khop hoan toan voi Design System cua ung dung.
+   - Gan x:Name="btnExportExcel" cho nut Xuat Excel.
+   - Gan su kien Click="btnClearList_Click" cho nut "Xoa danh sach" ben canh de dong bo trang thai giao dien.
+
+2. TreeViews and Value Converters/DTC.xaml.cs:
+   - Them ham SetExportButtonActive(bool isActive):
+     + Khi isActive = true: Chuyen Style sang BtnGreen (Nen xanh la chu trang noi bat).
+     + Khi isActive = false: Chuyen Style ve BtnOutline (Vien xam mac dinh).
+   - Hook trang thai nut Xuat Excel theo vong doi doc DTC:
+     + Khi khoi tao hoac mo cua so (DTC_Loaded): Reset ve BtnOutline (neu chua co data).
+     + Khi bat dau bam "Doc DTC" (btnReadDtc_Click): Reset ve BtnOutline.
+     + Khi doc xong toan bo ECU va co du lieu (_dtcRecords.Count > 0): Tu dong chuyen sang BtnGreen ruc ro!
+     + Khi bam "Xoa danh sach" (btnClearList_Click): Xoa records va tra nut ve BtnOutline.
+     + Khi doi loai xe (cbProjectList_SelectionChanged): Xoa records va tra nut ve BtnOutline.
+     + Khi bam "Xoa loi DTC" (btnClearDtc_Click): Xoa records va tra nut ve BtnOutline.
+
+III. KET QUA BIEN DICH VA KIEM CHUNG
+- MSBuild:
+  Build succeeded.
+  0 Warning(s)
+  0 Error(s)
+  Output: TreeViews and Value Converters\bin\Debug\CANForge_ebus.exe
+- Kiem thu tu dong (Automated Test Suite):
+  1000 / 1000 Test Cases PASSED (100.0%)
+- Giao dien UI:
+  Toan bo layout, margin, do rong, chieu cao giu nguyen ven 100%, chi cap nhat mau sac nut bam theo yeu cau truc tiep tu user.
+================================================================================

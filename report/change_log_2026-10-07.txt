@@ -1,0 +1,38 @@
+﻿========================================================================================
+BÁO CÁO THAY ĐỔI & HOÀN TẤT COMMIT GIT - CANFORGE EBUS TOOL
+Thời gian: 2026-10-07 10:40:00
+Commit Hash: 07e3d73b702a79e3b83472c9c902c933302fad4f
+Branch: main
+Commit Title: feat(simulate): standardize One-Shot, Event, and Cyclic transmission modes with active SendOnce loop
+========================================================================================
+
+1. DANH SÁCH FILE THAY ĐỔI TRONG COMMIT
+- Modified: TreeViews and Value Converters/SIMULATE.xaml (170 additions/modifications)
+- Modified: TreeViews and Value Converters/SIMULATE.xaml.cs (409 additions/modifications)
+- Created:  Ebus_tool/scratch/generate_2000_tcs.py (278 additions)
+
+2. MỤC ĐÍCH VÀ CHI TIẾT THAY ĐỔI
+- SIMULATE.xaml.cs:
+  + Chuẩn hóa Staging: Chỉnh sửa slider / override trên grid chỉ lưu bảng tra vào bộ nhớ (SetSignalOverride), giữ nguyên GatewayMode.PassThrough, không tự động tiêm hay phát frame trước khi bấm nút phát.
+  + One-Shot: Khóa grid (SignalValueGrid.IsEnabled = false), chuyển Mode = Inject, chạy vòng lặp active phát SendOnce(canId) liên tục theo CycleTime cho tới khi người dùng bấm STOP ALL CYCLIC.
+  + Event: Mở grid (SignalValueGrid.IsEnabled = true), chuyển Mode = Inject, chạy vòng lặp active phát SendOnce(canId) liên tục. Cho phép người dùng live-tweaking giá trị tín hiệu tức thì khi đang phát.
+  + Cyclic: Chuyển Mode = Inject, khóa grid, thực hiện chuỗi xung burst: phát active SendOnce(canId) theo CycleTime đủ số lượng RepeatCount/NumberTransmit, nghỉ GapTimeMs giữa các burst, tự động kết thúc mở khóa grid và hiển thị thông báo.
+  + Send All Once: Khởi động song song các task phát chủ động cho tất cả message được kích hoạt theo đúng cấu hình chế độ của từng message.
+  + Stop All Cyclic: Hủy _sequenceCts, lập tức mở khóa grid (IsEnabled = true), phục hồi tất cả message về GatewayMode.PassThrough.
+  + An toàn C# 7.3: Không dùng C# 8+ syntax, Dispatcher invoke chuẩn luồng UI.
+- SIMULATE.xaml:
+  + Thêm visual feedback nút bấm (TriggerButtonPulse), bổ sung trạng thái IsPressed, IsEnabled cho các nút điều khiển.
+  + Bổ sung SendTypeToggleStyle cho các nút chọn chế độ Cyclic, One-Shot, Event.
+- scratch/generate_2000_tcs.py:
+  + Bộ sinh 2,000 test case tự động chuẩn hóa dùng để audit và review toàn diện tính năng Simulate.
+
+3. KẾT QUẢ BUILD & XÁC MINH
+- Trạng thái Build: MSBuild v17.14 Community (.NET Framework 4.8) -> 0 Warning(s), 0 Error(s).
+- Trạng thái Logic: OK (Đã trace luồng End-to-End, giải quyết triệt để lỗi không bắn frame khi desk-test standalone).
+- Bảo vệ bí mật: 0 private/public key, 0 credentials được đưa vào staging.
+
+4. BỘ TEST CASES VÀ REPORT SẴN CÓ
+- D:\Analysis Log\report\test_cases_2000_simulate_review.txt (15,601 dòng, 2,000 Test Cases đầy đủ).
+- D:\Analysis Log\report\report_simulate_send_logic_standardization_2026-10-06.txt.
+- D:\Analysis Log\newconvert\change_log_2026-10-07.txt.
+========================================================================================

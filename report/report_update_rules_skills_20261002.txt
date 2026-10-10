@@ -1,0 +1,78 @@
+================================================================================
+BÁO CÁO CẬP NHẬT RULES & SKILLS + ĐỒNG BỘ GIT
+Thời gian: 2026-10-02 15:44:00
+Dự án: CAN Bus MITM Simulator / Tool Đọc DTC DID EBUS (CANForge)
+================================================================================
+
+1. SKILLS & RULES KÍCH HOẠT
+--------------------------------------------------------------------------------
+- git-workflow-and-versioning: Tạo nhánh, commit, merge, push.
+- context-engineering: Cập nhật cấu trúc rules/skills dự án.
+- code-review-and-quality: Kiểm tra toàn vẹn mã nguồn sau khi cập nhật.
+
+2. DANH SÁCH FILE ĐÃ TẠO MỚI
+--------------------------------------------------------------------------------
+a) .agents/rules/csharp-coding-standards.md
+   - Quy chuẩn viết mã C# 7.3: bảng cú pháp bị cấm, naming conventions 
+     (PascalCase/camelCase/_camelCase/ALL_CAPS), thread-safety patterns, 
+     error handling, validation boundaries.
+
+b) .agents/rules/uds-isotp-protocol.md
+   - Bảng dịch vụ UDS (SID 0x10~0x3E) với module xử lý tương ứng.
+   - Xử lý Negative Response (NRC) với danh sách mã lỗi phổ biến.
+   - ISO-TP segmentation (SF/FF/CF/FC) cho cả CAN Classic và CAN FD.
+   - DTC format SAE J2012 (3-byte -> Pxxxx-yy).
+   - Seed-Key Security Access flow.
+
+c) .agents/rules/build-verification.md
+   - Lệnh MSBuild chuẩn, tiêu chuẩn 0 error/0 warning.
+   - Quy trình 5 bước xác minh (Static -> Build -> Logic -> UI -> Report).
+   - Trạng thái chuẩn hóa (OK/PARTIAL/NEEDS_VERIFY/BUG).
+
+d) .agents/rules/dbc-signal-processing.md
+   - Bảng danh mục 8 file DBC (4 Classic BEV + 4 FD EP).
+   - DBC Parser keywords bắt buộc hỗ trợ.
+   - Thuật toán bit-packing Intel (LSB-first) và Motorola (MotorolaNextBit).
+   - Sign extension cho tín hiệu có dấu.
+
+e) .agents/rules/security-secrets.md
+   - Danh sách file bí mật không được commit.
+   - Quy trình kiểm tra trước git add.
+   - Quy tắc License RSA và xử lý dữ liệu người dùng.
+
+f) .agents/SKILL-CATALOG.md
+   - Danh mục tham chiếu nhanh toàn bộ 28 skills.
+   - Phân nhóm: Domain, UI, Architecture, Planning, Implementation, 
+     Quality, Operations, Documentation, Meta.
+   - Quy tắc kết hợp skills.
+
+3. DANH SÁCH FILE ĐÃ CẬP NHẬT
+--------------------------------------------------------------------------------
+g) AGENTS.md
+   - Bổ sung tham chiếu SKILL-CATALOG.md.
+   - Mở rộng bảng routing (thêm spec-driven, documentation, security).
+   - Thêm bảng danh sách Rules bắt buộc (9 rules).
+
+h) Docs/AGENT_BOOTSTRAP.md
+   - Thêm bước 6 (tham khảo SKILL-CATALOG.md) trong bootstrap.
+   - Mở rộng bảng routing skill.
+   - Thêm Section 3: Danh sách Rules bắt buộc với bảng đầy đủ.
+
+4. KẾT QUẢ BIÊN DỊCH
+--------------------------------------------------------------------------------
+- Build: Succeeded (0 Warning, 0 Error)
+- UI: Không thay đổi (bảo toàn 100%)
+
+5. ĐỒNG BỘ GIT
+--------------------------------------------------------------------------------
+- Nhánh: feat/update-rules-skills-v2 -> merge vào main
+- Commit: 4d92452 (feat) + bed6a44 (merge)
+- Push: origin/main đã đồng bộ thành công
+- Remote: https://github.com/Hoangnam3899/Read-DID-DTC-DIAG-SIMULATE-using-C-.git
+
+6. TRẠNG THÁI XÁC MINH
+--------------------------------------------------------------------------------
+- Trạng thái: OK
+- Mã nguồn không bị ảnh hưởng.
+- Giao diện UI bảo toàn 100%.
+================================================================================

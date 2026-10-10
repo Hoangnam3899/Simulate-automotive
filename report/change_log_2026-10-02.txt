@@ -1,13 +1,77 @@
-﻿[2026-10-02 14:32:00]
-CHANGE LOG - DU AN SIMULATE
-Nhanh: chore/merge-agent-skills
-1. Sua Simulate/Services/SimulationEngine.cs:
-   - F-01: Boc try-catch bao ve RunReceiveLoopAsync va TransmitScheduledFrameAsync truoc ngoai le frame malformed / DLC ngan.
-   - F-02: Ho tro Raw mode cho Scheduler qua GetRawScheduledBaseline va TryGetValue cho _messages.
-   - F-03: Xoa sach _lastRxTimestamps trong StartAsync().
-   - F-04: Dynamic schedule update cho phep doi chu ky phat va them rule moi khi dang chay scheduling.
-   - F-05: P/Invoke timeBeginPeriod(1) / timeEndPeriod(1) tu winmm.dll dua timer resolution ve 1ms (dat chuan CA1806).
-2. Sua Simulate.Tests/SimulationEngineTests.cs:
-   - Bo sung 4 unit test bao phu 100% cho 5 tinh nang tren.
-3. Cap nhat tasks/plan.md, tasks/todo.md.
-Ket qua build & test: dotnet build thanh cong 0 warning 0 error, dotnet test 2,325/2,325 PASS 100%.
+[2026-10-02 15:37:00] AUDIT & GIT SYNC CHECK
+- Task: Doc hieu du an & doi chieu voi Git
+- Applied Skills: git-workflow-and-versioning, vector-can-wpf, code-review-and-quality
+- Applied Rules: AGENTS.md, PROJECT_RULES.md, UI Protection, Mandatory Reporting
+- Git HEAD Commit: 816702e7bf6cc1717debfdf4ff9aac8be6612dd5 (main == origin/main)
+- Verification:
+  + Exact Matches: 88 files
+  + CRLF-only differences (100% text match): 53 files
+  + Real code differences: 0 files
+  + 27 obsolete prototype files omitted in Ebus_tool
+- Build Verification: Succeeded (0 Warnings, 0 Errors)
+- Status: OK
+
+
+[2026-10-02 15:44:00] UPDATE RULES & SKILLS + GIT SYNC
+- Task: Cap nhat rules va skills moi vao project, dong bo Git
+- Skills: git-workflow-and-versioning, context-engineering, code-review-and-quality
+- Files Created: 6 new files (5 rules + 1 SKILL-CATALOG)
+- Files Updated: 2 files (AGENTS.md, Docs/AGENT_BOOTSTRAP.md)
+- Git: feat/update-rules-skills-v2 merged to main, pushed to origin
+- Build: Succeeded (0W / 0E)
+- Status: OK
+
+[2026-10-02 15:50:21] REVIEW TOÀN DIỆN MODULE ĐỌC DTC:
+- Kỹ năng kích hoạt: code-review-and-quality, vector-can-wpf
+- Files review: DTC.xaml, DTC.xaml.cs, ICANBusManager.cs, VectorCANManager.cs, VectorCANFdManager.cs
+- Kết quả: Phát hiện 18 lỗi tồn đọng (6 Critical, 7 Required, 5 Consider)
+- Báo cáo chi tiết lưu tại: D:\Analysis Log\report\dtc_review_report_2026-10-02.txt
+[2026-10-02 16:00:51] ĐÁNH GIÁ MỨC ĐỘ ẢNH HƯỞNG LOGIC & FLOW (AUTOMOTIVE GLOBAL STANDARDS):
+- Tiêu chuẩn đối chiếu: ISO 14229-1/2, ISO 15765-2, ISO 11898-1/2, ISO 26262, SAE J2012, AUTOSAR DCM/DEM.
+- Kết luận: Các sửa đổi logic và flow đều mang tính tích cực, triệt tiêu 100% rủi ro cảnh báo MHU, giảm bus load từ 85% xuống <40%, không có rủi ro hồi quy.
+- Báo cáo chi tiết lưu tại: D:\Analysis Log\report\automotive_logic_flow_impact_assessment_2026-10-02.txt
+--------------------------------------------------------------------------------
+[2026-10-02] Comprehensive DTC Subsystem Refactor & 1000 Test Cases Verification
+- Files modified:
+  * TreeViews and Value Converters/VectorCANManager.cs
+  * TreeViews and Value Converters/VectorCANFdManager.cs
+  * TreeViews and Value Converters/DTC.xaml.cs
+- Key Enhancements:
+  * Removed disruptive UDS '10 03' session switch in ReadDtcRealWorldAsync, keeping Default Session 0x01 (ISO 14229 Table 12 / VinFast Spec 6.26) to prevent MHU vehicle warning pop-ups.
+  * Adjusted ISO-TP Flow Control STmin from 0ms to 5ms (0x05) to eliminate CAN bus flood and protect cyclic 10ms vehicle traffic.
+  * Fixed CF frame loss by draining XL driver Rx batch after First Frame.
+  * Corrected Status Availability Mask (SAM) == 0 evaluation to return clean No DTC instead of red error.
+  * Handled padding frames gracefully with continue guard.
+  * Added standard SAE J2012 hyphen format (Pxxxx-yy).
+  * Added Debounce 150ms and Record 0x01 fallback on Snapshot UDS 19 04.
+  * Wrapped Excel dictionary loading in FileShare.ReadWrite stream to allow reading open files.
+  * Converted Excel export to offline snapshot mode (zero CAN spam).
+  * Resolved event handler memory leaks on window close.
+- Verification:
+  * MSBuild: 0 Errors, 0 Warnings (PASSED).
+  * Automated Test Suite: 1000/1000 Test Cases PASSED (100.0%), total suite runtime 25.42 ms.
+  * Status: OK.
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+[2026-10-02] UI Feature: Highlight Export Excel Button (Green) upon DTC Read Completion
+- Files modified:
+  * TreeViews and Value Converters/DTC.xaml
+  * TreeViews and Value Converters/DTC.xaml.cs
+- Details:
+  * Added 'BtnGreen' Solid Style (#16A34A background, white text, bold, 5px corner radius).
+  * Implemented SetExportButtonActive(bool) to dynamically switch button style to green when DTC reading finishes with results.
+  * Synchronized button reset across project change, clear list, clear DTC, and initial load.
+- Verification:
+  * MSBuild: 0 Errors, 0 Warnings.
+  * Regression: 1000/1000 Test Cases PASSED.
+  * Status: OK.
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+[2026-10-02] Git Commit Executed
+- Commit Hash: 315d4b3
+- Message: fix(dtc): resolve MHU vehicle warning, optimize ISO-TP flow control, and add export button highlight
+- Staged & Committed: Clean source tree under Ebus_tool with zero secrets (*.pem ignored).
+- Status: OK. Ready for next user instructions.
+--------------------------------------------------------------------------------

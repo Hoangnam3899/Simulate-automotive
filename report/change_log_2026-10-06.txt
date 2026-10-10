@@ -1,0 +1,38 @@
+﻿
+--------------------------------------------------------------------------------
+[2026-10-06 06:12] COMMIT & PUSH TO ORIGIN MAIN
+- Commit: b41ef994df18c94ffdc5b59644ff924301fa4d69
+- Message: fix(dtc): resolve missing TX snapshot visibility and sanitize CVC Excel definedNames
+- Root Causes ghi rõ trên commit:
+  + Snapshot: Format cũ đặt Received trước Transmitted làm che khuất Transmitted dưới MaxHeight='80'; frame 19 02 thiếu request frame.
+  + CVC: File CVC.xlsx có definedNames lỗi khiến ClosedXML ném ParsingException, dictionary rỗng gây 'not defined'.
+- Remote status: Pushed to origin/main successfully.
+--------------------------------------------------------------------------------
+[2026-10-06 08:38:00]
+CHANGE LOG: QUICK ACTION LOGIC & BUTTON VISUAL STATES FIX
+- Module: SIMULATE (TreeViews and Value Converters)
+- Files modified:
+  * TreeViews and Value Converters/SIMULATE.xaml
+  * TreeViews and Value Converters/SIMULATE.xaml.cs
+- Summary of changes:
+  1. Decoupled signal override configuration from real-time GatewayMode.Inject in OnSignalPropertyChanged and SyncOverridesFromUi. Frames pass through CH1->CH2 without premature injection.
+  2. Fixed One-Shot execution in BtnSendOnce_Click and ExecuteSingleStepAsync to transmit exactly 1 frame without freezing UI or infinite Task.Delay(-1).
+  3. Added IsPressed and IsEnabled triggers across all 7 button styles in SIMULATE.xaml, providing tactile click response and unambiguous disabled styling.
+  4. Added SendTypeToggleStyle for Cyclic/One-Shot/Event buttons with active blue illumination.
+  5. Added TriggerButtonPulse using DoubleAnimation for instant interactive feedback upon button clicks.
+- MSBuild Result: 0 Error(s), 0 Warning(s)
+- Verification Status: OK
+--------------------------------------------------------------------------------
+================================================================================
+CHANGE LOG: 2026-10-06
+================================================================================
+[2026-10-06 13:46] Standardize Simulate Send Logic (One-Shot, Event, Cyclic):
+- Modified: TreeViews and Value Converters/SIMULATE.xaml.cs
+  * Decoupled Staging from Execution: Ticking Override in Signal Value Setup keeps Mode = PassThrough.
+  * Standardized One-Shot: Locks SignalValueGrid, injects continuously until STOP ALL CYCLIC.
+  * Standardized Event: Keeps SignalValueGrid unlocked for Live Tuning, injects continuously until STOP.
+  * Standardized Cyclic: Pulses Active Time (Inject) and Gap Time (PassThrough) for RepeatCount iterations.
+  * Rebuilt Send All Once and Stop All to safely coordinate CancellationTokenSource.
+- Created: D:\Analysis Log\report\test_cases_2000_simulate_review.txt (2,000 test cases suite)
+- Verification: MSBuild 0 errors, 0 warnings.
+================================================================================

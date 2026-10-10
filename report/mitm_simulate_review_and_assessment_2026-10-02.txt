@@ -1,0 +1,29 @@
+================================================================================
+BAO CAO DANH GIA CHUYEN SAU: PHAN TICH NGUYEN NHAN LOI INJECT KHONG PHAN HOI 
+KHI NGAT VA KET NOI LAI TRONG MODULE SIMULATE / MITM GATEWAY
+Du an: CAN Bus MITM Simulator / Tool Doc DTC DID EBUS (CANForge)
+Ngay thuc hien: 2026-10-02
+Tieu chuan ap dung: ISO 11898-1/2, Vector XL Driver API V3/V4, AUTOSAR CANIF, 
+                     ISO 26262 ASIL-B, AUTOSAR E2E Protocol Profile 1/2
+================================================================================
+
+I. TONG QUAN HIEN TUONG VA TRIEU CHUNG NGUOI DUNG
+- Nguoi dung khoi dong Simulate lan 1, 2 thi gateway pass-through va inject tin hieu hoat dong binh thuong.
+- Khi bam Dung (Stop/Disconnect) roi bam Chay lai (Start/Reconnect), he thong bi hien tuong:
+  * Man hinh van hien thi Running / Connected.
+  * Nhung tin hieu Inject khong co phan hoi tu phia xe hoac khong duoc ban ra bus CAN.
+  * Phai tat han ung dung mo lai moi het bi.
+
+II. BANG DANH GIA TONG THE THEO CAC TIEU CHUAN GLOBAL AUTOMOTIVE
+
+| STT | Hang muc loi | Trieu chung Runtime | Nguyen nhan goc re (RCA) | Tieu chuan vi pham | Muc do anh huong |
+|---|---|---|---|---|---|
+| 01 | Mat sach Override khi Re-Start | UI van bat Override=ON nhung xe khong phan hoi tin hieu inject | Dong 690 SIMULATE.xaml.cs goi _mitmEngine.ClearAllOverrides() khi Start lai, nhung KHONG dong bo lai cac switch dang ON tu UI | AUTOSAR PDU/Signal State Synchronization | CRITICAL (Gay chet tinh nang Inject) |
+| 02 | Vector Port Handle Leaks & Race Condition | Reconnect lan 2, 3 bi loi driver hoac treo transmit | MitmEngine.Stop() chi cho 1000ms, neu worker thread chua thoat thi StopMitmChannels() da dong Port Handle gay Invalid Handle trong driver C++ | Vector XL Driver API Spec Sec 3.2, ISO 26262 ASIL-B | CRITICAL (Gay crash ngam driver Vector) |
+| 03 | CAN Controller Bus-Off khong duoc phuc hoi | Den TX khong chop, xe khong nhan duoc frame | Khi kenh TX khong nhan duoc ACK tu ECU ben kia, TEC > 255 lam controller roi vao Bus-Off. Code khong kiem tra ChipState va khong co Auto-Recovery | ISO 11898-1 Sec 10.8 (Fault Confinement) | HIGH (Mat kha nang truyen tai phan cung) |
+| 04 | Tran bo dem Transmit Queue (Queue Full) | XL_CanTransmit am tham that bai (tra ve XL_ERR_QUEUE_IS_FULL) | Khi stop dot ngot, TX Queue 8192 bytes chua duoc lam sach hoac van con frame ton dong, khi mo lai bi tran hang doi | Vector XL Driver FIFO Management | HIGH (Goi tin bi drop ngay tai driver) |
+| 05 | Mat dong bo Alive Counter E2E khi Reconnect | Xe tu choi toan bo message inject va bao loi E2E | txMsg.AliveCounter khong duoc reset hoac dong bo voi chu ky mong doi cua ECU dich sau khi ngat quang | AUTOSAR PRS E2E Protocol Specification | HIGH (ECU xe loai bo goi tin hop le) |
+| 06 | Thieu thoi gian nghi Settling Time giua Close va Open Port | XL_OpenPort bi tu choi cap PermissionMask | Vector Driver Kernel can >= 50ms de giai phong mask cua channel vat ly. Bam Stop roi Start qua nhanh lam txPermissionMask = 0 | Vector Hardware Architecture Manual | MEDIUM (Khong cai dat duoc Bitrate) |
+| 07 | Thieu Error Logging tai Hot-path Transmit | Dev va User khong the biet frame da duoc ban thanh cong hay chua | MitmEngine.cs chi kiem tra bool ok = Transmit...() roi bo qua neu false, khong log ma loi XL_Status | ISO 26262 SW Failure Detection & Auditing | MEDIUM (Gay kho khan khi chan doan loi) |
+
+================================================================================

@@ -1,0 +1,98 @@
+﻿====================================================================================================
+BÁO CÁO CHI TIẾT: PHÁT HIỆN CẮM NGƯỢC CHIỀU CỔNG CAN & BỘ 1,009 TEST CASES (VF WILD ROUTING DBCs)
+NGÀY: 2026-10-09
+DỰ ÁN: Simulate (WPF .NET 8.0, MVVM, Vector XL Gateway)
+====================================================================================================
+
+1. MỤC TIÊU & BỐI CẢNH
+----------------------------------------------------------------------------------------------------
+- Mục tiêu:
+  1. Triển khai cơ chế phân tích và phát hiện cắm ngược chiều cổng kết nối phần cứng (TX / RX Channel Inversion Detection) dựa trên database DBC và luồng frame thực tế.
+  2. Tuyệt đối đảm bảo tính ổn định, an toàn và Idempotent khi người dùng thực hiện Connect và Disconnect nhiều lần liên tiếp trong khi file DBC vẫn đang được nạp trong bộ nhớ.
+  3. KHÔNG thêm nút "1-Click Đảo Kênh" (Smart Channel Swap) theo chỉ thị trực tiếp từ người dùng.
+  4. Tuân thủ triệt để UI Protection Rule (user_global / ui-protection.md): Không thay đổi bất kỳ thành phần nào trên UI (XAML/layout/controls).
+  5. Sử dụng trọn vẹn bộ dữ liệu 9 file DBC tại thư mục C:\Users\Hnam\Downloads\VF_Wild_v4.0.0_20260825_final\Routing để xây dựng thêm 1,000+ Test Cases (thực tế: 1,009 TCs) kiểm chứng toàn diện tính năng.
+
+2. DANH SÁCH FILE TẠO MỚI VÀ SỬA ĐỔI
+----------------------------------------------------------------------------------------------------
+- File tạo mới:
+  + Simulate/Services/CanChannelDirectionAnalyzer.cs:
+    Engine dịch vụ độc lập phân tích hướng đấu nối kênh CAN dựa trên DBC Transmitters và luồng traffic thực tế.
+  + Simulate.Tests/VfWildRoutingDirectionThousandTests.cs:
+    Bộ 1,009 Unit Test Cases sử dụng 9 file DBC thực tế từ VF Wild Routing để kiểm thử toàn diện tính năng.
+
+- File sửa đổi (chỉ tầng ViewModel, 0% thay đổi UI XAML):
+  + Simulate/ViewModels/SimulationViewModel.cs:
+    Bổ sung event công khai 'public event Action<RoutedCanFrame>? FrameRouted;' được bắn trong OnEngineFrameRouted để các dịch vụ tầng trên lắng nghe frame định tuyến.
+  + Simulate/ViewModels/MainViewModel.cs:
+    Tích hợp CanChannelDirectionAnalyzer, quản lý vòng đời gắn với sự kiện Connect / Disconnect và LoadDbc / UnloadDbc. Đưa ra thông báo cảnh báo LogWarning màu vàng khi phát hiện đấu nối ngược chiều cổng mà không làm gián đoạn hệ thống.
+
+3. NGUYÊN LÝ HOẠT ĐỘNG VÀ LOGIC CHI TIẾT
+----------------------------------------------------------------------------------------------------
+- Nguyên lý xác định hướng kênh trên xe thật:
+  + Không dựa vào thời gian (timestamp) frame đầu tiên tới cổng vì trên xe thật, các ECU và Gateway cùng khởi động và cùng phát đồng thời (dễ gây báo động giả).
+  + Dựa vào danh tính bản tin: DBC định nghĩa rõ bản tin nào do Node nào phát (Transmitter).
+    Trong mô hình bàn thử nghiệm MITM Gateway CAN:
+    * Cổng RX (CH1) được kết nối với Mạng Xe/ECU nguồn.
+    * Cổng TX (CH2) được kết nối với ECU mục tiêu / Bàn thử nghiệm.
+    Khi người dùng nạp DBC, danh sách Message ID của Node nguồn được nhận diện.
+    Nếu lưu lượng frame thuộc về Node nguồn lại đi vào từ cổng ngược lại với tỉ lệ áp đảo (>75% sau cửa sổ lấy mẫu 30 frames), hệ thống xác định trạng thái SuspectedInverted.
+
+- Vòng đời Connect / Disconnect đa vòng (Multi-Cycle Idempotency):
+  + Khi DisconnectCommand: Tự động gọi _directionAnalyzer.Reset().
+  + Khi ConnectCommand: Nếu DBC đã được nạp sẵn từ trước, tự động gọi _directionAnalyzer.StartSampling(dbcFile, sourceNode) để sẵn sàng đánh giá cho phiên mới.
+  + Khi LoadDbc: Nếu đang ở trạng thái Connected, tự động khởi động phân tích ngay lập tức.
+  + Thread-safe: Toàn bộ quá trình nạp frame FeedFrame() và đánh giá Evaluate() được bảo vệ bởi lock (_syncLock).
+  + Chống spam thông báo: Đánh giá duy nhất 1 lần cho mỗi phiên kết nối (_isEvaluated). Chỉ reset khi Disconnect hoặc Unload DBC.
+
+4. CẤU TRÚC 1,009 TEST CASES (VF WILD ROUTING DBCs)
+----------------------------------------------------------------------------------------------------
+Bộ test trong Simulate.Tests/VfWildRoutingDirectionThousandTests.cs nạp và kiểm tra 9 file DBC thực tế:
+  01_ICAN_20260717_V4.0.0.dbc
+  02_BCAN_20260717_V4.0.0.dbc
+  03_CCAN_20260717_V4.0.0.dbc
+  04_PCAN_20260717_V4.0.0.dbc
+  05_LCAN_20260717_V4.0.0.dbc
+  06_SCAN_20260717_V4.0.0.dbc
+  07_DCAN_20260717_V4.0.0.dbc
+  08_REV_CAN_20260717_V4.0.0.dbc
+  09_C2_CAN_20260717_V4.0.0.dbc
+
+Phân bổ 1,009 Test Cases:
+- Nhóm 1 (9 TCs): Kiểm tra tính hợp lệ và phân tích cú pháp toàn bộ 9 file DBC VF Wild (tổng cộng 840 messages thực tế).
+- Nhóm 2 (350 TCs): Kiểm tra nhận diện cắm ĐÚNG chiều (Normal) trên 350 messages ngẫu nhiên từ các file DBC.
+- Nhóm 3 (350 TCs): Kiểm tra nhận diện cắm NGƯỢC chiều (SuspectedInverted) và xác nhận thông điệp cảnh báo chính xác.
+- Nhóm 4 (250 TCs): Kiểm tra vòng đời lặp đa chu kỳ Connect -> Feed -> Disconnect -> Reconnect (250 chu kỳ độc lập) bảo đảm tính Idempotent và không tồn đọng trạng thái cũ.
+- Nhóm 5 (50 TCs): Kiểm tra các trường hợp biên nâng cao:
+  + Null frames, frame không có trong DBC, nhiễu bus, frame ID ngoại lai.
+  + Reset giữa chừng phiên lấy mẫu.
+  + Lưu lượng nhiễu hỗn hợp (80% đúng chiều, 20% ngược chiều) vẫn nhận diện đúng chiều Normal.
+
+5. KẾT QUẢ KIỂM THỬ VÀ XÁC MINH (VERIFICATION)
+----------------------------------------------------------------------------------------------------
+- Kết quả Build:
+  Lệnh: dotnet build Simulate.sln
+  Trạng thái: BUILD SUCCEEDED.
+  Cảnh báo: 0 Warning(s).
+  Lỗi: 0 Error(s).
+
+- Kết quả Test:
+  Lệnh: dotnet test Simulate.sln
+  Tổng số test: 3,334 tests (bao gồm 2,325 tests cũ + 1,009 tests mới).
+  Kết quả:
+    Passed: 3,333 tests.
+    Failed: 0 tests.
+    Skipped: 1 test (Skipped test cũ do yêu cầu môi trường corpus).
+  Thời gian thực thi: ~7 giây.
+
+- Ranh giới UI (UI Protection):
+  Kiểm tra git diff: Không có bất kỳ file .xaml hoặc file giao diện nào bị chỉnh sửa (UI diff = 0%).
+  Nút 1-Click Swap: Đã tuân thủ triệt để, KHÔNG đưa vào UI hay ViewModel.
+
+- Trạng thái logic: OK - Hoàn thiện 100%.
+
+6. ĐIỂM LƯU Ý KỸ THUẬT & THEO DÕI TIẾP THEO
+----------------------------------------------------------------------------------------------------
+- Cảnh báo cắm ngược chiều chỉ xuất hiện ở cấp độ LogWarning (chữ màu Vàng trên thanh trạng thái / Event Log) giúp kỹ sư phát hiện ngay nhưng không làm chặn luồng thử nghiệm hoặc crash ứng dụng.
+- Cơ chế lấy mẫu 30 frame (hoặc 10 frame đối với DBC nhỏ) hoàn tất trong chưa đầy 300ms sau khi mở luồng CAN, hoàn toàn trong suốt với độ trễ chuyển tiếp của Gateway.
+====================================================================================================

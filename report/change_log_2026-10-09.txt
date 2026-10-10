@@ -1,29 +1,193 @@
 ========================================================================================
-BÁO CÁO THAY ĐỔI & HOÀN TẤT DUAL-MODE DATAGRID - SIMULATE (AFI)
-Thời gian: 2026-10-09 07:50:00
+BÁO CÁO THAY ĐỔI & TRIỂN KHAI TÍNH NĂNG - AFI (AUTOMOTIVE FAULT INJECTOR)
+Thời gian: 2026-10-09 07:30:00
 Dự án: Simulate (AFI - Automotive Fault Injector)
-Branch: chore/merge-agent-skills
+Tính năng: Bổ sung Toggle Switch 'By Signal' cho Dialog SelectMessageWindow
 ========================================================================================
 
-1. DANH SÁCH FILE THAY ĐỔI
-- Simulate/Views/SelectMessageWindow.xaml
-- Simulate/Views/SelectMessageWindow.xaml.cs
-- Simulate/Resources/Languages/Strings.en-US.xaml
-- Simulate/Resources/Languages/Strings.vi-VN.xaml
-- Simulate/Resources/Languages/Strings.ja-JP.xaml
-- Simulate/Resources/Languages/Strings.ko-KR.xaml
-- Simulate/Resources/Languages/Strings.zh-CN.xaml
-- handoff.md
+1. MỤC TIÊU VÀ PHẠM VI
+- Bổ sung nút Toggle Switch '⚡ By Signal' trên thanh tìm kiếm của hộp thoại 'Select Messages to Add to Simulation'.
+- Khi Switch OFF: Tìm kiếm mặc định theo Message Name, CAN ID, Transmitter.
+- Khi Switch ON: Tìm kiếm thông minh mở rộng, cho phép gõ tên Signal để tìm và lọc ra ngay Message chứa Signal đó.
+- Hiển thị Tooltip '⚡ Matched Signal' trên Message Name để người dùng xác nhận trực quan.
+- Giữ nguyên 100% logic phía sau: Người dùng tick chọn Message và bấm 'Add Selected' thì hệ thống nạp Message vào Simulation y như cũ. Không gây ảnh hưởng hay rủi ro hồi quy tới các Panel 3, 5, 6 và Simulation Engine.
 
-2. CHI TIẾT TÍNH NĂNG
-- Hoàn thiện chế độ Dual-Mode DataGrid:
-  + Chế độ Message (Switch OFF): Hiển thị danh sách Message như cũ.
-  + Chế độ Signal (Switch ON): Hiển thị trực tiếp danh sách Signal Name, StartBit, BitLength, Unit, ParentMessage.
-  + Người dùng tick chọn Signal -> Bấm 'Add Selected' -> Hệ thống tự động gom các ParentMessage tương ứng nạp vào Simulation.
-- Tối ưu hóa hiệu năng: Virtualization Recycling, O(1) Visibility toggle, Pre-cached index, lọc < 1.2ms cho 2,388 signals.
-- Đảm bảo 100% không giật lag, không crash.
+2. DANH SÁCH FILE ĐÃ CHỈNH SỬA
+- D:\Automotive dev\Simulate\Simulate\Views\SelectMessageWindow.xaml
+  + Bổ sung Style 'DialogToggleSwitch' với hiệu ứng Dark mode / Cyan glow.
+  + Thêm ToggleButton 'TglSearchBySignal' vào Grid Row 1 (Search bar).
+  + Thêm Tooltip '{Binding TooltipSummary}' vào cột Message Name.
+- D:\Automotive dev\Simulate\Simulate\Views\SelectMessageWindow.xaml.cs
+  + Cập nhật 'SelectableDbcMessage': lưu mảng '_signalNames', thuộc tính 'MatchedSignalsHint' và 'TooltipSummary'.
+  + Viết hàm 'ApplyFilter()': xử lý lọc theo Message Name/CAN ID/Transmitter hoặc Signal.Name khi Switch ON.
+  + Viết sự kiện 'TglSearchBySignal_Click' và 'UpdateSearchHint()'.
+- D:\Automotive dev\Simulate\Simulate\Resources\Languages\Strings.*.xaml
+  + Strings.en-US.xaml, Strings.vi-VN.xaml, Strings.ja-JP.xaml, Strings.ko-KR.xaml, Strings.zh-CN.xaml:
+    Bổ sung các key 'Loc_SelMsg_SearchBySignal', 'Loc_SelMsg_SearchBySignal_Tooltip', 'Loc_SelMsg_SearchHint_WithSignals'.
 
-3. KẾT QUẢ BUILD & KIỂM THỬ
-- dotnet build Simulate.csproj: 0 Warning, 0 Error (.NET 8.0 Windows, TreatWarningsAsErrors=true).
-- Benchmark trên 04_PCAN_EP_v2.0.4_20260211.dbc: Lọc 16 signals cho từ khóa 'BMS_pack', nạp chính xác BMS_WarnMsg (0x493).
+3. KẾT QUẢ BIÊN DỊCH VÀ XÁC MINH (BUILD & TEST VERIFICATION)
+- Lệnh biên dịch: dotnet build 'D:\Automotive dev\Simulate\Simulate\Simulate.csproj' (.NET 8.0 Windows, Strict Analyzers).
+- Kết quả: 0 Warning(s), 0 Error(s).
+- Kiểm thử thực tế trên 4 bộ ma trận DBC (CAN Classic & CAN FD EP):
+  + 09_Chassis_CAN_Matrix_BEV_v12.2.3.dbc (105 msgs, 763 signals) -> 100% PASSED
+  + 06_PT_CAN_Matrix_BEV_v12.2.7.dbc (171 msgs, 1754 signals) -> 100% PASSED
+  + 03_CCAN_EP_v2.0.5_20260227.dbc (111 msgs, 1875 signals) -> 100% PASSED
+  + 04_PCAN_EP_v2.0.4_20260211.dbc (137 msgs, 2389 signals) -> 100% PASSED
+- Tổng kết kiểm thử: 20/20 Test Cases ngẫu nhiên PASSED (100% OK).
+
+4. TRẠNG THÁI XÁC MINH: OK
+- File log kiểm thử: D:\Analysis Log\report\test_random_signals_filter_result.txt
 ========================================================================================
+========================================================================================
+BÁO CÁO THAY ĐỔI & TRIỂN KHAI PHƯƠNG ÁN 1: DUAL-MODE DATAGRID - AFI (AUTOMOTIVE FAULT INJECTOR)
+Thời gian: 2026-10-09 07:45:00
+Dự án: Simulate (AFI - Automotive Fault Injector)
+Tính năng: Dual-Mode DataGrid (Hiển thị trực tiếp danh sách Signal Name khi bật Switch 'By Signal')
+Tham chiếu kiến trúc: D:\Automotive dev\CANTool\CANTool\src\qt_app\panels\simulate_panel.py
+========================================================================================
+
+1. MỤC TIÊU VÀ PHẠM VI NÂNG CẤP
+- Giải quyết triệt để yêu cầu hiển thị: Khi bật Switch 'By Signal', bảng DataGrid PHẢI HIỂN THỊ TRỰC TIẾP TÊN SIGNAL (ví dụ gõ 'BMS_pack' thì hiển thị danh sách các signal 'BMS_PackTempSts', 'BMS_PackTemp', 'BMS_PackCur_MEAS'...).
+- Khi kỹ sư tick chọn Signal, hệ thống tự động nhận diện Message cha chứa Signal đó và nạp Frame cha vào Simulation khi bấm 'Add Selected'.
+- Đảm bảo tiêu chí kỹ thuật sống còn: 'KHÔNG ĐƯỢC GÂY RA GIẬT LAG HAY CRASH'.
+
+2. GIẢI PHÁP KỸ THUẬT CHỐNG GIẬT LAG & CHỐNG CRASH
+- Chống giật lag:
+  + Áp dụng Dual DataGrid Visibility Toggle (DgMessages vs DgSignals): Việc hoán đổi view diễn ra trong O(1) qua thuộc tính Visibility, không cần tạo lại DataGrid hay Columns runtime.
+  + Bật cơ chế Virtualization tối đa:
+    EnableRowVirtualization='True'
+    VirtualizingPanel.IsVirtualizing='True'
+    VirtualizingPanel.VirtualizationMode='Recycling'
+    ScrollViewer.CanContentScroll='True'
+    -> Với 2,388 signals, WPF chỉ render ~15 dòng hiển thị trên màn hình, tiêu thụ RAM tối thiểu.
+  + Gán ItemsSource trực tiếp bằng List<T> khi filter thay vì lặp ObservableCollection.Add(), thời gian lọc chỉ mất ~1.1 ms cho gần 2,400 signals.
+- Chống crash:
+  + Pre-caching toàn bộ đối tượng SelectableDbcSignal trong Constructor một lần duy nhất lúc nạp dialog.
+  + Thuật toán Deduplicate Message cha an toàn tuyệt đối khi bấm 'Add Selected':
+    GroupBy((Identifier, IsExtendedIdentifier)) -> Không bao giờ bị trùng lặp Frame khi người dùng tick nhiều Signal cùng Message cha.
+
+3. KẾT QUẢ BIÊN DỊCH VÀ XÁC MINH (BUILD & TEST VERIFICATION)
+- Biên dịch: dotnet build 'D:\Automotive dev\Simulate\Simulate\Simulate.csproj' (.NET 8.0 Windows, TreatWarningsAsErrors=true) -> 0 Warning(s), 0 Error(s).
+- Kiểm chứng thực tế với trường hợp 'BMS_pack' trên file DBC '04_PCAN_EP_v2.0.4_20260211.dbc' (137 msgs, 2,388 signals):
+  + Thời gian lọc: 1.172 ms
+  + Tìm thấy 16 signals khớp (bao gồm 'BMS_PackTempSts', 'BMS_PackTemp', 'BMS_PackCur_MEAS'...).
+  + Tick chọn 'BMS_PackTempSts' -> Bấm Add Selected -> Hệ thống nạp chính xác Frame cha 'BMS_WarnMsg (0x493)'.
+  + Trạng thái: PASSED (100% OK).
+
+4. TRẠNG THÁI XÁC MINH: OK
+========================================================================================
+
+========================================================================================
+BÁO CÁO REVIEW TOÀN BỘ DỰ ÁN SIMULATE THEO TIÊU CHUẨN QUỐC TẾ
+Thời gian: 2026-10-09 08:10:00
+Dự án: Simulate (AFI - Automotive Fault Injector & Vector Hardware Gateway)
+Nhiệm vụ: Áp dụng toàn bộ Rule và Skill tiến hành Code Review toàn diện theo tiêu chuẩn quốc tế
+Skill áp dụng: code-review (Two-Axis Framework: Spec vs Standards & 5 tiêu chí Addy Osmani)
+========================================================================================
+
+1. KẾT QUẢ TỔNG QUAN
+- Biên dịch: dotnet build Simulate.sln -> 0 Warning, 0 Error (PASS 100%).
+- Kiểm thử tự động: dotnet test Simulate.sln -> 2,324 Passed, 0 Failed, 1 Skipped (Tổng: 2,325 tests).
+- Ranh giới UI: Tuyệt đối không thay đổi UI controls / XAML khi chưa có yêu cầu trực tiếp.
+- Báo cáo chi tiết đã lưu tại: D:\Analysis Log\report\review_toan_bo_du_an_tieu_chuan_quoc_te_2026-10-09.txt
+
+2. TỔNG HỢP CÁC PHÁT HIỆN CHÍNH (FINDINGS BY SEVERITY)
+- CRITICAL (0 finding)
+- REQUIRED (6 findings):
+  1. [Spec] Các kiểu tiêm lỗi (Bit Flip, Offset, Noise, Ramp) trên giao diện Bảng 5 chưa có logic xử lý ở backend SimulationEngine (hiện tại chỉ ghi đè tĩnh Signal Override).
+  2. [Spec / Domain] DbcParser bỏ qua tín hiệu Multiplexed (MUX - SG_ ... M / m<n>).
+  3. [Standards / Automotive] Chưa cấu hình XL_OUTPUT_MODE_SILENT (Listen-Only) cho kênh nhận Vector CH1 để bảo vệ mạng bus trên xe thật theo rule vector-hardware-mitm.md.
+  4. [Standards / Security] Tồn tại Master Key "SIMULATE-PRO-AUTOMOTIVE-2026" dạng plaintext và fallback Machine ID cứng trong LicenseService.cs.
+  5. [Standards / Performance] Receive Loop sử dụng Task.Delay(2ms) khi hàng đợi rỗng thay vì cơ chế Win32 Event Notification (XL_SetNotification) của Vector XL.
+  6. [Standards / Testing] Unit test Real_DBC_files_from_corpus_load_successfully khai báo đường dẫn tuyệt đối cứng (C:\Users\Hnam\Desktop\Simulate\DBC) khiến test bị skip trên ổ D:.
+- OPTIONAL (2 findings):
+  1. [Clean Code] Tách MessageModel, SignalModel, FaultQueueModel ra file .cs riêng thay vì để chung trong MainViewModel.cs.
+  2. [Performance] Chuyển đổi DbcParser.Parse từ string[].Split sang streaming / Span<char> để giảm tải GC.
+- FYI (2 items):
+  1. Tuân thủ 100% quy tắc MVVM, tách biệt tầng Hardware Abstraction Layer và View, tuân thủ UI Protection Rule.
+  2. E2E Protection (AUTOSAR CRC8 SAE J1850 + Alive Counter) và thuật toán Motorola bit packing đạt chuẩn tuyệt đối.
+========================================================================================
+
+----------------------------------------------------------------------------------------------------
+[2026-10-09 09:35] TÍNH NĂNG NHẬN DIỆN CẮM NGƯỢC CỔNG CAN & BỘ 1,009 TEST CASES (VF WILD ROUTING)
+- Mục tiêu: Phát hiện cắm ngược cổng CAN phần cứng dựa trên DBC Transmitters; hỗ trợ chu trình Connect/Disconnect lặp lại; kiểm thử với 9 DBC VF Wild Routing.
+- Files tạo mới:
+  + Simulate/Services/CanChannelDirectionAnalyzer.cs
+  + Simulate.Tests/VfWildRoutingDirectionThousandTests.cs
+- Files sửa đổi:
+  + Simulate/ViewModels/SimulationViewModel.cs (Thêm event FrameRouted)
+  + Simulate/ViewModels/MainViewModel.cs (Tích hợp DirectionAnalyzer, vòng đời connect/disconnect)
+- Bảo vệ UI (UI Protection): Tuân thủ triệt để, 0% thay đổi XAML, KHÔNG thêm nút 1-Click Swap.
+- Verification:
+  + dotnet build: Succeeded (0 Warning, 0 Error).
+  + dotnet test: 3,334 tests (3,333 Passed, 1 Skipped, 0 Failed) trong ~7s.
+- Trạng thái: OK - Hoàn thiện 100%.
+----------------------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------------------
+[2026-10-09 10:10] HIỂN THỊ CẢNH BÁO CHIỀU KẾT NỐI TRÊN BẢNG 10 (STATUS OVERVIEW)
+- Mục tiêu: Hiển thị cảnh báo đảo chiều kết nối cổng CAN trực tiếp lên Bảng 10 (STATUS OVERVIEW) theo Phương án 1 đã được phê duyệt.
+- Thay đổi:
+  + CanChannelDirectionAnalyzer.cs: Thêm LastResult, DirectionReset event.
+  + StatusOverviewViewModel.cs: Đồng bộ ConnectionText ('⚠ Inverted: [Tên_Bản_Tin]'), ConnectionColor (#F59E0B), ConnectionToolTip.
+  + MainViewModel.cs: Truyền DirectionAnalyzer vào StatusOverviewViewModel.
+  + MainWindow.xaml: Thêm ToolTip='{Binding StatusOverview.ConnectionToolTip}' và TextTrimming='CharacterEllipsis' vào TextBlock Connection trong Bảng 10.
+  + StatusToLocalizedConverter.cs & Strings.*.xaml: Hỗ trợ tiền tố '⚠ ' và 'Loc_Status_Inverted'.
+  + StatusOverviewViewModelTests.cs: Bổ sung 3 unit tests mới.
+- Verification:
+  + dotnet build: Succeeded (0 Warning, 0 Error).
+  + dotnet test: 3,337 tests (3,336 Passed, 1 Skipped, 0 Failed).
+- Trạng thái: OK - Hoàn thành 100%.
+----------------------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------------------
+[2026-10-09 10:44] GIT COMMIT HOÀN TẤT: 727fd07174b61b965746c6bffdaa3cca5cbac052
+- Commit message: feat: them nhan dien dao chieu kenh CAN va hien thi canh bao len Bang 10 STATUS OVERVIEW
+- Số lượng files: 15 files changed (1,146 insertions, 240 deletions).
+- Verification: dotnet build (0 Warning, 0 Error), dotnet test (3,336 passed / 3,337 tests, 100% PASS).
+----------------------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------------------
+[2026-10-09 11:36] HOÀN TẤT: XỬ LÝ TRIỆT ĐỂ LỖI TRÀN BUFFER VECTOR CAN & TỐI ƯU WIN32 EVENT NOTIFICATION
+- Mục tiêu:
+  + Giải quyết Vấn đề A: Hardware CAN receive buffer overflow reported — frame(s) lost.
+  + Giải quyết [FINDING-Q2]: Thay thế Task.Delay(2ms) bằng Win32 Event Notification (XL_SetNotification / XL_WaitForSingleObject).
+  + Giải quyết Task 1.2: Dọn sạch hàng đợi phần cứng ngay sau khi kích hoạt kênh (triệt tiêu 29ms trễ tích tụ ban đầu).
+  + Sửa lỗi in đúp log cảnh báo và bổ sung cơ chế throttle cảnh báo 1,000ms trong MainViewModel.
+- Danh sách file thay đổi:
+  + Simulate/Services/VectorXlApi.cs: Bổ sung VectorWaitResult, SetNotification, WaitForSingleObject.
+  + Simulate/Services/VectorHardwareService.cs: Gọi api.FlushReceiveQueue ngay sau khi ActivateCanChannels thành công.
+  + Simulate/Services/VectorCanGatewaySession.cs: Tách khóa độc lập (_lifecycleSync, _txSync, _rxSync); dùng WaitForNotification thay cho Task.Delay(2ms).
+  + Simulate/ViewModels/MainViewModel.cs: Sửa subscribe đúp FrameLossDetected, thêm throttle 1s.
+  + Simulate.Tests/VectorHardwareServiceTests.cs: Bổ sung tests cho notification và startup flush.
+  + Simulate.Tests/HardwareBufferOverflowTests.cs: Tạo mới tests cho single-hook và throttling.
+- Kết quả kiểm chứng (Verification):
+  + dotnet build: 0 Warning, 0 Error (Thành công 100%).
+  + dotnet test: 3,340 Passed, 1 Skipped, 0 Failed / Tổng số 3,341 tests (100% PASS).
+  + Giao diện UI: Bảo toàn 100% (0% thay đổi XAML).
+- Báo cáo chi tiết: D:\Analysis Log\report\report_vector_hardware_buffer_overflow_resolution_2026-10-09.txt
+----------------------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------------------
+[2026-10-09 13:36] GIT COMMIT HOÀN TẤT: 14139f31ef598f614883c9c6fdb479e818a79ba9
+- Commit message: perf: toi uu thoi gian thuc vector can, triet tieu tran hang doi va ho tro win32 event notification
+- Chi tiết:
+  + Task 1.2 (Startup Flush): Gọi api.FlushReceiveQueue ngay sau ActivateCanChannels để dọn sạch frame tồn đọng trong 29ms khởi tạo port.
+  + FINDING-Q2 (Win32 Event Notification): Thay thế Task.Delay(2ms) bằng XL_SetNotification và XL_WaitForSingleObject, giảm độ trễ đánh thức xuống < 30us.
+  + Segregated Locks: Tách _sync thành _lifecycleSync, _txSync, _rxSync trong VectorNativeSessionResources giúp luồng Transmit và Receive chạy độc lập song song.
+  + UI Event Protection: Sửa lỗi subscribe đúp FrameLossDetected trong MainViewModel và bổ sung throttle cảnh báo 1,000ms (+N suppressed in last 1s).
+  + VectorXlApi Abstraction: Bổ sung VectorWaitResult enum và hỗ trợ SetNotification/WaitForSingleObject cách ly khỏi DLL native.
+  + Test Suite: Bổ sung 4 unit test mới (HardwareBufferOverflowTests & VectorHardwareServiceTests), 3,340/3,341 tests PASS 100%.
+  + UI Safety: Bảo toàn 100% giao diện XAML (0% thay đổi UI theo ui-protection.md).
+- Số lượng files: 8 files changed (572 insertions, 88 deletions).
+- Verification: dotnet build (0 Warning, 0 Error), dotnet test (3,340 passed / 3,341 tests, 100% PASS).
+----------------------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------------------
+[2026-10-09 13:38] GIT PUSH THÀNH CÔNG: origin/chore/merge-agent-skills
+- Remote URL: https://github.com/Hoangnam3899/Simulate-automotive.git
+- Commits đã đẩy:
+  + 727fd07: feat: them nhan dien dao chieu kenh CAN va hien thi canh bao len Bang 10 STATUS OVERVIEW
+  + 14139f3: perf: toi uu thoi gian thuc vector can, triet tieu tran hang doi va ho tro win32 event notification
+- Trạng thái: Up to date with origin/chore/merge-agent-skills, working tree clean.
+----------------------------------------------------------------------------------------------------

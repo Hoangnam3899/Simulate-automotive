@@ -1,0 +1,42 @@
+================================================================================
+BAO CAO CHI TIET: CHUAN HOA TOAN DIEN CAC PHUONG THUC GUI & THAO TAC NHANH (SIMULATE)
+Du an: CAN Bus MITM Simulator / Tool Doc DTC DID EBUS (CANForge)
+Thoi gian: 2026-10-06 13:46:00
+Trang thai xac minh: OK (Build 0 Error, 0 Warning)
+================================================================================
+
+1. YEU CAU & BOI CANH:
+   - Nguoi dung yeu cau chuan hoa triet de cach van hanh cua 3 kieu gui xuyen suot tu truoc toi nay:
+     * One-Shot: Bom de lien tuc 1 frame trong suot thoi gian, KHOA luoi gia tri (SignalValueGrid.IsEnabled = false) cho toi khi nhan STOP.
+     * Event: Gan giong One-Shot nhung KHONG KHOA luoi gia tri (SignalValueGrid.IsEnabled = true), cho phep vua inject vua doi gia tri tin hieu (Live Tuning), gia tri moi an ngay lap tuc vao frame xe cho toi khi nhan STOP.
+     * Cyclic: Phat theo chu ky cau hinh gom Active Time (CycleTime), Gap Time (GapTimeMs) va Repeat Count (so lan lap lai).
+   - Tach biet dut diem giua:
+     * Staging (Thiet lap gia tri): Tich chon Override chi luu vao RAM dem MitmEngine, Message giu PassThrough, KHONG DUOC TU BAN.
+     * Execution (Thao tac nhanh): Bam SEND ONCE / SEND ALL ONCE moi bat dau kich hoat Inject.
+   - Tao bo 2,000 Test Cases chi tiet de phuc vu review toan dien.
+
+2. DANH SACH FILE THAY DOI:
+   - Sua doi: TreeViews and Value Converters/SIMULATE.xaml.cs
+     * OnSignalPropertyChanged: Chi kich hoat Event khi phien Event dang chay song (Mode == Inject).
+     * BtnSendOnce_Click: Bat Mode = Inject, phan nhanh goi ExecuteOneShotAsync, ExecuteEventAsync, ExecuteCyclicSequenceAsync.
+     * ExecuteOneShotAsync: Khoa luoi, inject lien tuc cho toi khi bi huy boi STOP ALL CYCLIC.
+     * ExecuteEventAsync: Mo luoi cho Live Tuning, inject lien tuc cho toi khi bi huy boi STOP ALL CYCLIC.
+     * ExecuteCyclicSequenceAsync: Chuoi xung chu ky sach (Pha Active -> Pha Gap -> Lap N lan -> Hoan tat bao popup).
+     * BtnSendAllOnce_Click: Dong bo kich ban batch da message song song an toan.
+     * BtnStopAll_Click: Huy token, mo khoa luoi, dua toan bo message ve PassThrough an toan.
+   - Tao moi: D:\Analysis Log\report\test_cases_2000_simulate_review.txt (13,588 dong chua dung 2,000 test cases).
+
+3. KET QUA BIEN DICH & XAC MINH:
+   - MSBuild (.NET Framework 4.8 / C# 7.3):
+     Command: & 'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe' 'TreeViews and Value Converters\TreeViews and Value Converters.csproj' /t:Build /p:Configuration=Debug
+     Ket qua: 0 Warning(s), 0 Error(s). Output: CANForge_ebus.exe.
+   - UI Protection Rule: Giu nguyen cau truc giao dien, khong lam lech layout.
+
+4. TIEU CHUAN TEST SUITE (2,000 TEST CASES):
+   - TC-0001 -> TC-0350: Staging & Thiet lap gia tri (350 TCs).
+   - TC-0351 -> TC-0750: One-Shot Injection & Khoa luoi gia tri (400 TCs).
+   - TC-0751 -> TC-1150: Event Injection & Live Tuning tinh chinh song (400 TCs).
+   - TC-1151 -> TC-1550: Cyclic Sequence & Xung bom loi chu ky (400 TCs).
+   - TC-1551 -> TC-1800: Send All Once & Dieu phoi dong loat da message (250 TCs).
+   - TC-1801 -> TC-2000: An toan, Do tre Timing, Emergency Stop & Edge Cases (200 TCs).
+================================================================================

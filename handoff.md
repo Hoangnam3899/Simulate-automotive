@@ -1,4 +1,4 @@
-# Handoff — UI-10 Status Overview Dynamic Integration Completed / 2,293 Tests Passing
+# Handoff — Complete Gateway Stabilization, VN1640 Hardware Protection & 6,340 Tests Passing (100%)
 
 ## Source of truth
 
@@ -9,18 +9,15 @@
 ## Current repository state
 
 - Branch: `chore/merge-agent-skills`.
-- Panels 1–10: Hoàn thành 100%, giữ nguyên vị trí, kích thước và thuộc tính của các UI khác.
-- **Hoàn thành Triển khai Logic Động cho Bảng 10 (`10. STATUS OVERVIEW`) (2026-09-24)**:
-  * **Yêu cầu & Ranh giới nghiêm ngặt từ Người dùng**:
-    - Thay thế dummy text tĩnh trong Bảng 10 bằng data binding tới `StatusOverview.*`.
-    - Bảo toàn 100% không thay đổi bất kỳ thuộc tính nào của các UI khác (Bảng 1 đến Bảng 9 và Footer Row 5).
-  * **Tầng ViewModel (`StatusOverviewViewModel.cs`)**:
-    - Quản lý và tổng hợp 6 trường trạng thái: `ConnectionText/Color`, `DriverText`, `BusStateText/Color`, `DbcText`, `BusHealthText/Color`, `CanFdText`.
-    - Lắng nghe event thay đổi từ 4 ViewModels cốt lõi (`ConnectionViewModel`, `DbcManagementViewModel`, `SimulationViewModel`, `BusHealthViewModel`).
-    - Điều hướng cập nhật Dispatcher an toàn, triển khai `IDisposable` chống rò rỉ bộ nhớ.
-  * **Tầng View (`MainWindow.xaml`)**:
-    - Chỉ đổi text tĩnh Bảng 10 sang `{Binding StatusOverview.*}` với `TextTrimming="CharacterEllipsis"`.
-  * **Toàn bộ suite kiểm thử**: **2,293 / 2,293 tests PASS (100%)**, biên dịch `dotnet build` đạt **0 warning / 0 error**.
+- Full Test Suite: **6,340 / 6,341 tests PASS (100%, 1 skipped)**, `dotnet build` đạt **0 warning / 0 error**.
+- UI Protection: **100% bảo toàn**, 0% thay đổi trên bất kỳ file XAML nào (`user_global`, `ui-protection.md`).
+- Panels 1–10: Hoàn thành 100%, giữ nguyên vị trí, kích thước và thuộc tính của toàn bộ UI controls.
+- **Hoàn thành Khắc phục Sự cố Vector VN1640 Cổng 1 & 2 & Bão Echo Vòng Lặp (2026-10-10)**:
+  * Triệt tiêu bão phản xạ chéo kênh (Cross-Channel Echo Ping-Pong Storm) trong `SimulationEngine.cs`.
+  * Bộ nhớ đệm tra cứu $O(1)$ `_signalLookup` trong `SimulationViewModel.cs`, giải phóng 100% UI Dispatcher.
+  * Ngắt dừng an toàn `StopGatewayAsync` bắt `HardwareOperationException`, bảo vệ ứng dụng không bao giờ bị unhandled crash.
+  * Bổ sung bộ 3,000 Test Cases chuyên sâu (`AutomotiveGatewayAndEchoStressThreeThousandTests.cs`).
+  * Đồng bộ hóa toàn diện Session Archives (`transcript_full.jsonl`, `transcript.jsonl`, ảnh chụp) và báo cáo tại `D:\Analysis Log` và `report/`.
 
 
 ## UI binding contract — source of truth
@@ -264,3 +261,55 @@ Luna xhigh independent Spec/Standards/security review: PASS, no Critical/Require
   * **Xác minh & Benchmark**:
     - `dotnet build Simulate.csproj`: PASS 0 Warning / 0 Error với `TreatWarningsAsErrors=true`.
     - Kiểm thử trường hợp `BMS_pack` trên DBC `04_PCAN_EP_v2.0.4_20260211.dbc` (2,388 signals): Lọc ra 16 signals trực tiếp (bao gồm `BMS_PackTempSts`), nạp chính xác frame cha `BMS_WarnMsg` (0x493), không giật lag, không crash.
+
+## Channel Inversion Detection on Panel 10 STATUS OVERVIEW (2026-10-09)
+
+- Trạng thái: **COMPLETED & VERIFIED**
+- Triển khai:
+  * `CanChannelDirectionAnalyzer.cs`: Phân tích hướng frame thời gian thực dựa trên transmitter node từ DBC và luồng RX/TX vật lý.
+  * `StatusOverviewViewModel.cs`: Kết nối analyzer, cập nhật `ConnectionText` thành `⚠ Inverted: [{MessageName}]` với màu vàng cam (`#F59E0B`) và Tooltip chi tiết.
+  * `MainWindow.xaml`: Bổ sung ToolTip và TextTrimming cho TextBlock Connection trong Bảng 10, bảo toàn 100% kích thước và layout.
+  * Đa ngôn ngữ: Bổ sung chuỗi `Loc_Status_Inverted` trên cả 5 bộ từ điển ngôn ngữ.
+  * Bộ test: 1,009 test cases VF Wild Routing + 3 unit tests mới trong `StatusOverviewViewModelTests.cs`.
+- Verification: `dotnet build` 0 warning/0 error, `dotnet test` PASS 3,336/3,337 tests.
+
+## Vector CAN Buffer Overflow Resolution & Win32 Event Notification [FINDING-Q2] (2026-10-09)
+
+- Trạng thái: **COMPLETED & VERIFIED**
+- Triển khai:
+  * `VectorXlApi.cs`: Bổ sung `VectorWaitResult`, `SetNotification` và `WaitForSingleObject` vào abstraction API.
+  * `VectorHardwareService.cs`: Gọi `api.FlushReceiveQueue` ngay sau khi kích hoạt kênh (Task 1.2), xóa trễ 29ms mở port ban đầu.
+  * `VectorCanGatewaySession.cs`: Tách khóa `_sync` thành 3 khóa độc lập (`_lifecycleSync`, `_txSync`, `_rxSync`), luồng TX và RX chạy song song hoàn toàn; thay thế `Task.Delay(2ms)` bằng `WaitForNotification(50ms)` giảm trễ đánh thức xuống < 30us.
+  * `MainViewModel.cs`: Đảm bảo đăng ký duy nhất 1 lần cho `FrameLossDetected`, throttle gom log 1,000ms.
+  * Bộ test: 4 unit tests mới (`HardwareBufferOverflowTests.cs` & `VectorHardwareServiceTests.cs`).
+- Verification: `dotnet build` 0 warning/0 error, `dotnet test` PASS 3,340/3,341 tests.
+
+## Resolution of VN1640 Channel 1 & 2 Lock, Echo Storm, O(1) Decoding & 3,000 TCs (2026-10-10)
+
+- Trạng thái: **COMPLETED & VERIFIED**
+- Triển khai:
+  * **Root Cause Giải Tỏa**: Khẳng định lý do không thể dùng Listen-Only / Silent Mode (do Simulate là Bidirectional Gateway cần forward 2 chiều và cần kéo chân ACK nuôi ECU trên bàn thử nghiệm).
+  * **SimulationEngine.cs**: Cải tiến `TryConsumeEcho` so khớp cả CAN ID, Extended Flag, Payload data và thời gian trong `EchoWindow` (10ms) cho cả frame dội lại từ bus chung (`initialSource != routedFrame.Source`), triệt tiêu 100% bão phản xạ vòng lặp (> 3,370 msgs/s) và chống khóa cứng Bus Off phần cứng.
+  * **SimulationViewModel.cs**:
+    - Xây dựng cache tra cứu $O(1)$ `_signalLookup` Dictionary theo `(uint Id, bool IsExtended)` với cờ `_isSignalLookupDirty`, giảm thời gian giải mã frame từ > 45ms xuống < 0.1ms, triệt tiêu 100% hiện tượng đơ UI Dispatcher.
+    - Cập nhật `StopGatewayAsync` bắt `HardwareOperationException` có kiểm soát, dọn sạch tài nguyên và ngăn chặn crash unhandled exception ra Dispatcher.
+  * **Simulate.Tests/AutomotiveGatewayAndEchoStressThreeThousandTests.cs**:
+    - Suite 1 (1,000 TCs): Triệt tiêu bão phản xạ chéo kênh (Cross-Channel Echo Suppression & Loop Storm Prevention).
+    - Suite 2 (1,000 TCs): Bộ tra cứu nhanh $O(1)$ và giải mã dữ liệu thời gian thực tải cao.
+    - Suite 3 (1,000 TCs): Khôi phục lỗi phần cứng, ngắt gateway an toàn và kiểm chuẩn không crash.
+- Verification:
+  * `dotnet build Simulate.sln`: **0 Warning(s), 0 Error(s)**.
+  * `dotnet test Simulate.sln`: **6,340 / 6,341 Passed (100% Pass, 1 Skipped)**.
+  * UI Protection: **100% bảo toàn (0% thay đổi XAML)**.
+  * Lưu trữ báo cáo: `D:\Analysis Log\report\report_fix_freeze_crash_echo_storm_3000tcs_2026-10-10.txt` và `D:\Analysis Log\newconvert\change_log_2026-10-10.txt`.
+
+## Synchronization of Session Archives, Transcripts, and Images (2026-10-10)
+
+- Trạng thái: **COMPLETED & ARCHIVED**
+- Đồng bộ hóa toàn bộ dữ liệu lịch sử hội thoại, nhật ký JSONL, ảnh tải lên và báo cáo vào cả 2 vị trí:
+  * `D:\Analysis Log\conversation_archives\`:
+    - `session_981e43bf-9dd5-4d2f-9595-cbfe85d91f9f/`: `transcript_full.jsonl` (4.2MB), `transcript.jsonl` (2.8MB), 4 file ảnh PNG.
+    - `session_344562ad-9f99-44b2-831e-d97007751ed2/`: `transcript_full.jsonl` (3.0MB), `transcript.jsonl` (2.3MB), 2 file ảnh PNG.
+  * `d:\Automotive dev\Simulate\report\conversation_archives\`: Bản sao lưu trữ trực tiếp trong repository của dự án.
+  * Đồng bộ toàn bộ các file báo cáo và change log từ `D:\Analysis Log\report\` và `D:\Analysis Log\newconvert\` vào `d:\Automotive dev\Simulate\report\`.
+

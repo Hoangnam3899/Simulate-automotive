@@ -1,0 +1,26 @@
+﻿====================================================================================================
+CHANGE LOG - 2026-10-10
+Du an: Simulate (C# WPF .NET 8.0 / Automotive CAN & UDS Gateway Simulator)
+====================================================================================================
+
+1. TOM TAT THAY DOI:
+- Khac phuc loi Crash out va treo phan cung (Den do cong 1 & 2 Vector VN1640).
+- Triet tieu bao phan xa vong lap (Cross-Channel Ping-Pong Echo Storm) trong cua so 10ms.
+- Toi uu bo tra cuu tin hieu O(1) trong SimulationViewModel, giai phong UI Thread Dispatcher.
+- Boc an toan StopGatewayAsync ngan chan crash unhandled exception tu worker task.
+- Bo sung 3,000 Test Cases tu dong (AutomotiveGatewayAndEchoStressThreeThousandTests.cs).
+
+2. DANH SACH FILE SUA DOI / TAO MOI:
+- MODIFIED: Simulate/Services/SimulationEngine.cs
+- MODIFIED: Simulate/ViewModels/SimulationViewModel.cs
+- CREATED:  Simulate.Tests/AutomotiveGatewayAndEchoStressThreeThousandTests.cs
+- MODIFIED: tasks/todo.md
+- MODIFIED: tasks/plan.md
+- CREATED:  D:\Analysis Log\report\report_fix_freeze_crash_echo_storm_3000tcs_2026-10-10.txt
+- CREATED:  D:\Analysis Log\newconvert\change_log_2026-10-10.txt
+
+3. KET QUA KIEM CHUAN:
+- dotnet build Simulate.sln: 0 Warning, 0 Error.
+- dotnet test Simulate.sln: 6,340 / 6,341 Passed (100% Pass, 1 Skipped).
+- Bao toan giao dien (user_global): 0% thay doi tren bat ky file UI/XAML nao.
+====================================================================================================

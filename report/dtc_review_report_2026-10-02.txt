@@ -1,0 +1,78 @@
+﻿================================================================================
+BÁO CÁO REVIEW TOÀN DIỆN MODULE ĐỌC DTC (CAN BUS MITM SIMULATOR / CANFORGE)
+Thời gian review: 2026-10-02 15:50:00
+Phạm vi kiểm tra:
+  - TreeViews and Value Converters/DTC.xaml
+  - TreeViews and Value Converters/DTC.xaml.cs
+  - TreeViews and Value Converters/ICANBusManager.cs
+  - TreeViews and Value Converters/VectorCANManager.cs
+  - TreeViews and Value Converters/VectorCANFdManager.cs
+Kỹ năng áp dụng: code-review-and-quality, vector-can-wpf
+Quy chuẩn đối chiếu:
+  - .NET Framework 4.8 / C# 7.3
+  - UDS ISO 14229-1 (Service 0x19, 0x14, 0x10, 0x22)
+  - ISO-TP ISO 15765-2 (Classic CAN & CAN FD)
+  - SAE J2012 / ISO 15031-6 DTC Format
+  - UI Protection Rule & Build Verification Rule
+================================================================================
+
+TỔNG QUAN KẾT QUẢ ĐÁNH GIÁ:
+- Tình trạng biên dịch: THÀNH CÔNG (0 Warning, 0 Error).
+- Điểm mạnh:
+  + Đã xây dựng tầng trừu tượng ICANBusManager hỗ trợ chuyển đổi mượt mà giữa CAN Classic và CAN FD.
+  + Đã có xử lý cơ bản State Machine cho NRC 0x78 (Response Pending) và NRC 0x21 (Busy Repeat Request).
+  + Tích hợp đa ngôn ngữ (LocalizationManager) và tra cứu thư viện mã lỗi tự động qua ODXPath/Excel.
+- Các vấn đề phát hiện:
+  + Tổng cộng: 18 lỗi và vấn đề kỹ thuật tồn đọng.
+  + Phân loại mức độ: 06 Critical (Nghiêm trọng) | 07 Required (Cần khắc phục) | 05 Consider (Cải tiến).
+
+--------------------------------------------------------------------------------
+BẢNG TỔNG HỢP CÁC LỖI TỒN ĐỌNG (CLASSIFIED BY SEVERITY & 5-AXIS)
+--------------------------------------------------------------------------------
+
+| STT | Vấn đề / Lỗi tồn đọng | Phân loại Trục | Mức độ | Vị trí File & Dòng | Hậu quả / Rủi ro thực tế |
+|---|---|---|---|---|---|
+| 01 | Mất gói tin Consecutive Frame (CF Packet Loss) do break vòng lặp sau First Frame | Correctness / Protocol | CRITICAL | VectorCANManager.cs (L742), VectorCANFdManager.cs (L741) | Khi đọc danh sách DTC dài (> 1 frame CAN), nếu driver Vector đã nhận sẵn các CF trong buffer, lệnh break sẽ vứt bỏ các CF này, dẫn đến timeout không thể đọc được DTC. |
+| 02 | Lỗi Padding Guard dùng 'break' ngắt toàn bộ danh sách DTC | Correctness / Protocol | CRITICAL | VectorCANManager.cs (L1249), VectorCANFdManager.cs (L1148) | Khi gặp cụm byte 00 00 00 00 hoặc mã lỗi P0000, lệnh break ngắt luôn vòng lặp, làm BỎ SÓT toàn bộ các mã lỗi thật đứng sau nó. Cần dùng 'continue'. |
+| 03 | Race Condition làm ngập Bus CAN khi click chọn dòng DataGrid | Safety / Performance | CRITICAL | DTC.xaml.cs (L766-833) DtcGrid_SelectionChanged | Khi người dùng click nhanh hoặc giữ phím mũi tên Lên/Xuống, hàng loạt request UDS 0x19 0x04 được bắn dồn dập ra bus cùng lúc, gây nghéz bus và lẫn lộn phản hồi giữa các ECU. |
+| 04 | Xuất Excel gửi lặp lại hàng chục request UDS ra xe, gây đơ giao diện | Performance / Architecture | CRITICAL | DTC.xaml.cs (L1492-1540) btnExportExcel_Click | Khi bấm Xuất Excel, code lại gửi thêm 1 request UDS 19 04 ra bus cho từng dòng DTC. Nếu có 30 DTC hoặc người dùng đang offline, xuất file bị treo hàng chục giây và ghi 'No Response'. |
+| 05 | Mâu thuẫn logic SAM trong 19 01 trả về IsNoDtc=true khi không khớp Mask | Correctness / Protocol | CRITICAL | VectorCANManager.cs (L1106), VectorCANFdManager.cs (L1021) | Khi ECU SAM không khớp bit mask filter, code trả về IsNoDtc=true kèm ErrorMsg, gây mâu thuẫn dữ liệu hoặc hiển thị xe sạch lỗi (màu xanh lá) thay vì xử lý đúng chuẩn ISO 14229. |
+| 06 | Format mã lỗi DTC J2012 thiếu dấu gạch ngang '-' | Correctness / Standards | CRITICAL | VectorCANManager.cs (L1278), VectorCANFdManager.cs (L1230) | Trả về dạng 'P012345' thay vì 'P0123-45' theo chuẩn SAE J2012 / ISO 15031-6 và rule uds-isotp-protocol.md của dự án. |
+| 07 | Nhiễm bẩn dữ liệu chéo dự án (Cross-project data contamination) do không xóa Cache | Architecture / State | REQUIRED | DTC.xaml.cs (L201-245) cbProjectList_SelectionChanged | Khi đổi Project, _dtcCache và _dtcFileCache không được Clear. ECU cùng tên (như BCM) ở xe mới sẽ bị tra cứu nhầm mô tả lỗi từ file Excel của xe cũ. |
+| 08 | Xung đột File Lock (IOException) khi file Excel đang được mở bởi kỹ sư | Safety / Robustness | REQUIRED | DTC.xaml.cs (L1235-1300) LoadDtcDictionaryFromFileOptimized | Dùng new XLWorkbook(filePath) trực tiếp. Nếu file Excel đang mở trên máy tính, app nuốt exception và hiển thị toàn bộ mã lỗi thành '[Chưa định nghĩa]'. |
+| 09 | Đánh giá trạng thái (GetDtcEvaluation) bỏ sót bit 2 (PendingDTC) | Correctness / Logic | REQUIRED | DTC.xaml.cs (L750-758) GetDtcEvaluation | Hàm chỉ kiểm tra bit 0 và bit 3. Nếu mã lỗi trả về st=0x04 (Pending), hàm xếp nhầm thành 'No Fault' và hiển thị màu xám. |
+| 10 | Hardcoded chuỗi tiếng Việt khi kiểm tra Hủy tác vụ ('Đã hủy') | Correctness / I18n | REQUIRED | DTC.xaml.cs (L392, L570) | So sánh chuỗi Contains('Đã hủy'). Nếu app chuyển sang Tiếng Anh/Tiếng Trung/Tiếng Hàn, việc hủy tác vụ sẽ bị hiểu lầm thành LỖI ĐỌC (màu đỏ). |
+| 11 | Rò rỉ bộ nhớ (Memory Leak) do Event Handler LocalizationManager | Architecture / Performance | REQUIRED | DTC.xaml.cs (L152) DTC() constructor | Window DTC đăng ký lambda vào Singleton LocalizationManager nhưng không bao giờ gỡ bỏ khi đóng Window, khiến GC không thu hồi được form. |
+| 12 | UDS 0x19 0x04 hardcoded Record 0xFF không có fallback | Correctness / Protocol | REQUIRED | DTC.xaml.cs (L799) DtcGrid_SelectionChanged | Nhiều ECU không hỗ trợ Record 0xFF mà chỉ hỗ trợ 0x01. Khi ECU trả NRC 0x31 (Out of Range), app không fallback sang 0x01 mà chỉ in chuỗi lỗi thô. |
+| 13 | Timeout đọc số VIN (500ms) quá ngắn cho multi-frame ISO-TP | Correctness / Timing | REQUIRED | DTC.xaml.cs (L698) ReadVinLocalAsync | VIN dài 17 bytes buộc phải truyền bằng First Frame + Flow Control + 2 Consecutive Frames. Timeout 500ms dễ bị timeout trên mạng CAN tải cao. |
+| 14 | Chưa có cơ chế duy trì TesterPresent (0x3E) khi quét nhiều ECU | Architecture / Protocol | CONSIDER | DTC.xaml.cs, VectorCANManager.cs | Khi quét 15-20 ECU hoặc gặp ECU treo lâu, session 0x03 có thể bị timeout S3server (5000ms), khiến các ECU sau từ chối lệnh với NRC 0x7E. |
+| 15 | Các thành phần UI 'chết' không có Backend Hook | Readability / UI Integrity | CONSIDER | DTC.xaml (L372-404, L467, L231) | Nút 'Xóa danh sách' (dtc.clearList), nút '↻' reload, ô nhập 'Node ID' và ComboBox 'Service 0x19' không được gắn sự kiện/binding nào. |
+| 16 | Đặt tên thuộc tính Model DtcRecord sai lệch ngữ nghĩa | Readability / Maintainability | CONSIDER | DTC.xaml.cs (L65-109) DtcRecord | Thuộc tính FirstOccurrence lại dùng để lưu 'Evaluation' (Active/Pending), SoLan lại lưu 'Status Tags', LastOccurrence thì bỏ trống. |
+| 17 | Dead code dư thừa trong DTC.xaml.cs | Readability / Simplicity | CONSIDER | DTC.xaml.cs (L1137-1233, L1302-1361) | Các hàm GetDtcInfoFromLibrary và LoadDtcDictionaryFromFile cũ không còn được gọi nhưng chưa được dọn dẹp. |
+| 18 | Thiếu hỗ trợ First Frame 32-bit length trong CAN FD ISO-TP | Protocol / Completeness | CONSIDER | VectorCANFdManager.cs (L733) ReceiveIsoTpUdsFd | Khi UDS payload > 4095 bytes (ví dụ xe nhiều DTC kèm snapshot lớn), chuẩn ISO 15765-2 FD quy định PCI 32-bit chưa được parse. |
+
+================================================================================
+CHI TIẾT PHÂN TÍCH THEO 5 TRỤC CODE REVIEW (THE FIVE-AXIS REVIEW)
+================================================================================
+
+1. Correctness (Tính đúng đắn & Tuân thủ giao thức)
+- ISO-TP Packet Loss: Lệnh 'break' tại L742 (VectorCANManager.cs) và L741 (VectorCANFdManager.cs) sau khi nhận First Frame khiến toàn bộ các Consecutive Frame (CF) đã nằm trong mảng ReceiveAvailableFrames() bị vứt bỏ, gây timeout vô lý khi đọc danh sách DTC nhiều phần tử.
+- Padding Guard Flaw: Vòng lặp parse DTC 19 02 dùng 'break' khi gặp 4 byte 0 (00 00 00 00). Nếu dữ liệu từ ECU có chứa frame rác hoặc mã lỗi P0000, vòng lặp dừng ngay lập tức, bỏ qua tất cả các DTC hợp lệ ở phía sau. Khắc phục: Dùng 'continue' thay vì 'break'.
+- DTC J2012 Formatting: Dtc3ToJ2012 tạo ra 'P012345' (7 ký tự liền). Theo chuẩn ISO 15031-6 / SAE J2012 và quy chuẩn dự án, format bắt buộc là 'P0123-45' (mã gốc 5 ký tự + '-' + failure type 2 ký tự).
+- Evaluation Logic: GetDtcEvaluation chỉ kiểm tra bit 0 và bit 3. Bỏ qua bit 2 (PendingDTC - 0x04) khiến mã lỗi Pending bị đánh giá nhầm thành 'No Fault'.
+
+2. Readability & Simplicity (Độ rõ ràng & Đơn giản hóa)
+- Model DtcRecord: Trường FirstOccurrence được dùng để lưu chuỗi đánh giá (Active/Pending/Stored), trong khi trường LastOccurrence bị bỏ trống, trường SoLan lại lưu chuỗi Tags (TF, CONF...). Điều này gây khó hiểu cho người bảo trì.
+- Dead Code: Các phương thức cũ GetDtcInfoFromLibrary và LoadDtcDictionaryFromFile vẫn tồn tại dù đã có bản Optimized.
+
+3. Architecture & State Management (Kiến trúc & Quản lý trạng thái)
+- Cache Contamination: _dtcCache và _dtcFileCache không được làm sạch khi đổi Project ở ComboBox. Điều này làm cho thông tin mã lỗi giữa các dòng xe khác nhau bị ghi đè chéo, dẫn đến hiển thị sai mô tả lỗi của ECU.
+- Memory Leak: Event handler LocalizationManager.Instance.PropertyChanged += ... trong constructor của DTC Window không được giải phóng khi đóng cửa sổ.
+
+4. Security, Safety & Robustness (An toàn & Chống lỗi ngoại vi)
+- CAN Bus Spam: Sự kiện DtcGrid_SelectionChanged là async void và không có debounce. Khi người dùng click lướt qua nhiều dòng, hàng loạt lệnh 19 04 được bắn ra bus đồng thời, gây nhiễu loạn traffic và làm ECU rơi vào trạng thái Busy/Reject.
+- Excel File Lock: Khi đọc thư viện DTC bằng ClosedXML, nếu người dùng đang mở file Excel đó trong máy tính, hàm sẽ văng lỗi IOException và làm mất toàn bộ mô tả lỗi. Khắc phục: Mở qua FileStream với FileShare.ReadWrite.
+
+5. Performance & Responsiveness (Hiệu năng)
+- Export Excel Overhead: Khi xuất Excel, app chạy vòng lặp gửi lại request UDS ra xe cho từng dòng DTC, gây đơ giao diện hàng chục giây và không thể xuất được nếu người dùng đã ngắt kết nối với xe. Khắc phục: Tái sử dụng dữ liệu đã đọc hoặc chỉ fetch nếu kết nối còn hoạt động và có timeout kiểm soát.
+================================================================================

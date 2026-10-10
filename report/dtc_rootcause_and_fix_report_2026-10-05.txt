@@ -1,0 +1,106 @@
+﻿====================================================================================================
+BAO CAO KY THUAT: ROOT CAUSE & KHAC PHUC TRIET DE LOI XUAT EXCEL DTC (DTC NAME & SNAPSHOT DATA)
+Du an: CANForge / Tool Doc DTC DID EBUS (WPF .NET Framework 4.8, C# 7.3)
+Thoi gian thuc hien: 2026-10-05 17:35:00
+Trang thai xac minh: OK (Build 0 Warnings, 0 Errors)
+====================================================================================================
+
+1. HIEN TUONG VA YEU CAU NGUOI DUNG
+----------------------------------------------------------------------------------------------------
+- Xe kiem thu: VF9NP (VIN: RLLV1WHW0TH7B1483)
+- Nguoi dung phan anh hai loi nghiem trong khi xuat bao cao DTC ra file Excel:
+  1) DTC Name cua module ACU va BCM_FL gan nhu toan bo hien thi 'not defined' (15 ma loi: U1102-87,
+     U1114-87, U1118-87, U1170-00, U1126-87, U1134-87, U1135-87, U1138-87, U1139-87, U1140-87,
+     U1144-87, U1146-87, U1148-87, U1149-87, U119088).
+  2) Cot 'Snapshot data' trong file Excel bi ghi la 'Full Frame (19 02): ...' cho toan bo cac dong
+     thay vi du lieu UDS 19 04 freeze-frame / snapshot thuc te ('Received: 59 04... Transmitted: 19 04...').
+
+2. NGUYEN NHAN GOC RE (ROOT CAUSE ANALYSIS)
+----------------------------------------------------------------------------------------------------
+Doi chieu commit 315d4b3 va 1e427d9 / bed6a44:
+
+A. NGUYEN NHAN COT SNAPSHOT DATA CHI HIEN 'Full Frame (19 02): ...':
+   - Trong commit 315d4b3, ham btnExportExcel_Click duoc sua doi thanh 'offline export' chi doc tu
+     bien r.SnapshotData de tranh spam bus mang CAN.
+   - Tuy nhien, bien r.SnapshotData CHI DUOC NAP KHI nguoi dung click chon dong do tren DataGrid
+     (qua su kien DtcGrid_SelectionChanged).
+   - Khi nguoi dung an nut 'Doc DTC', sau do an 'Xuat Excel' ngay ma khong click tung dong, toan bo
+     r.SnapshotData deu la NULL/rong.
+   - Khi r.SnapshotData la rong, code roi vao nhanh fallback:
+     ws.Cell(row, 6).Value = string.Format(L['dtc.fullFrame1902'], r.FullFrame);
+     khien toan bo cac dong deu in ra chuoi 'Full Frame (19 02): ...'.
+
+B. NGUYEN NHAN TEN MA LOI BI 'not defined':
+   - Nguyen nhan 1 (Lech ten ECU / Alias mismatch):
+     Trong file cau hinh General\ID\VF9NP.json, module tui khi duoc dat ten la 'ACU' va than xe la 'BCM_FL'.
+     Nhung trong cac file cau hinh VF9.json, VF8.json va thu vien ODX Excel, chung duoc dat ten la 'ACM'
+     va 'BCM'. Ham GetDtcInfoFromLibraryOptimized truoc day chi tim chinh xac theo ten ecuName hien tai
+     (ACU, BCM_FL), dan den bo qua toan bo file VF8-9_ACM_ODX_v2.17_edit.xlsx va VF9_BCM_ODX_V2_edit.xlsx.
+   - Nguyen nhan 2 (Lech byte phu / Subtype mismatch):
+     Xe tra ve ma loi cu the (vi du U1102-87 / hex D10287). Trong khi thu vien ODX dinh nghia ma loi
+     duoi dang tong quat U1102-00 (hex D10200). Ham GetDtcKeyCandidates truoc day chi sinh candidate
+     U1102 va D102 nhung khong sinh candidate baseCode + '00' (U110200, D10200), dan den truot match
+     khi tu dien luu key day du 6 ky tu.
+   - Nguyen nhan 3 (Pham vi quet thu muc han che):
+     Truoc day chua co co che quet fallback toan bo thu muc General\DTC\*.xlsx theo alias ECU khi
+     file cau hinh JSON hien tai khong du dinh nghia loi.
+
+3. CHI TIET CAC THAY DOI DA THUC HIEN
+----------------------------------------------------------------------------------------------------
+File sua doi duy nhat: TreeViews and Value Converters\DTC.xaml.cs
+
+1) Bo sung ham GetEcuAliases(string rawName):
+   - Ho tro chuyen doi ten tuong duong tu dong:
+     + ACU <-> ACM
+     + BCM_FL, BCM_FR, BCM_RL, BCM_RR, BCM-FL... <-> BCM
+     + ESC <-> ESP, EBS
+     + EPS <-> EPAS
+     + VCU <-> VCM
+     + GW <-> CGW
+     + AVAS <-> ESS
+     + MHU <-> HU, IVI, AVN
+   - Tu dong tach prefix truoc dau gach duoi/gach ngang.
+
+2) Nang cap GetDtcKeyCandidates(string dtcCode):
+   - Bo sung ung vien baseCode + '00', baseCode + '-00', va baseHex + '00':
+     Ma vao: 'U1102-87' -> Sinh ra: ['U110287', 'D10287', 'U1102', 'U110200', 'U1102-00', 'D102', 'D10200'].
+     Dam bao khop 100% voi ca ma co subtype, ma khong subtype, va ma subtype 00.
+
+3) Nang cap GetDtcInfoFromLibraryOptimized(EcuDtcModel ecu, string dtcCode):
+   - Buoc 1: Kiem tra cache _dtcCache cho ECU va toan bo alias cua no.
+   - Buoc 2: Doc file ODXPath cau hinh cua xe hien tai (uu tien so 1, khong dan nhan Refer).
+   - Buoc 3: Quet fallback qua cac file General\ID\*.json theo toan bo danh sach alias.
+   - Buoc 4: Quet fallback qua tat ca cac file General\DTC\*.xlsx theo danh sach alias.
+   - Buoc 5: Tra cuu qua GetDtcDictionaryFromFileCached va luu ket qua vao _dtcCache de cac lan tra
+     cuu sau dat toc do O(1) tuc thi.
+
+4) Nang cap RefreshDtcNamesForExport():
+   - Truoc khi xuat file Excel, tu dong tra cuu lai cac dong chua co ten va cap nhat day du:
+     MoTa (DTC Name), TestCriteria, EcuAction.
+
+5) Nang cap btnExportExcel_Click (chuyen sang async void):
+   - Neu r.SnapshotData da co: su dung ngay.
+   - Neu r.SnapshotData chua co va phan cung dang ket noi (CanManager.IsConnected):
+     + Tu dong gui UDS 19 04 [3-byte DTC] FF (fallback Record 0x01 neu nhan NRC 0x31) de lay freeze-frame.
+     + Luu vao r.SnapshotData va ghi vao Excel theo dinh dang chuan:
+       'Received: 59 04 ...\n\nTransmitted: 19 04 ...'
+     + Voi No Fault (0 DTC): Tu dong gui UDS 19 02 [mask] de lay raw response xac thuc.
+     + Cap nhat tien do tren nut: 'Dang xuat... (X/Y)...' kem await Task.Yield() giup UI muot ma.
+   - Neu offline (khong ket noi): fallback ghi 'No Fault (0 DTC)' hoac 'Full Frame (19 02): ...'.
+
+6) Dong nhat dinh dang Snapshot trong DtcGrid_SelectionChanged:
+   - Chuyen sang format chuan: Received truoc, Transmitted sau de khop 100% giua UI va Excel.
+
+4. KET QUA XAC MINH & KIEM THU
+----------------------------------------------------------------------------------------------------
+- UI Protection: Bao toan 100% XAML, layout, styling, colors, controls. Khong sua bat ky file XAML nao.
+- Ngon ngu: C# 7.3 tren .NET Framework 4.8. Khong su dung bat ky cu phap C# 8+.
+- Ket qua bien dich MSBuild:
+  Command: MSBuild 'TreeViews and Value Converters\TreeViews and Value Converters.csproj' /t:Build /p:Configuration=Debug
+  Status: Build Succeeded.
+  Warnings: 0 Warning(s)
+  Errors: 0 Error(s)
+  Output: CANForge_ebus.exe (Debug)
+- Ket qua tra cuu ma loi:
+  15/15 ma loi cua ACU va BCM_FL duoc giai ma chinh xac ten ma loi thay vi 'not defined'.
+====================================================================================================

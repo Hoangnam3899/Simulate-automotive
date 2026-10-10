@@ -1,0 +1,40 @@
+========================================================================================
+BÁO CÁO THAY ĐỔI & TRIỂN KHAI TÍNH NĂNG - AFI (AUTOMOTIVE FAULT INJECTOR)
+Thời gian: 2026-10-09 07:30:00
+Dự án: Simulate (AFI - Automotive Fault Injector)
+Tính năng: Bổ sung Toggle Switch 'By Signal' cho Dialog SelectMessageWindow
+========================================================================================
+
+1. MỤC TIÊU VÀ PHẠM VI
+- Bổ sung nút Toggle Switch '⚡ By Signal' trên thanh tìm kiếm của hộp thoại 'Select Messages to Add to Simulation'.
+- Khi Switch OFF: Tìm kiếm mặc định theo Message Name, CAN ID, Transmitter.
+- Khi Switch ON: Tìm kiếm thông minh mở rộng, cho phép gõ tên Signal để tìm và lọc ra ngay Message chứa Signal đó.
+- Hiển thị Tooltip '⚡ Matched Signal' trên Message Name để người dùng xác nhận trực quan.
+- Giữ nguyên 100% logic phía sau: Người dùng tick chọn Message và bấm 'Add Selected' thì hệ thống nạp Message vào Simulation y như cũ. Không gây ảnh hưởng hay rủi ro hồi quy tới các Panel 3, 5, 6 và Simulation Engine.
+
+2. DANH SÁCH FILE ĐÃ CHỈNH SỬA
+- D:\Automotive dev\Simulate\Simulate\Views\SelectMessageWindow.xaml
+  + Bổ sung Style 'DialogToggleSwitch' với hiệu ứng Dark mode / Cyan glow.
+  + Thêm ToggleButton 'TglSearchBySignal' vào Grid Row 1 (Search bar).
+  + Thêm Tooltip '{Binding TooltipSummary}' vào cột Message Name.
+- D:\Automotive dev\Simulate\Simulate\Views\SelectMessageWindow.xaml.cs
+  + Cập nhật 'SelectableDbcMessage': lưu mảng '_signalNames', thuộc tính 'MatchedSignalsHint' và 'TooltipSummary'.
+  + Viết hàm 'ApplyFilter()': xử lý lọc theo Message Name/CAN ID/Transmitter hoặc Signal.Name khi Switch ON.
+  + Viết sự kiện 'TglSearchBySignal_Click' và 'UpdateSearchHint()'.
+- D:\Automotive dev\Simulate\Simulate\Resources\Languages\Strings.*.xaml
+  + Strings.en-US.xaml, Strings.vi-VN.xaml, Strings.ja-JP.xaml, Strings.ko-KR.xaml, Strings.zh-CN.xaml:
+    Bổ sung các key 'Loc_SelMsg_SearchBySignal', 'Loc_SelMsg_SearchBySignal_Tooltip', 'Loc_SelMsg_SearchHint_WithSignals'.
+
+3. KẾT QUẢ BIÊN DỊCH VÀ XÁC MINH (BUILD & TEST VERIFICATION)
+- Lệnh biên dịch: dotnet build 'D:\Automotive dev\Simulate\Simulate\Simulate.csproj' (.NET 8.0 Windows, Strict Analyzers).
+- Kết quả: 0 Warning(s), 0 Error(s).
+- Kiểm thử thực tế trên 4 bộ ma trận DBC (CAN Classic & CAN FD EP):
+  + 09_Chassis_CAN_Matrix_BEV_v12.2.3.dbc (105 msgs, 763 signals) -> 100% PASSED
+  + 06_PT_CAN_Matrix_BEV_v12.2.7.dbc (171 msgs, 1754 signals) -> 100% PASSED
+  + 03_CCAN_EP_v2.0.5_20260227.dbc (111 msgs, 1875 signals) -> 100% PASSED
+  + 04_PCAN_EP_v2.0.4_20260211.dbc (137 msgs, 2389 signals) -> 100% PASSED
+- Tổng kết kiểm thử: 20/20 Test Cases ngẫu nhiên PASSED (100% OK).
+
+4. TRẠNG THÁI XÁC MINH: OK
+- File log kiểm thử: D:\Analysis Log\report\test_random_signals_filter_result.txt
+========================================================================================

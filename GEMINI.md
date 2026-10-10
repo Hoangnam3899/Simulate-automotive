@@ -29,7 +29,8 @@ C# WPF desktop application (.NET 8.0). Solution: `Simulate.sln`. Architecture: M
 - Never modify files outside the solution without permission.
 - Ask before adding NuGet dependencies.
 - Ask before changing project/solution structure.
-- Always verify build after changes: `dotnet build`.
+- Always verify build after changes: `dotnet build` (0 warning / 0 error) and `dotnet test` (100% pass).
+- ALWAYS save and synchronize report logs per `.agents/rules/report-standards.md` to `D:\Analysis Log\report\`, `D:\Analysis Log\newconvert\`, and workspace `report/`.
 
 ## Skills
 

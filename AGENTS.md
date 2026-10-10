@@ -33,7 +33,8 @@ This is a **C# WPF desktop application** built with .NET 8.0. The project source
 - **NEVER** modify files outside the solution without explicit user permission.
 - **Ask first** before adding NuGet package dependencies.
 - **Ask first** before changing project structure or solution configuration.
-- **ALWAYS** run `dotnet build` after code changes to verify compilation.
+- **ALWAYS** run `dotnet build` after code changes to verify compilation (0 warning / 0 error) and `dotnet test` (100% pass).
+- **ALWAYS** save and synchronize report logs per `.agents/rules/report-standards.md` to `D:\Analysis Log\report\`, `D:\Analysis Log\newconvert\`, and workspace `report/`.
 
 ## Agent Skills
 

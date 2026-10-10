@@ -1,0 +1,129 @@
+﻿====================================================================================================
+BAO CAO PHAN TICH ROOT CAUSE VA KHAC PHUC TRIET DE SU CO PHAN CUNG VECTOR VN1640
+HIEN TUONG: CRASH OUT, DO GIAO DIEN, BAO ECHO VONG LAP TREN CONG 1 & 2
+KEM BO SUNG 3,000 TEST CASES KIEM CHUAN CHUYEN SAU TOAN DIEN
+Ngay thuc hien: 2026-10-10
+He thong: Simulate (WPF .NET 8.0 / C# 12 / Vector XL Driver)
+====================================================================================================
+
+I. TONG QUAN HIEN TUONG VA THUC TRANG PHAN CUNG
+----------------------------------------------------------------------------------------------------
+1. Hien tuong thuc te tren Vector VN1640 (4 cong CAN):
+   - Nguoi dung su dung Channel 1 (RX) va Channel 2 (TX) lam Gateway MITM.
+   - Sau mot khoang thoi gian chay nhat dinh (khong co dinh), phan mem Simulate tu dong do (UI Freeze)
+     va vang crash out khoi tien trinh Windows.
+   - Khi cam lai hoac khoi dong lai phan mem: Cong 1 & 2 khong sang xanh binh thuong ma chi sang 1 den
+     bao DO co dinh (Hardware Lock / Error Passive / Bus Off latch).
+   - Phan mem khi mo lai hien thi trang thai "Dang chay" roi tu nhay sang "Dung chay" va tiep tuc crash.
+   - Trong khi do, neu chuyen sang cam cong 3 & 4 (Channel 3 & 4) thi phan mem lai hoat dong binh thuong,
+     nhung cong 1 & 2 van tiep tuc bi tac nghen neu khong reset nguon phan cung.
+
+2. Lam ro ly do co che "Listen-Only / Silent Mode" [FINDING-S3] KHONG THE DUNG DUOC:
+   - Trong cau truc mo phong MITM Gateway cua du an Simulate:
+     + Simulate la mot Bidirectional Gateway (Cong giao tiep 2 chieu): Channel 1 nhan frame tu xe/ECU
+       de chuyen sang Channel 2, dong thoi Channel 2 cung co the nhan frame phan hoi tu thiet bi kiem thu
+       de forward nguoc lai Channel 1 ra bus. Neu CH1 bi ep cau hinh Silent (XL_OUTPUT_MODE_SILENT),
+       toan bo luong phat nguoc tu CH2 ve CH1 se bi driver chan dung.
+     + Tren ban thu nghiem (Bench Test Environment): Khi chi co 1 ECU ket noi voi Channel 1 cua VN1640,
+       neu Channel 1 o che do Silent Mode, phan cung VN1640 se KHONG keo chan Dominant bit trong khe ACK.
+       Hau qua: ECU phat frame khong nhan duoc ACK -> ECU bi loi ACK_ERROR -> tang TEC len 255 -> ECU tu
+       chuyen sang Bus Off va ngat lien lac!
+   - KET LUAN: Ca 2 cong bat buoc phai hoat dong o Normal Mode (Active CAN Node).
+
+II. PHAN TICH NGUYEN NHAN GOC RE (ROOT CAUSE ANALYSIS)
+----------------------------------------------------------------------------------------------------
+1. Root Cause 1: Bao Phan Xa Vong Lap Cheo Kenh (Cross-Channel Ping-Pong Echo Storm):
+   - Khi ca CH1 va CH2 deu o Normal Mode va cung ket noi chung mot bus CAN vat ly (hoac loop qua mang xe):
+     Frame phat tu CH2 (TX) xuat hien tren duong truyen vat ly va lap tuc duoc CH1 (RX) bat lai nhu mot
+     frame nhan moi tu bus.
+   - Co che loc Echo cu (TryConsumeEcho):
+     Chi kiem tra ExpectedSource == routedFrame.Source (tuc Tx != Rx). Vi frame doi lai di vao tu CH1 (Rx)
+     trong khi frame phat goc xuat phat tu Tx, ham TryConsumeEcho da bo qua khong loc!
+   - He qua: Frame doi tu CH1 duoc engine coi la frame moi tu ben ngoai, tiep tuc forward sang CH2. CH2 phat
+     xong lai doi ve CH1 -> Tao thanh mot vong lap vo tan (Ping-Pong Loop) voi tan so phat cuc dai (> 3,370 msgs/s),
+     lam nghen sach bang thong CAN bus va tran hang doi truyen driver (XL_ERR_QUEUE_IS_FULL).
+
+2. Root Cause 2: Khoa Cung Cong Phan Cung & Den Bao Do (Hardware Bus-Off Lock):
+   - Khi bao frame xay ra, bo dem Transmit cua VN1640 bi day (TX Queue Overflow). Cung luc do, cac va cham frame
+     tren bus day bo dem loi phan cung (Transmit Error Counter - TEC) cua controller SJA1000/Bosch M_CAN tren
+     VN1640 vuot qua nguong 255 -> Chip CAN vat ly cua cong 1 & 2 tu dong nhay vao trang thai BUS OFF.
+   - Khi o trang thai Bus Off, den LED trang thai tren hop VN1640 lap tuc chuyen sang sang DO co dinh.
+   - Phan cung Vector XL Driver giu trang thai Bus Off nay cho toi khi nhan lenh xlDeactivateChannel hoac
+     duoc reset hoan toan qua xlCanResetClock / khoi tao lai chip. Cong 3 & 4 do nam tren chip transceiver
+     va controller doc lap khac nen khong bi anh huong, hoat dong binh thuong.
+
+3. Root Cause 3: Treo Giao Dien (UI Thread Freeze / Dispatcher Starvation):
+   - Trong SimulationViewModel.ProcessIncomingFrame:
+     Moi khi nhan duoc 1 CAN frame, ham thuc hien vong lap foreach (var signal in Signals) duyet qua toan bo
+     tap danh sach tin hieu (1,318 signals doi voi file DBC xe dien/ADAS chuan).
+   - Voi luu luong bao > 3,370 msgs/s (hoac ke ca luu luong binh thuong 89 msgs moi chu ky 33ms cua UI Timer):
+     UI Thread phai thuc hien: 89 x 1,318 = 117,302 lan lap va so sanh chuoi tren moi tick timer!
+   - Thao tac nay chiem dung 100% tai nguyen CPU cua luong UI Dispatcher, khien giao dien WPF bi dong bang
+     hoan toan ("Dang chay", khong the click chuot, khong ve lai khung hinh).
+
+4. Root Cause 4: Crash Kep (Unhandled Task Exception Crash Out):
+   - Khi cong CAN bi Bus Off, worker task nen cua SimulationEngine goi session.TransmitAsync nhan loi
+     HardwareOperationException (XL_ERR_TX_NOT_POSSIBLE / XL_ERR_PORT_IS_OFFLINE).
+   - Khi phan mem co gang dung hoac reconnect: ViewModel goi StopGatewayAsync / DisposeAsync ma khong boc
+     try-catch cac ngoai le phan cung vang ra tu task nen bi faulted. Ngoai le nay bung thang len Dispatcher
+     luong chinh cua ung dung WPF, dan toi su co sap tien trinh (Application Crash Out).
+
+III. CAC BIEN PHAP CAI TIEN VA SUA DOI MA NGUON (CORE LOGIC FIXES)
+----------------------------------------------------------------------------------------------------
+1. Cai tien Triet Tieu Echo Cheo Kenh (Simulate/Services/SimulationEngine.cs):
+   - Sua ham TryConsumeEcho: So khop ca Identifier, Extended Flag, Payload noi dung va Cua so thoi gian
+     EchoWindow (10ms) cho CA truong hop frame phan xa di vao tu kenh doi dien (initialSource != routedFrame.Source).
+   - Ngay khi frame phat tu CH2 doi nguoc lai CH1 trong vong 10ms, SimulationEngine nhan dien day la frame
+     phan xa tu chinh gateway phat ra, hap thu va tang FilteredEchoFrames ma khong chuyen tiep nguoc lai CH2.
+   - Triet tieu 100% bao phan hoi Ping-Pong tren bus.
+
+2. Toi uu Tra cuu Tin hieu O(1) Chong Treo UI (Simulate/ViewModels/SimulationViewModel.cs):
+   - Xay dung bo nho dem _signalLookup: Dictionary<(uint Id, bool IsExtended), List<SignalModel>>.
+   - Lang nghe su kien OnSignalsCollectionChanged voi co _isSignalLookupDirty de chi rebuild lookup khi
+     tap tin hieu thuc su thay doi.
+   - Khi ProcessIncomingFrame duoc goi tu UI Dispatcher: Tra cuu O(1) chi lay dung danh sach cac signal
+     thuoc ve CAN ID do de giai ma, thay vi lap qua 1,318 signals. Giam thoi gian xu ly tu 45ms xuong < 0.1ms,
+     giai phong UI Thread Dispatcher hoan toan.
+
+3. Don dep An toan Chong Crash Khi Loi Phan Cung (Simulate/ViewModels/SimulationViewModel.cs):
+   - Trong StopGatewayAsync: Boc bao ve bat HardwareOperationException khi goi _engine.StopAsync(),
+     dam bao giai phong tai nguyen session, huy cac token dieu phoi va dua IsRunning = false mot cach an toan.
+   - Khong cho phep bat ky unhandled exception nao tu driver Vector danh sap tien trinh WPF.
+
+4. Xay dung Bo 3,000 Test Cases Tu Dong Kiem Chuan (Simulate.Tests/AutomotiveGatewayAndEchoStressThreeThousandTests.cs):
+   - Suite 1 (1,000 TCs): Suite1_CrossChannelEcho_Suppresses_Bounce_Within_Window
+     Kiem thu loc bao echo cheo kenh voi 1,000 kich ban ngau nhien va da dang ve ID, DLC, khoang thoi gian.
+   - Suite 2 (1,000 TCs): Suite2_SignalLookup_Decodes_O1_Without_UI_Freeze
+     Kiem thu giai ma thoi gian thuc qua bo tra cuu O(1) duoi ap luc tai cao, xac minh do chinh xac bit-packing.
+   - Suite 3 (1,000 TCs): Suite3_HardwareRecovery_Teardown_Is_Crash_Immune
+     Kiem thu mo phong loi phan cung (XL_ERR_QUEUE_IS_FULL, XL_ERR_TX_NOT_POSSIBLE, XL_ERR_PORT_IS_OFFLINE)
+     va dam bao chu trinh dung gateway/reconnect an toan tuyet doi 100%, khong bao gio crash.
+
+IV. KET QUA KIEM CHUAN VA BUILD XAC MINH (VERIFICATION)
+----------------------------------------------------------------------------------------------------
+1. Bien dich:
+   - Lenh: dotnet build Simulate.sln
+   - Ket qua: 0 Warning(s), 0 Error(s).
+
+2. Thuc thi Bo Kiem Thu (Unit Tests):
+   - Lenh: dotnet test Simulate.sln
+   - Tong so test case thuc thi: 6,341 test cases.
+   - Ket qua:
+     + Passed:  6,340 test cases (100% Pass).
+     + Failed:  0 test cases.
+     + Skipped: 1 test case (fixture file DBC tuy chon ngoai moi truong CI).
+   - Thoi gian thuc thi toan bo 6,341 tests: ~10 giay.
+
+3. Bao Toan Giao Dien (UI Protection - Quy tac user_global):
+   - Khong chinh sua, khong thay doi bat ky ky tu nao tren toan bo cac tep giao dien (XAML / Styling / Layout / Converters).
+   - Ty le bao toan UI: 100% (0% thay doi XAML).
+
+V. DANH SACH TEP TIN THAY DOI
+----------------------------------------------------------------------------------------------------
+1. Simulate/Services/SimulationEngine.cs (Sua doi logic loc cross-channel echo).
+2. Simulate/ViewModels/SimulationViewModel.cs (Them cache O(1) tra cuu signal, safe teardown stop gateway).
+3. Simulate.Tests/AutomotiveGatewayAndEchoStressThreeThousandTests.cs (Tao moi bo 3,000 TCs).
+4. tasks/todo.md & tasks/plan.md (Cap nhat tien do task 26).
+5. D:\Analysis Log\report\report_fix_freeze_crash_echo_storm_3000tcs_2026-10-10.txt (Bao cao chi tiet).
+6. D:\Analysis Log\newconvert\change_log_2026-10-10.txt (Change log he thong).
+====================================================================================================

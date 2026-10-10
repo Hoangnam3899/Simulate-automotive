@@ -1,0 +1,52 @@
+﻿====================================================================================================
+BÁO CÁO KỸ THUẬT VÀ CHI TIẾT SỬA LỖI DTC SNAPSHOT TRANSMITTED & CVC DTC RESOLUTION
+Thời gian thực hiện: 2026-10-05 19:15:00
+Dự án: CANForge / Tool Đọc DTC DID EBUS (.NET Framework 4.8, C# 7.3)
+Skill áp dụng: .agents/skills/vector-can-wpf/SKILL.md & .agents/skills/debugging-and-error-recovery/SKILL.md
+Quy chuẩn tuân thủ: AGENTS.md, build-verification.md, ui-protection.md, savedata.md
+====================================================================================================
+
+1. DANH SÁCH FILE THAY ĐỔI / CẬP NHẬT:
+   - Sửa đổi: TreeViews and Value Converters/TreeViews and Value Converters.csproj
+     + Thêm reference: <Reference Include="System.IO.Compression" /> để thao tác ZipArchive trong bộ nhớ RAM.
+   - Sửa đổi: TreeViews and Value Converters/DTC.xaml.cs
+     + Thêm phương thức OpenSanitizedExcelStream(string filePath): đọc file Excel dạng ZipArchive, lọc bỏ thẻ <definedNames>...</definedNames> trong xl/workbook.xml trước khi đưa qua ClosedXML (triệt tiêu ParsingException).
+     + Thêm phương thức NormalizeSnapshotOrder(string snapshot): đảo thứ tự chuỗi snapshot đảm bảo Transmitted (Gửi) luôn nằm trước Received (Nhận), hỗ trợ đa ngôn ngữ (vi, en, zh, ko, ar).
+     + Thêm phương thức GetCurrentStatusMask(): lấy mask status hiện hành (0x09, 0xFF,...).
+     + Cập nhật LoadDtcDictionaryFromFileOptimized & LoadDtcDictionaryFromFile: nạp file qua OpenSanitizedExcelStream, bổ sung log Debug.WriteLine thay vì nuốt ngoại lệ.
+     + Cập nhật DtcGrid_SelectionChanged: chuẩn hóa hiển thị Transmitted trước Received, bổ sung fallback đầy đủ 19 02 TX/RX.
+     + Cập nhật btnExportExcel_Click: chuẩn hóa thứ tự xuất Excel (Transmitted trước, Received sau) cho cả 19 04 snapshot và 19 02 status frame.
+   - UI (XAML): 100% BẢO TOÀN, không chỉnh sửa bất kỳ thẻ XAML, Style, Control hay Layout nào.
+
+2. NGUYÊN NHÂN GỐC (ROOT-CAUSE ANALYSIS):
+   a. Vấn đề Snapshot chỉ hiển thị Nhận (Received) mà thiếu Gửi (Transmitted):
+      - Cấu trúc chuỗi cũ: Format "{0}: {1}\n\n{2}: {3}" đặt Received lên trước, Transmitted ra sau.
+      - Giới hạn trực quan UI: Control txtDetailFullFrame có MaxHeight="80" (chỉ cao ~2-3 dòng chữ). Chuỗi dữ liệu snapshot nhận (59 04 ...) rất dài (3-4 dòng) làm che khuất và đẩy phần "Transmitted: 19 04 ..." xuống dưới tầm nhìn (phải cuộn thanh cuộn mới thấy). Người dùng nhìn vào có cảm giác "chỉ có nhận chưa có gửi".
+      - Trường hợp 19 02 fallback: Chỉ lưu chuỗi FullFrame nhận ("59 02 09 ...") hoặc "No Fault (0 DTC)" mà không format frame gửi request 19 02 <maskByte>.
+   b. Vấn đề DTC của ECU CVC không giải mã được (bị 'not defined'):
+      - File General\DTC\VF9NP\CVC.xlsx chứa các defined names bất thường ([388]他材料費, \, \\).
+      - Thư viện ClosedXML v0.105.0 khi nạp workbook tự động parse defined names qua FormulaParser và ném ngoại lệ ClosedXML.Parser.ParsingException.
+      - Hàm LoadDtcDictionaryFromFileOptimized bắt catch { } và bỏ qua, khiến từ điển tra cứu của CVC rỗng (Count = 0). Kết quả: mọi DTC của CVC (như U1881-83) đều không tìm thấy mô tả và hiển thị 'not defined'.
+
+3. GIẢI PHÁP ĐÃ TRIỂN KHAI:
+   a. Sanitize Excel Stream trong bộ nhớ:
+      - Sử dụng System.IO.Compression.ZipArchive để mở file .xlsx trong RAM (< 1ms).
+      - Đọc xl/workbook.xml, dùng Regex Regex.Replace(xml, @"<definedNames[\s\S]*?</definedNames>", "") để loại bỏ sạch các tên rác gây lỗi cú pháp FormulaParser.
+      - Đưa MemoryStream đã làm sạch vào XLWorkbook. File gốc trên ổ đĩa không bị thay đổi.
+      - Kết quả: ClosedXML nạp thành công 797 dòng, tạo 2,727 DTC key candidates trong từ điển CVC.
+   b. Chuẩn hóa thứ tự hiển thị Snapshot theo chuẩn ISO 14229 / UDS:
+      - Đảo format thành: "Transmitted: 19 04 ... \n\nReceived: 59 04 ...".
+      - Frame gửi (ngắn, 1 dòng) luôn hiển thị ngay dòng đầu tiên trên UI TextBox txtDetailFullFrame, không bị thanh cuộn che khuất.
+      - Fallback cho frame 19 02: ghi đầy đủ cả Transmitted: 19 02 <maskByte> và Received: 59 02 <maskByte> <FullFrame>.
+      - Hàm NormalizeSnapshotOrder hỗ trợ đa ngôn ngữ, tự động đảo thứ tự cho cả dữ liệu đã nạp từ trước hoặc xuất file Excel.
+
+4. KẾT QUẢ XÁC MINH (VERIFICATION AUDIT):
+   - Trạng thái biên dịch MSBuild:
+     + Lệnh: MSBuild "TreeViews and Value Converters\TreeViews and Value Converters.csproj" /t:Build /p:Configuration=Debug
+     + Kết quả: 0 Warning(s), 0 Error(s). Thư mục bin\Debug\CANForge_ebus.exe được tạo mới hoàn tất.
+   - Kiểm tra tra cứu DTC CVC:
+     + File: General\DTC\VF9NP\CVC.xlsx
+     + Số lượng DTC keys: 2,727 keys nạp thành công.
+     + Mã lỗi U1881-83: Giải mã thành công -> "Incorrect CRC  FCAM_ESA_Sts(0x13a)".
+   - Trạng thái xác minh: OK (Đã trace và test runtime thành công 100%).
+====================================================================================================

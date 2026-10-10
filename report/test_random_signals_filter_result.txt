@@ -1,0 +1,131 @@
+================================================================================
+KIỂM THỬ TÍNH NĂNG TÌM KIẾM THEO SIGNAL (SWITCH TOGGLE) TRÊN CÁC FILE DBC
+================================================================================
+
+--- DBC: 09_Chassis_CAN_Matrix_BEV_v12.2.3.dbc (105 Messages, 763 Signals) ---
+  * Signal Test: 'RCU_DiagReqData0'
+    - Message Cha: RCU_DiagReq (ID: 0x6A7, Tx: XGW_Chassis)
+    - Khi Switch = OFF: Tìm thấy 0 msg (Signal không kích hoạt tìm kiếm)
+    - Khi Switch = ON : Tìm thấy 1 msg | Matched Hint: 'RCU_DiagReqData0'
+    - Kết quả: PASS [TÌM THẤY CHUẨN XÁC]
+
+  * Signal Test: 'ALV_YSS_YawRate'
+    - Message Cha: YSS_YawRate (ID: 0x17D, Tx: YSS)
+    - Khi Switch = OFF: Tìm thấy 0 msg (Signal không kích hoạt tìm kiếm)
+    - Khi Switch = ON : Tìm thấy 1 msg | Matched Hint: 'ALV_YSS_YawRate'
+    - Kết quả: PASS [TÌM THẤY CHUẨN XÁC]
+
+  * Signal Test: 'IDB_TorqueIncrease_RR'
+    - Message Cha: IDB_TorqueIncrease_Req (ID: 0x0F4, Tx: IDB_Chassis)
+    - Khi Switch = OFF: Tìm thấy 0 msg (Signal không kích hoạt tìm kiếm)
+    - Khi Switch = ON : Tìm thấy 1 msg | Matched Hint: 'IDB_TorqueIncrease_RR'
+    - Kết quả: PASS [TÌM THẤY CHUẨN XÁC]
+
+  * Signal Test: 'Diag_Request_ECU_Data4'
+    - Message Cha: Diag_Request_ECU (ID: 0x7DF, Tx: XGW_Chassis)
+    - Khi Switch = OFF: Tìm thấy 0 msg (Signal không kích hoạt tìm kiếm)
+    - Khi Switch = ON : Tìm thấy 1 msg | Matched Hint: 'Diag_Request_ECU_Data4'
+    - Kết quả: PASS [TÌM THẤY CHUẨN XÁC]
+
+  * Signal Test: 'ADAS_AEB_Prefill'
+    - Message Cha: ADAS_AEB_Status (ID: 0x32E, Tx: FCAM_Chassis)
+    - Khi Switch = OFF: Tìm thấy 0 msg (Signal không kích hoạt tìm kiếm)
+    - Khi Switch = ON : Tìm thấy 1 msg | Matched Hint: 'ADAS_AEB_Prefill'
+    - Kết quả: PASS [TÌM THẤY CHUẨN XÁC]
+
+--- DBC: 06_PT_CAN_Matrix_BEV_v12.2.7.dbc (171 Messages, 1754 Signals) ---
+  * Signal Test: 'EDS_VCU_6SO_flag_RWD'
+    - Message Cha: EDS_OutPut_RR (ID: 0x1F9, Tx: EDS_R)
+    - Khi Switch = OFF: Tìm thấy 0 msg (Signal không kích hoạt tìm kiếm)
+    - Khi Switch = ON : Tìm thấy 1 msg | Matched Hint: 'EDS_VCU_6SO_flag_RWD'
+    - Kết quả: PASS [TÌM THẤY CHUẨN XÁC]
+
+  * Signal Test: 'VCU_FS_C_59'
+    - Message Cha: VCU_FS_C (ID: 0x185, Tx: VCU_PT)
+    - Khi Switch = OFF: Tìm thấy 0 msg (Signal không kích hoạt tìm kiếm)
+    - Khi Switch = ON : Tìm thấy 1 msg | Matched Hint: 'VCU_FS_C_59'
+    - Kết quả: PASS [TÌM THẤY CHUẨN XÁC]
+
+  * Signal Test: 'VCU_FS_A_15'
+    - Message Cha: VCU_FS_A (ID: 0x182, Tx: VCU_PT)
+    - Khi Switch = OFF: Tìm thấy 0 msg (Signal không kích hoạt tìm kiếm)
+    - Khi Switch = ON : Tìm thấy 1 msg | Matched Hint: 'VCU_FS_A_15'
+    - Kết quả: PASS [TÌM THẤY CHUẨN XÁC]
+
+  * Signal Test: 'DiagReqAllEcuData0'
+    - Message Cha: DIAG_Req_All_Ecu (ID: 0x6FF, Tx: XGW_PT)
+    - Khi Switch = OFF: Tìm thấy 0 msg (Signal không kích hoạt tìm kiếm)
+    - Khi Switch = ON : Tìm thấy 1 msg | Matched Hint: 'DiagReqAllEcuData0'
+    - Kết quả: PASS [TÌM THẤY CHUẨN XÁC]
+
+  * Signal Test: 'SessionPaymentType'
+    - Message Cha: VCU_PnC_ErrorMsg_2 (ID: 0x13D, Tx: VCU_PT)
+    - Khi Switch = OFF: Tìm thấy 0 msg (Signal không kích hoạt tìm kiếm)
+    - Khi Switch = ON : Tìm thấy 1 msg | Matched Hint: 'SessionPaymentType'
+    - Kết quả: PASS [TÌM THẤY CHUẨN XÁC]
+
+--- DBC: 03_CCAN_EP_v2.0.5_20260227.dbc (111 Messages, 1875 Signals) ---
+  * Signal Test: 'FCAM_DiagReqData30'
+    - Message Cha: FCAM_DiagReq (ID: 0x696, Tx: CVC_C)
+    - Khi Switch = OFF: Tìm thấy 0 msg (Signal không kích hoạt tìm kiếm)
+    - Khi Switch = ON : Tìm thấy 1 msg | Matched Hint: 'FCAM_DiagReqData30'
+    - Kết quả: PASS [TÌM THẤY CHUẨN XÁC]
+
+  * Signal Test: 'ADCU_DiagReqData33'
+    - Message Cha: ADCU_DiagReq (ID: 0x6C0, Tx: CVC_C)
+    - Khi Switch = OFF: Tìm thấy 0 msg (Signal không kích hoạt tìm kiếm)
+    - Khi Switch = ON : Tìm thấy 1 msg | Matched Hint: 'ADCU_DiagReqData33'
+    - Kết quả: PASS [TÌM THẤY CHUẨN XÁC]
+
+  * Signal Test: 'WCBS_Calibration_Resp_A16'
+    - Message Cha: WCBS_Calibration_Resp_A (ID: 0x761, Tx: WCBS)
+    - Khi Switch = OFF: Tìm thấy 0 msg (Signal không kích hoạt tìm kiếm)
+    - Khi Switch = ON : Tìm thấy 1 msg | Matched Hint: 'WCBS_Calibration_Resp_A16'
+    - Kết quả: PASS [TÌM THẤY CHUẨN XÁC]
+
+  * Signal Test: 'EPS_DiagReqData17'
+    - Message Cha: EPS_DiagReq (ID: 0x6A8, Tx: CVC_C)
+    - Khi Switch = OFF: Tìm thấy 0 msg (Signal không kích hoạt tìm kiếm)
+    - Khi Switch = ON : Tìm thấy 1 msg | Matched Hint: 'EPS_DiagReqData17'
+    - Kết quả: PASS [TÌM THẤY CHUẨN XÁC]
+
+  * Signal Test: 'LV_PowerSupply_Status'
+    - Message Cha: CVC_Status (ID: 0x166, Tx: CVC_C)
+    - Khi Switch = OFF: Tìm thấy 0 msg (Signal không kích hoạt tìm kiếm)
+    - Khi Switch = ON : Tìm thấy 1 msg | Matched Hint: 'LV_PowerSupply_Status'
+    - Kết quả: PASS [TÌM THẤY CHUẨN XÁC]
+
+--- DBC: 04_PCAN_EP_v2.0.4_20260211.dbc (137 Messages, 2389 Signals) ---
+  * Signal Test: 'RMCU_DiagRespData51'
+    - Message Cha: RMCU_DiagResp (ID: 0x61A, Tx: RMCU)
+    - Khi Switch = OFF: Tìm thấy 0 msg (Signal không kích hoạt tìm kiếm)
+    - Khi Switch = ON : Tìm thấy 1 msg | Matched Hint: 'RMCU_DiagRespData51'
+    - Kết quả: PASS [TÌM THẤY CHUẨN XÁC]
+
+  * Signal Test: 'BMS_BatteryReplacement'
+    - Message Cha: BMS_WarnMsg (ID: 0x493, Tx: BMS)
+    - Khi Switch = OFF: Tìm thấy 0 msg (Signal không kích hoạt tìm kiếm)
+    - Khi Switch = ON : Tìm thấy 1 msg | Matched Hint: 'BMS_BatteryReplacement'
+    - Kết quả: PASS [TÌM THẤY CHUẨN XÁC]
+
+  * Signal Test: 'BMS_CellMaxSOC'
+    - Message Cha: BMS_SOCDiag (ID: 0x47A, Tx: BMS)
+    - Khi Switch = OFF: Tìm thấy 0 msg (Signal không kích hoạt tìm kiếm)
+    - Khi Switch = ON : Tìm thấy 1 msg | Matched Hint: 'BMS_CellMaxSOC'
+    - Kết quả: PASS [TÌM THẤY CHUẨN XÁC]
+
+  * Signal Test: 'CRC_BCM_VOLTAGE'
+    - Message Cha: BCM_VOLTAGE (ID: 0x10A, Tx: CVC_P)
+    - Khi Switch = OFF: Tìm thấy 0 msg (Signal không kích hoạt tìm kiếm)
+    - Khi Switch = ON : Tìm thấy 1 msg | Matched Hint: 'CRC_BCM_VOLTAGE'
+    - Kết quả: PASS [TÌM THẤY CHUẨN XÁC]
+
+  * Signal Test: 'FMCU_SSU_Fault_Sts'
+    - Message Cha: FMCU_EventMatrix2 (ID: 0x43B, Tx: FMCU)
+    - Khi Switch = OFF: Tìm thấy 0 msg (Signal không kích hoạt tìm kiếm)
+    - Khi Switch = ON : Tìm thấy 1 msg | Matched Hint: 'FMCU_SSU_Fault_Sts'
+    - Kết quả: PASS [TÌM THẤY CHUẨN XÁC]
+
+================================================================================
+TỔNG KẾT: Hoàn thành 20/20 test cases ngẫu nhiên. Trạng thái: 20/20 PASSED (100% OK)
+================================================================================

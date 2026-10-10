@@ -1,0 +1,146 @@
+﻿========================================================================================
+BÁO CÁO REVIEW TOÀN BỘ DỰ ÁN SIMULATE THEO TIÊU CHUẨN QUỐC TẾ & AUTOMOTIVE STANDARDS
+Thời gian thực hiện: 2026-10-09
+Người thực hiện: Antigravity Code Review Agent (Skill: code-review)
+Dự án: Simulate (AFI - Automotive Fault Injector & Vector Hardware Gateway)
+Nền tảng: .NET 8.0 (WPF), C# 12, Vector XL Driver API (vxlapi_NET.dll 64-bit)
+Tiêu chuẩn đối chiếu:
+- ISO/IEC 25010 (Software Quality Models)
+- ISO 11898-1/2 (CAN Classic & CAN FD Data Link / Physical Layer)
+- Vector XL Driver API Guidelines (Vector Informatik GmbH - Manual 20.30)
+- AUTOSAR Classic E2E Profile 1 (CRC8 SAE J1850 + Alive Counter)
+- ISO 14229-1 (UDS Diagnostics) & ISO 15765-2 (ISO-TP)
+- Clean Architecture, Deep Modules & MVVM CommunityToolkit Pattern
+========================================================================================
+
+I. TỔNG QUAN KẾT QUẢ KIỂM TRA HỆ THỐNG
+1. Biên dịch: dotnet build Simulate.sln -> 0 Warning(s), 0 Error(s) (THÀNH CÔNG 100%).
+2. Kiểm thử tự động: dotnet test Simulate.sln -> 2,324 Passed, 0 Failed, 1 Skipped (Tổng: 2,325 tests).
+3. Tuân thủ ranh giới UI: Tuyệt đối 0% thay đổi trực tiếp trên XAML / Layout / Styling khi chưa được phê duyệt.
+4. Kiến trúc tổng thể: Tách bạch xuất sắc giữa Hardware Driver, In-Memory Session, Pure Simulation Domain (DbcParser, SignalCodec, E2eProtector) và ViewModel Projection.
+
+II. BÁO CÁO CHI TIẾT THEO 2 TRỤC (TWO-AXIS FRAMEWORK)
+
+----------------------------------------------------------------------------------------
+TRỤC 1: SPEC AXIS (ĐỐI CHIẾU ĐẶC TẢ YÊU CẦU & CHUẨN AUTOMOTIVE)
+----------------------------------------------------------------------------------------
+
+[FINDING-S1] [REQUIRED] CÁC KIỂU LỖI FAULT INJECTION (BIT FLIP, NOISE, RAMP, OFFSET) CHƯA ĐƯỢC HIỆN THỰC Ở BACKEND ENGINE
+- Vị trí:
+  + Simulate/ViewModels/FaultConfigurationViewModel.cs (Dòng 46-54)
+  + Simulate/Services/SimulationEngine.cs (Dòng 1120-1128: CreateInjectedFrame)
+- Mô tả:
+  Tại Bảng 5 (Fault Configuration), danh sách AvailableFaultTypes cung cấp 6 chế độ:
+  "Signal Override", "Stuck at Value", "Bit Flip", "Offset", "Noise", "Ramp".
+  Tuy nhiên, trong SimulationEngine.CreateInjectedFrame, logic tiêm lỗi hiện tại CHỈ thực hiện ghi đè giá trị tĩnh (SignalCodec.PackPhysical(payload, signal, signalOverride.PhysicalValue)).
+  Chưa có bộ sinh nhiễu ngẫu nhiên (Noise), chưa có logic đảo bit (Bit Flip), chưa có bộ cộng độ lệch động theo thời gian thực (Offset), và chưa có bộ tăng giảm tuyến tính (Ramp).
+- Mức độ nghiêm trọng: REQUIRED (Thiếu hiện thực so với tính năng đã công bố trên giao diện).
+- Đề xuất khắc phục:
+  Thiết kế pattern IFaultStrategy trong SimulationEngine để hiện thực đầy đủ các thuật toán:
+  + BitFlipFaultStrategy: Invert bit bằng XOR mask tại vị trí signal payload.
+  + OffsetFaultStrategy: Lấy live physical value từ RX frame và cộng/trừ delta offset trước khi pack.
+  + NoiseFaultStrategy: Sinh giá trị ngẫu nhiên Gaussian/Uniform trong khoảng biên độ cấu hình.
+  + RampFaultStrategy: Tính toán giá trị nội suy tuyến tính theo thời gian duy trì (Duration).
+
+[FINDING-S2] [REQUIRED] BỎ QUA TÍN HIỆU MULTIPLEXED (MUX) TRONG BỘ PHÂN TÍCH DBC (DBC PARSER)
+- Vị trí: Simulate/Services/DbcParser.cs (Dòng 216-225)
+- Mô tả:
+  Trong hàm ParseSignal, khi phát hiện ký hiệu multiplexer (match.Groups["multiplexer"].Success), parser chỉ ghi nhận cảnh báo DbcParseIssueCode.UnsupportedStatement và lập tức return, bỏ qua hoàn toàn tín hiệu đó.
+  Trong chuẩn Vector DBC và các hệ thống xe thực tế (đặc biệt là chuẩn chẩn đoán OBD-II 0x7DF/0x7E8 hoặc các hộp Gateway/BMS), tín hiệu Multiplexed rất phổ biến. Việc bỏ qua khiến người dùng không thể theo dõi hoặc can thiệp các tín hiệu này.
+- Mức độ nghiêm trọng: REQUIRED (Thiếu sót chuẩn nghiệp vụ DBC Automotive).
+- Đề xuất khắc phục:
+  Mở rộng model DbcSignal để hỗ trợ MultiplexerRole (None, MultiplexerSwitch, MultiplexedSignal) kèm SwitchValue, cho phép giải mã có điều kiện dựa trên giá trị của Switch signal trong payload.
+
+[FINDING-S3] [REQUIRED] CHƯA TÍCH HỢP TÙY CHỌN LISTEN-ONLY / SILENT MODE CHO CỔNG NHẬN VECTOR (CH1)
+- Vị trí:
+  + Simulate/Services/VectorXlApi.cs (Dòng 352-359)
+  + Simulate/Services/VectorHardwareService.cs (Dòng 267-281)
+  + Đối chiếu quy tắc: .agents/rules/vector-hardware-mitm.md (Mục 1)
+- Mô tả:
+  Quy chuẩn Vector Hardware & MITM Engine quy định: "CH1 Luôn Listen-Only: Khi thiết lập MITM, cổng nhận CH1 bắt buộc cấu hình XL_OUTPUT_MODE_SILENT để tránh làm nhiễu mạng CAN trên xe thật."
+  Hiện tại, VectorXlApi.ActivateCanChannels luôn kích hoạt với XL_ACTIVATE_NONE. Khi cắm vào xe thật để nghe/bắt gói tin hoặc mô phỏng dạng TAP, CAN controller sẽ chủ động bắn ACK/Error frame, tiềm ẩn nguy cơ làm nhiễu mạng bus trên xe thật hoặc sinh mã lỗi DTC trên ECU.
+- Mức độ nghiêm trọng: REQUIRED (An toàn phần cứng & chuẩn giao thức kết nối xe thật).
+- Đề xuất khắc phục:
+  Bổ sung thuộc tính IsListenOnly / IsSilentMode vào CanGatewayOptions và gọi _driver.XL_SetOutputMode(portHandle, rxMask, XL_OUTPUT_MODE_SILENT) khi kích hoạt chế độ lắng nghe an toàn.
+
+----------------------------------------------------------------------------------------
+TRỤC 2: STANDARDS & CODE QUALITY AXIS (CHẤT LƯỢNG MÃ NGUỒN THEO TIÊU CHUẨN QUỐC TẾ)
+----------------------------------------------------------------------------------------
+
+[FINDING-Q1] [SECURITY - REQUIRED] TỒN TẠI MASTER KEY CỐ ĐỊNH & MÃ BĂM LEGACY FALLBACK TRONG LICENSESERVICE
+- Vị trí:
+  + Simulate/Services/LicenseService.cs (Dòng 12, 13, 78, 93-101)
+- Mô tả:
+  1. Hằng số public const string MasterKey = "SIMULATE-PRO-AUTOMOTIVE-2026" được lưu dạng plaintext trong file nhị phân. Bất kỳ ai sử dụng công cụ disassembler (như ILSpy, dotPeek, x64dbg) đều có thể trích xuất master key này để mở khóa vĩnh viễn mọi bản cài đặt.
+  2. Fallback MachineId cố định: "4C4C4540-0058-3410-8050-B7C04F563233" trong trường hợp không đọc được Registry và file.
+  3. SecretSalt "SIMULATE_AUTOMOTIVE_E2E_SECRET_SALT_2026" dùng để tạo legacy key SHA-256 nội bộ, làm suy yếu cơ chế chữ ký số bất đối xứng RSA-2048 chính.
+- Mức độ nghiêm trọng: REQUIRED (Bảo mật sản phẩm & phòng chống dịch ngược).
+- Đề xuất khắc phục:
+  Loại bỏ hoàn toàn MasterKey cố định khỏi bản Release thương mại (chỉ giữ trong cấu hình #if DEBUG nội bộ). Dựa 100% vào cơ chế xác thực chữ ký số RSA-2048 (ValidateRsaSignature) với Public Key đã nhúng.
+
+[FINDING-Q2] [PERFORMANCE - REQUIRED] ĐỘ TRỄ NHẬN GÓI POLLING (2MS TASK.DELAY) THAY VÌ EVENT NOTIFICATION CỦA VECTOR XL
+- Vị trí:
+  + Simulate/Services/VectorCanGatewaySession.cs (Dòng 336-340, 584-588)
+- Mô tả:
+  Khi hàng đợi rỗng (XL_ERR_QUEUE_IS_EMPTY), receive loop thực hiện:
+  await Task.Delay(TimeSpan.FromMilliseconds(2), cancellationToken).ConfigureAwait(false);
+  Điều này dẫn đến:
+  1. Độ trễ trễ nhận gói tin (Latency Jitter) từ 0ms đến 2ms đối với frame đầu tiên đến sau khi hàng đợi rỗng. Với yêu cầu Gateway độ trễ Pass-through < 1ms, độ trễ 2ms làm giảm hiệu năng thời gian thực.
+  2. Gây tiêu tốn tài nguyên chuyển đổi ngữ cảnh (Context Switching) không cần thiết liên tục 500 lần/giây khi không có lưu lượng bus.
+- Mức độ nghiêm trọng: REQUIRED (Hiệu năng thời gian thực tiêu chuẩn công nghiệp).
+- Đề xuất khắc phục:
+  Sử dụng cơ chế Win32 Event Notification chính thức của Vector XL Driver API: gọi XL_SetNotification truyền native event handle, kết hợp với ThreadPool.RegisterWaitForSingleObject hoặc WaitHandle.WaitOneAsync để đánh thức thread nhận tức thì (0ms latency, zero-polling CPU cost).
+
+[FINDING-Q3] [TESTING - REQUIRED] ĐƯỜNG DẪN TUYỆT ĐỐI CỨNG KHIẾN BỎ QUA TEST TÍCH HỢP DBC THỰC TẾ TRÊN MÁY KHÁC
+- Vị trí: Simulate.Tests/DbcManagementViewModelTests.cs (Dòng 163-168)
+- Mô tả:
+  Unit test Real_DBC_files_from_corpus_load_successfully khai báo đường dẫn cứng:
+  string dbcFolder = @"c:\Users\Hnam\Desktop\Simulate\DBC";
+  Khi chạy trên môi trường khác (ví dụ workspace hiện tại ở ổ D:\Automotive dev\Simulate\DBC), test bị rơi vào nhánh Assert.Inconclusive("DBC test folder not found on disk."); và bị BỎ QUA (Skipped).
+- Mức độ nghiêm trọng: REQUIRED (Tính khả chuyển của bộ kiểm thử CI/CD).
+- Đề xuất khắc phục:
+  Truy xuất thư mục DBC tương đối so với AppDomain.CurrentDomain.BaseDirectory hoặc giải quyết đường dẫn tự động tìm kiếm cả ổ C: và D:.
+
+[FINDING-Q4] [ARCHITECTURE - OPTIONAL] ĐỊNH NGHĨA MODEL NẰM CHUNG TRONG FILE MAINVIEWMODEL.CS
+- Vị trí: Simulate/ViewModels/MainViewModel.cs (Dòng 14-400)
+- Mô tả:
+  Các class MessageModel, SignalModel, FaultQueueModel đang được đặt chung trong file MainViewModel.cs dài hơn 700 dòng. Riêng SignalModel chiếm gần 350 dòng chứa logic format hiển thị, đổi đơn vị và validation.
+- Mức độ nghiêm trọng: OPTIONAL (Code Smell: Divergent Change, Large Class).
+- Đề xuất khắc phục:
+  Tách riêng từng model thành MessageModel.cs, SignalModel.cs, FaultQueueModel.cs trong thư mục Simulate/Models/ hoặc Simulate/ViewModels/Models/.
+
+[FINDING-Q5] [PERFORMANCE - OPTIONAL] PHÉP TÁCH CHUỖI TOÀN BỘ STRING[].SPLIT TRONG DBCPARSER TẠO NHIỀU RÁC GC
+- Vị trí: Simulate/Services/DbcParser.cs (Dòng 41)
+- Mô tả:
+  string[] lines = documentText.Split('\n'); cấp phát toàn bộ mảng chuỗi cùng lúc. Với DBC dung lượng lớn (10MB-50MB), việc này đẩy hàng trăm nghìn chuỗi nhỏ vào Large Object Heap (LOH) gây áp lực lên GC Gen 2.
+- Mức độ nghiêm trọng: OPTIONAL (Tối ưu hóa hiệu năng).
+- Đề xuất khắc phục:
+  Sử dụng StringReader với ReadLine() hoặc duyệt qua ReadOnlySpan<char> theo từng dòng không cấp phát bộ nhớ trung gian.
+
+III. CÁC ĐIỂM SÁNG ĐẠT TIÊU CHUẨN QUỐC TẾ CỦA DỰ ÁN (BENCHMARK HIGHLIGHTS)
+1. E2E Protection & CRC8: Hiện thực chuẩn xác 100% đặc tả AUTOSAR CRC8 SAE J1850 (Polynomial 0x1D, Init 0xFF, FinalXOR 0xFF) tại Crc8SaeJ1850.cs và tự động nhận diện Profile 1 cực kỳ thông minh tại DbcE2eDetector.cs.
+2. Signal Bit-Packing: Thuật toán Motorola/Intel bit packing tại SignalCodec.cs tuân thủ chuẩn xác giải thuật MotorolaNextBit của Vector Informatik, xử lý hoàn hảo cả kiểu có dấu (Signed) và không dấu (Unsigned).
+3. Concurrency & Concurrency Safety:
+   + SimulationEngine sử dụng TimeProvider hiện đại của .NET 8, timeBeginPeriod(1) để tăng độ phân giải timer Windows lên 1ms.
+   + Triển khai Echo Filtering window chuẩn 10ms, chặn vòng lặp phản hồi (feedback loop) và lọc echo loopback hoàn hảo.
+4. Quản lý vòng đời tài nguyên Vector XL:
+   + VectorNativeSessionResources quản lý đóng ngắt kênh theo đúng flowchart kỹ thuật Vector: Deactivate Channels -> Close Port -> Close Driver với Idempotent cleanup.
+   + MainWindow.xaml.cs tuân thủ triệt để graceful shutdown, không khóa UI thread.
+5. Kiểm thử đồ sộ & vững chắc: 2,324 unit tests bao phủ toàn diện từ Vector driver mock, CAN Classic/FD, E2E, DBC parsing, đến ViewModel projection.
+
+IV. TỔNG KẾT BẢNG PHÂN LOẠI SEVERITY
+- CRITICAL (0 finding): Không có lỗi gây treo ứng dụng, mất dữ liệu hay sự cố an toàn nghiêm trọng.
+- REQUIRED (6 findings):
+  + Finding S1: Thiếu hiện thực backend cho Bit Flip, Noise, Ramp, Offset.
+  + Finding S2: DBC Parser bỏ qua tín hiệu Multiplexed (MUX).
+  + Finding S3: Thiếu cấu hình Listen-Only / Silent Mode cho cổng nhận Vector CH1.
+  + Finding Q1: Master key plaintext & hardcoded fallback ID trong LicenseService.
+  + Finding Q2: Trễ nhận 2ms do cơ chế polling thay vì native event notification.
+  + Finding Q3: Đường dẫn test DBC cứng gây skip test trên máy khác.
+- OPTIONAL (2 findings):
+  + Finding Q4: Tách MessageModel, SignalModel, FaultQueueModel ra file riêng.
+  + Finding Q5: Chuyển DbcParser.Parse sang dạng streaming/Span<char>.
+- FYI (2 items):
+  + Tuân thủ 100% quy tắc bảo vệ UI và MVVM Clean Architecture.
+  + dotnet build 0 error, 0 warning; 2,324/2,325 tests PASS.
+========================================================================================

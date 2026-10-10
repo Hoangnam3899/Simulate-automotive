@@ -1,0 +1,67 @@
+﻿====================================================================================================
+BÁO CÁO CHI TIẾT: HIỂN THỊ CẢNH BÁO CHIỀU KẾT NỐI TRÊN BẢNG 10 (STATUS OVERVIEW)
+NGÀY: 2026-10-09
+DỰ ÁN: Simulate (WPF .NET 8.0, MVVM, Vector XL Gateway)
+====================================================================================================
+
+1. MỤC TIÊU & YÊU CẦU NGƯỜI DÙNG
+----------------------------------------------------------------------------------------------------
+- Yêu cầu người dùng:
+  Hiển thị cảnh báo đảo chiều kết nối cổng phần cứng:
+  'Cảnh báo chiều kết nối: Bản tin [CVC_WCBS02 (0x120)] của [CVC_C] xuất hiện ở Kênh TX thay vì Kênh RX'
+  lên trực tiếp Bảng 10 (STATUS OVERVIEW).
+- Phương án triển khai được người dùng phê duyệt tường minh (Phương án 1):
+  Cập nhật thuộc tính Connection trong Bảng 10 thành '⚠ Inverted: [Tên_Bản_Tin]' màu Vàng cam (#F59E0B)
+  kèm Tooltip hiển thị đầy đủ chi tiết bản tin và ECU nguồn bị ngược.
+  Tuyệt đối bảo toàn 100% bố cục, không vỡ layout 108px của Bảng 10.
+
+2. DANH SÁCH FILE THAY ĐỔI
+----------------------------------------------------------------------------------------------------
+- Simulate/Services/CanChannelDirectionAnalyzer.cs:
+  + Bổ sung thuộc tính LastResult và sự kiện DirectionReset để thông báo trạng thái đánh giá cho các ViewModel tầng trên.
+  + Cập nhật chuỗi details chứa đầy đủ tên bản tin, CAN ID, Node nguồn và tỉ lệ frame phát hiện.
+
+- Simulate/ViewModels/StatusOverviewViewModel.cs:
+  + Nhận CanChannelDirectionAnalyzer trong constructor.
+  + Đăng ký lắng nghe sự kiện DirectionEvaluated và DirectionReset.
+  + Cập nhật thuộc tính ConnectionText:
+    * Khi cắm ngược: '⚠ Inverted: [{SampleMessageName}]'
+    * Màu sắc ConnectionColor: '#F59E0B' (Vàng cam cảnh báo).
+    * Tooltip ConnectionToolTip: Hiển thị đầy đủ thông điệp chi tiết.
+    * Khi bình thường / Reset: Trở về '● Connected' (#10B981) hoặc '○ Disconnected' (#64748B).
+
+- Simulate/ViewModels/MainViewModel.cs:
+  + Truyền DirectionAnalyzer vào StatusOverviewViewModel khi khởi tạo.
+
+- Simulate/MainWindow.xaml:
+  + Thêm ToolTip='{Binding StatusOverview.ConnectionToolTip}' và TextTrimming='CharacterEllipsis' vào TextBlock Connection trong Bảng 10. Giữ nguyên 100% kích thước và layout.
+
+- Simulate/Converters/StatusToLocalizedConverter.cs:
+  + Nhận diện tiền tố '⚠ ' và trạng thái 'INVERTED' -> 'Loc_Status_Inverted'.
+
+- Simulate/Resources/Languages/Strings.*.xaml (vi-VN, en-US, zh-CN, ja-JP, ko-KR):
+  + Bổ sung chuỗi bản địa hóa cho Loc_Status_Inverted (Ví dụ: vi-VN: '⚠ Cắm ngược (Inverted)', en-US: '⚠ Inverted (Reversed)').
+
+- Simulate.Tests/StatusOverviewViewModelTests.cs:
+  + Bổ sung 3 unit tests mới kiểm tra:
+    1. SuspectedInverted_updates_connection_status_to_warning_and_tooltip
+    2. Normal_direction_confirms_valid_channel_orientation
+    3. Reset_clears_direction_warning_and_returns_to_connected
+
+3. KẾT QUẢ KIỂM THỬ VÀ XÁC MINH (VERIFICATION)
+----------------------------------------------------------------------------------------------------
+- Build:
+  Lệnh: dotnet build Simulate.sln
+  Kết quả: BUILD SUCCEEDED (0 Warning, 0 Error).
+
+- Tests:
+  Lệnh: dotnet test Simulate.sln
+  Tổng số test: 3,337 tests.
+  Kết quả: Passed: 3,336 tests, Skipped: 1 test, Failed: 0 tests (100% PASS).
+  Thời gian: ~8 giây.
+
+- Bảo vệ UI (UI Protection):
+  Đúng theo phê duyệt của người dùng (Phương án 1): Chỉ thêm ToolTip và TextTrimming cho TextBlock Connection trong Bảng 10, không làm thay đổi margin, kích thước hay vị trí của bất kỳ bảng điều khiển nào khác.
+
+- Trạng thái: OK - Hoàn thành 100%.
+====================================================================================================

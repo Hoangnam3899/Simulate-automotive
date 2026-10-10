@@ -16,6 +16,7 @@
 3. **BẢO VỆ UI TỰ NHIÊN (`user_global`):**
    KHÔNG ĐƯỢC THAY ĐỔI BẤT KỲ CÁI GÌ Ở TRÊN UI (XAML / Controls / Layout / Design) khi chưa có sự cho phép trực tiếp từ người dùng.
 
-4. **VERIFICATION & WORK LOG:**
+4. **VERIFICATION, WORK LOG & BÁO CÁO:**
    - Sau mỗi phiên/task làm việc, bắt buộc cập nhật tiến độ vào `tasks/todo.md` và `tasks/plan.md`.
-   - Chạy `dotnet build` để đảm bảo ứng dụng biên dịch thành công 0 warning / 0 error.
+   - Chạy `dotnet build` để đảm bảo ứng dụng biên dịch thành công 0 warning / 0 error; chạy `dotnet test` đạt 100% PASS.
+   - Ghi nhận và đồng bộ báo cáo `.txt` theo chuẩn `.agents/rules/report-standards.md` và `.agents/rules/savedata.md` vào cả 3 vị trí: `D:\Analysis Log\report\`, `D:\Analysis Log\newconvert\` và `report/`.

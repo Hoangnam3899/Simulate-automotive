@@ -1,0 +1,27 @@
+﻿
+[2026-10-05 17:35:00] FIX: Triet de loi DTC Name 'not defined' va Snapshot Data 'Full Frame (19 02)' khi xuat Excel
+- File sua doi: TreeViews and Value Converters/DTC.xaml.cs
+- Logic:
+  1. Them GetEcuAliases() anh xa ACU <-> ACM, BCM_FL <-> BCM, ESC <-> ESP, v.v.
+  2. Bo sung candidate baseCode+00 va baseHex+00 vao GetDtcKeyCandidates().
+  3. Nang cap GetDtcInfoFromLibraryOptimized() quet JSON xe khac va thu muc General\DTC\ theo alias.
+  4. Nang cap btnExportExcel_Click() thanh async, tu dong query UDS 19 04/19 02 tu phan cung CAN neu thieu snapshot data.
+  5. Dong nhat format Snapshot Data thanh Received truoc, Transmitted sau.
+- Build: MSBuild .NET 4.8 Debug -> 0 Errors, 0 Warnings (OK).
+- UI: Bao toan 100% XAML.
+
+--------------------------------------------------------------------------------
+[2026-10-05 19:15] SỬA LỖI SNAPSHOT THIẾU/LỘN TRANSMITTED & CVC DTC 'NOT DEFINED'
+- Files modified:
+  + TreeViews and Value Converters/TreeViews and Value Converters.csproj (Add System.IO.Compression)
+  + TreeViews and Value Converters/DTC.xaml.cs (OpenSanitizedExcelStream, NormalizeSnapshotOrder, SelectionChanged, ExportExcel)
+- Root Cause:
+  + Snapshot: Chuỗi cũ format Received trước Transmitted, bị MaxHeight='80' của txtDetailFullFrame che khuất phần Transmitted phía dưới; fallback 19 02 chỉ có chuỗi nhận.
+  + CVC: File CVC.xlsx chứa definedNames lỗi cú pháp khiến ClosedXML v0.105.0 ném ParsingException, hàm load bắt catch nuốt lỗi khiến dictionary rỗng.
+- Solution:
+  + Khử definedNames rác bằng ZipArchive MemoryStream trước khi nạp vào ClosedXML.
+  + Chuẩn hóa thứ tự Transmitted đứng trước Received theo chuẩn ISO 14229 trong cả UI và Excel.
+  + Bổ sung đầy đủ TX/RX cho frame 19 02.
+- Build status: MSBuild 0 Errors, 0 Warnings.
+- Verification: U1881-83 -> 'Incorrect CRC  FCAM_ESA_Sts(0x13a)'. Status: OK.
+--------------------------------------------------------------------------------

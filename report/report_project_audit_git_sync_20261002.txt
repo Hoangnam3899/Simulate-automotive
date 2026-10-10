@@ -1,0 +1,80 @@
+================================================================================
+BÁO CÁO ĐỌC HIỂU DỰ ÁN VÀ ĐỐI CHIẾU ĐỒNG BỘ VỚI GIT (CANFORGE / EBUS_TOOL)
+Thời gian: 2026-10-02 15:37:00
+Dự án: CAN Bus MITM Simulator / Tool Đọc DTC DID EBUS (CANForge)
+Môi trường: .NET Framework 4.8, C# 7.3, Visual Studio 2022 / MSBuild
+================================================================================
+
+1. CÁC QUY TẮC & KỸ NĂNG ĐƯỢC KÍCH HOẠT (RULES & SKILLS APPLIED)
+--------------------------------------------------------------------------------
+- Rules áp dụng:
+  + AGENTS.md, PROJECT_RULES.md, GEMINI.md
+  + UI Protection Rule (Bảo vệ giao diện XAML, không thay đổi bất kỳ control nào)
+  + Mandatory Reporting Rule (Lưu báo cáo vào D:\Analysis Log\report\ và newconvert\)
+  + Vector Hardware & MITM Engine Rules
+- Skills kích hoạt:
+  + .agents/skills/git-workflow-and-versioning/SKILL.md: Phân tích trạng thái git, commits, remotes, diff mã nguồn.
+  + .agents/skills/vector-can-wpf/SKILL.md: Đọc hiểu kiến trúc chẩn đoán UDS, phần cứng Vector XL API (V3/V4), MITM Gateway, E2E CRC8.
+  + .agents/skills/code-review-and-quality/SKILL.md: Đánh giá chất lượng và toàn vẹn mã nguồn.
+
+2. TỔNG QUAN ĐỌC HIỂU DỰ ÁN (PROJECT ARCHITECTURE & CORE MODULES)
+--------------------------------------------------------------------------------
+- Tên hệ thống: CANForge / Tool Đọc DTC DID EBUS
+- Mục tiêu: Cung cấp giải pháp toàn diện cho chẩn đoán UDS trên xe buýt điện (EBUS) và mô phỏng / can thiệp mạng CAN/CAN-FD ở chế độ Man-in-the-Middle (MITM).
+- Các module cốt lõi:
+  1) Chẩn đoán UDS (ISO 14229 / ISO 15765-2):
+     - DTC.xaml / DTC.xaml.cs: Đọc mã lỗi (0x19), xóa lỗi (0x14), tra cứu tên DTC đa ngôn ngữ (VI, EN, KO, ZH, AR) và file định nghĩa lỗi.
+     - DID.xaml / DID.xaml.cs: Đọc thông tin DID (0x22), ghi DID (0x2E), hỗ trợ giải mã System DID, VIN, Hardware/Software version.
+     - DIAG.xaml / DIAG.xaml.cs: Quản lý phiên chẩn đoán (0x10), TesterPresent (0x3E), RoutineControl (0x31), ECU Reset (0x11).
+     - DATA_ECU.xaml / DATA_ECU.xaml.cs: Quản lý danh mục định danh các hộp ECU trên mạng CAN.
+     - GETKEY.xaml / SeedKeyHelper.cs: Thuật toán bảo mật SecurityAccess (0x27) tính Key từ Seed.
+  2) Mô phỏng & Can thiệp MITM Bus CAN / CAN FD:
+     - VectorCANManager.cs: Giao tiếp CAN Classic qua Vector XL Driver API V3.
+     - VectorCANFdManager.cs: Giao tiếp CAN FD qua Vector XL Driver API V4, hỗ trợ dual bitrate (500k/2M), 64-byte payload, CAN FD DLC 0..15.
+     - MitmEngine.cs: Bộ điều phối thời gian thực với timeBeginPeriod(1):
+       * Pass-through: CH1 Listen-Only -> CH2 TX với độ trễ < 1ms.
+       * Inject / Modify: Can thiệp tín hiệu (SignalEncoder - Intel/Motorola), tự động tính E2E CRC8 SAE J1850 + tăng Alive Counter (E2EHelper), độ trễ < 3ms.
+       * Block / Drop: Lọc bỏ frame theo ID.
+       * Echo Filter: Loại bỏ loopback frame trong cửa sổ 10ms.
+  3) Ma trận DBC & Tín hiệu:
+     - DbcParser.cs & DbcModels.cs: Phân tích các file ma trận CAN Classic BEV (Info, Body, PT, Chassis) và CAN FD EP (ICAN, BCAN, CCAN, PCAN).
+     - SignalEncoder.cs: Đóng gói tín hiệu theo thứ tự bit Intel LSB / Motorola MSB.
+  4) Bảo mật & Tiện ích:
+     - LicenseHelper.cs: Mã hóa RSA 2048-bit xác thực bản quyền gắn với Machine ID.
+     - LocalizationManager.cs & LocExtension.cs: Đa ngôn ngữ (5 ngôn ngữ).
+     - ExcelHelper.cs: Xuất báo cáo chuyên nghiệp qua ClosedXML.
+
+3. KẾT QUẢ ĐỐI CHIẾU ĐỒNG BỘ VỚI GIT (GIT CROSS-REFERENCE AUDIT)
+--------------------------------------------------------------------------------
+- Thư mục Git Root: D:\Automotive dev\TOOL ĐỌC DTC DID EBUS\V1.5
+- Nhánh hiện tại: main (đồng bộ 1:1 với origin/main tại commit 816702e).
+- Trạng thái cây thư mục:
+  * Trong Git commit 816702e: Cấu trúc thư mục được đặt tại 'TreeViews and Value Converters/'.
+  * Trên ổ đĩa hiện tại: Toàn bộ cấu trúc dự án được gom gọn vào thư mục làm việc 'Ebus_tool/'.
+- Chi tiết đối chiếu nội dung file:
+  * Tổng số file Git tracked: 168 files.
+  * File khớp chính xác tuyệt đối từng byte (Exact Byte Matches): 88 files.
+  * File trùng khớp 100% nội dung text (chỉ khác ký tự xuống dòng CRLF vs LF trên Windows): 53 files.
+  * File có sai lệch logic nội dung (Real Logic Differences): 0 FILE (KHÔNG CÓ SAI LỆCH NÀO).
+  * 27 files không có trong Ebus_tool: Thuộc các thư mục nháp/mockup ban đầu (UI DID, UI DTC, UI Diag, UI ID ECU, UI Simulate, learn day1) từ commit khởi tạo, các giao diện này đã được tích hợp hoàn chỉnh vào source code chính của Ebus_tool.
+  * Các file chưa track trên git trong Ebus_tool:
+    + packages/ (Thư viện phụ thuộc NuGet, được quản lý qua packages.config).
+    + TreeViews and Value Converters/private_key.pem & public_key.pem (Khóa RSA - được bảo mật tuyệt đối theo quy tắc không đưa lên Git).
+    + Các file build tạm thời (*_wpftmp.csproj).
+
+4. KẾT QUẢ BIÊN DỊCH KIỂM TRA (BUILD VERIFICATION)
+--------------------------------------------------------------------------------
+- Công cụ: MSBuild 17 (Visual Studio 2022 Community)
+- Project: D:\Automotive dev\TOOL ĐỌC DTC DID EBUS\V1.5\Ebus_tool\TreeViews and Value Converters\TreeViews and Value Converters.csproj
+- Cấu hình: Debug | AnyCPU
+- Kết quả: Build Succeeded.
+  * Warnings: 0
+  * Errors: 0
+  * Output: CANForge_ebus.exe (sẵn sàng vận hành)
+
+5. KẾT LUẬN & TRẠNG THÁI XÁC MINH
+--------------------------------------------------------------------------------
+- Trạng thái xác minh: OK
+- Toàn bộ mã nguồn cốt lõi trong workspace Ebus_tool hoàn toàn TRÙNG KHỚP với commit mới nhất trên Git remote.
+- Giao diện UI được bảo toàn 100% (không có thay đổi).
+================================================================================

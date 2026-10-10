@@ -1,0 +1,38 @@
+========================================================================================
+BÁO CÁO THAY ĐỔI & TRIỂN KHAI PHƯƠNG ÁN 1: DUAL-MODE DATAGRID - AFI (AUTOMOTIVE FAULT INJECTOR)
+Thời gian: 2026-10-09 07:45:00
+Dự án: Simulate (AFI - Automotive Fault Injector)
+Tính năng: Dual-Mode DataGrid (Hiển thị trực tiếp danh sách Signal Name khi bật Switch 'By Signal')
+Tham chiếu kiến trúc: D:\Automotive dev\CANTool\CANTool\src\qt_app\panels\simulate_panel.py
+========================================================================================
+
+1. MỤC TIÊU VÀ PHẠM VI NÂNG CẤP
+- Giải quyết triệt để yêu cầu hiển thị: Khi bật Switch 'By Signal', bảng DataGrid PHẢI HIỂN THỊ TRỰC TIẾP TÊN SIGNAL (ví dụ gõ 'BMS_pack' thì hiển thị danh sách các signal 'BMS_PackTempSts', 'BMS_PackTemp', 'BMS_PackCur_MEAS'...).
+- Khi kỹ sư tick chọn Signal, hệ thống tự động nhận diện Message cha chứa Signal đó và nạp Frame cha vào Simulation khi bấm 'Add Selected'.
+- Đảm bảo tiêu chí kỹ thuật sống còn: 'KHÔNG ĐƯỢC GÂY RA GIẬT LAG HAY CRASH'.
+
+2. GIẢI PHÁP KỸ THUẬT CHỐNG GIẬT LAG & CHỐNG CRASH
+- Chống giật lag:
+  + Áp dụng Dual DataGrid Visibility Toggle (DgMessages vs DgSignals): Việc hoán đổi view diễn ra trong O(1) qua thuộc tính Visibility, không cần tạo lại DataGrid hay Columns runtime.
+  + Bật cơ chế Virtualization tối đa:
+    EnableRowVirtualization='True'
+    VirtualizingPanel.IsVirtualizing='True'
+    VirtualizingPanel.VirtualizationMode='Recycling'
+    ScrollViewer.CanContentScroll='True'
+    -> Với 2,388 signals, WPF chỉ render ~15 dòng hiển thị trên màn hình, tiêu thụ RAM tối thiểu.
+  + Gán ItemsSource trực tiếp bằng List<T> khi filter thay vì lặp ObservableCollection.Add(), thời gian lọc chỉ mất ~1.1 ms cho gần 2,400 signals.
+- Chống crash:
+  + Pre-caching toàn bộ đối tượng SelectableDbcSignal trong Constructor một lần duy nhất lúc nạp dialog.
+  + Thuật toán Deduplicate Message cha an toàn tuyệt đối khi bấm 'Add Selected':
+    GroupBy((Identifier, IsExtendedIdentifier)) -> Không bao giờ bị trùng lặp Frame khi người dùng tick nhiều Signal cùng Message cha.
+
+3. KẾT QUẢ BIÊN DỊCH VÀ XÁC MINH (BUILD & TEST VERIFICATION)
+- Biên dịch: dotnet build 'D:\Automotive dev\Simulate\Simulate\Simulate.csproj' (.NET 8.0 Windows, TreatWarningsAsErrors=true) -> 0 Warning(s), 0 Error(s).
+- Kiểm chứng thực tế với trường hợp 'BMS_pack' trên file DBC '04_PCAN_EP_v2.0.4_20260211.dbc' (137 msgs, 2,388 signals):
+  + Thời gian lọc: 1.172 ms
+  + Tìm thấy 16 signals khớp (bao gồm 'BMS_PackTempSts', 'BMS_PackTemp', 'BMS_PackCur_MEAS'...).
+  + Tick chọn 'BMS_PackTempSts' -> Bấm Add Selected -> Hệ thống nạp chính xác Frame cha 'BMS_WarnMsg (0x493)'.
+  + Trạng thái: PASSED (100% OK).
+
+4. TRẠNG THÁI XÁC MINH: OK
+========================================================================================

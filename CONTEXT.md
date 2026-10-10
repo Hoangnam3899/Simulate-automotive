@@ -68,6 +68,18 @@ _Avoid_: wall-clock timestamp, hardware latency
 A finite physical value selected to replace one named DBC signal during injection.
 _Avoid_: raw payload replacement, live signal value
 
+**Cross-channel echo suppression**:
+The real-time mechanism in SimulationEngine that identifies and absorbs CAN frames reflected back across the shared physical bus within the 10ms EchoWindow, preventing ping-pong feedback loops and hardware transmit buffer overflow.
+_Avoid_: silent mode, hardware loopback filter
+
+**Channel direction analyzer**:
+The heuristic evaluation engine that correlates incoming message identifiers with DBC transmitter node metadata to detect inverted hardware transceiver wiring (TX plugged into RX or vice-versa) and alerts the user.
+_Avoid_: static cable check, baudrate detector
+
+**Win32 event notification**:
+The interrupt-driven reception mechanism using Vector XL XL_SetNotification and XL_WaitForSingleObject, replacing CPU-bound polling delays to achieve sub-30us wakeup latency without queue starvation.
+_Avoid_: Task.Delay polling, thread sleep
+
 **Application audit log**:
 The timestamped operational record capturing user interactions, configuration updates, operational warnings, and runtime system errors.
 _Avoid_: CAN trace, frame sniffer, raw bus log

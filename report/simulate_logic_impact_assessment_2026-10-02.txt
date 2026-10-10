@@ -1,0 +1,21 @@
+================================================================================
+BANG DANH GIA ANH HUONG LOGIC VA HE THONG SAU KHI SUA CHUA MODULE SIMULATE
+Du an: CAN Bus MITM Simulator / Tool Doc DTC DID EBUS (CANForge)
+Ngay thuc hien: 2026-10-02
+Quy chuan tuan thu: C# 7.3 (.NET Framework 4.8), ISO 11898-1/2, Vector XL Driver API,
+                     AUTOSAR CP R20-11, ISO 26262 ASIL-B, AUTOSAR E2E Profile 1/2
+================================================================================
+
+I. MA TRAN DANH GIA TAC DONG LOGIC (LOGIC IMPACT MATRIX)
+
+| STT | Thanh phan / Module | Trach nhiem hien tai | Thay doi sau khi sua | Tac dong logic | Muc do anh huong |
+|---|---|---|---|---|:---:|
+| 01 | SIMULATE.xaml.cs (BtnStartSimulation_Click) | Xoa sach override (_mitmEngine.ClearAllOverrides) | Thay bang SyncOverridesFromUi(): duyet _txMessages va nap lai toan bo signal dang bat Override=true | Giu nguyen trang thai nguoi dung da cau hinh tren UI; khi Start lai, he thong lap tuc inject dung gia tri ma khong bi ve trang thai pass-through ngam | TICH CUC CAO (Triet tieu loi mat inject) |
+| 02 | MitmEngine.cs (Stop / GatewayLoop) | Wait(1000) roi thoat, khong dam bao worker thread da dung han | Cai dat co bao hoan tat Task (_workerTask.Wait(1500) kem kiem tra IsCompleted), chan moi thao tac dong port khi thread con chay | Loai bo triet de Race Condition giua thread gateway va ham dong port Vector; chong loi Invalid Handle trong C++ native DLL | TICH CUC CAO (Chong crash driver) |
+| 03 | VectorCANManager.cs & VectorCANFdManager.cs (StopMitmChannels) | Dong port ngay lap tuc khong co settling delay | Bo sung do tre on dinh Settling Time (Thread.Sleep(50)) giua cac buoc Flush -> Deactivate -> Close | Kernel driver cua Vector giai phong mask vat ly hoan toan truoc khi duoc mo lai; dam bao txPermissionMask duoc cap thanh cong o lan Reconnect | TICH CUC TRUNG BINH (On dinh phan cung) |
+| 04 | VectorCANManager.cs & VectorCANFdManager.cs (TransmitViaTxChannel) | Nuot ma loi khi XL_CanTransmit tra ve != XL_SUCCESS | Kiem tra ma loi: neu XL_ERR_QUEUE_IS_FULL thi tu dong Flush Queue; neu Bus-Off thi tu dong kich hoat Recovery | Chong tran hang doi TX 8192 bytes khi mat ACK; tu dong khoi phuc controller khi xe bat nguon lai | TICH CUC CAO (Tu phuc hoi phan cung) |
+| 05 | MitmEngine.cs (ProcessInject / E2E) | Tinh E2E tren bien AliveCounter rieng biet de gay lech pha | Lay gia tri Counter hien hanh tu frame live lam moc tiep tuc dem (+1 mod 15/16) | ECU xe khong bi loi Sequence Jump (Delta Counter Error), khong kich hoat Fail-Safe, chap nhan frame inject mui muot | TICH CUC CAO (Khong bi ECU loai bo frame) |
+| 06 | Module DTC / DID / DIAG | Dung portHandle doc lap | Khong bi anh huong bat loi, dong thoi tranh duoc tinh trang tranh chap mask kenh nho settling delay | An toan tuyet doi, cach ly giua cac module | KHONG ANH HUONG |
+| 07 | Giao dien UI (XAML / Layout) | Giao dien dieu khien Simulate | Giu nguyen ven 100% XAML, Style, Margin, Control | Tuan thu tuyet doi quy tac UI Protection | KHONG THAY DOI UI |
+
+================================================================================
