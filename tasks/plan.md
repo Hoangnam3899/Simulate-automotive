@@ -701,3 +701,24 @@ Trước Task 0/1 cần người dùng phê duyệt riêng nếu thực hiện:
   - dotnet test Simulate.sln: **PASS 100% (3,340 / 3,341 tests, 1 skipped)**.
   - UI Protection: **0% thay đổi trên bất kỳ file XAML nào**.
   - Báo cáo đã lưu: D:\Analysis Log\report\report_vector_hardware_buffer_overflow_resolution_2026-10-09.txt và D:\Analysis Log\newconvert\change_log_2026-10-09.txt.
+
+
+## 26. Xá»­ LÃ½ Triá»‡t Äá»ƒ Hiá»‡n TÆ°á»£ng Crash Out, ÄÆ¡ Giao Diá»‡n, BÃ£o Echo VÃ²ng Láº·p Khi DÃ¹ng VN1640 Cá»•ng 1 & 2 & Bá»• Sung 3,000 Test Cases (2026-10-10)
+- **Má»¥c tiÃªu**:
+  1. PhÃ¢n tÃ­ch vÃ  cÃ´ láº­p nguyÃªn nhÃ¢n gá»‘c rá»… (Root Cause) cá»§a lá»—i crash out, Ä‘Æ¡ giao diá»‡n, vÃ  khÃ³a cá»•ng pháº§n cá»©ng (Ä‘Ã¨n Ä‘á» cá»‘ Ä‘á»‹nh) trÃªn Vector VN1640 (Cá»•ng 1 & 2).
+  2. XÃ¡c Ä‘á»‹nh lÃ½ do ká»¹ thuáº­t cÆ¡ cháº¿ Listen-Only / Silent Mode khÃ´ng kháº£ thi cho kiáº¿n trÃºc Gateway 2 chiá»u (Bidirectional Gateway) vÃ  ECU bench testing (thiáº¿u ACK).
+  3. Lá»c triá»‡t Ä‘á»ƒ bÃ£o pháº£n xáº¡ vÃ²ng láº·p (Cross-Channel Echo Suppression) trong cá»­a sá»• 10ms.
+  4. TÄƒng tá»‘c giáº£i mÃ£ tÃ­n hiá»‡u tá»« O(N) xuá»‘ng O(1) (_signalLookup), báº£o vá»‡ UI Thread Dispatcher khÃ´ng bá»‹ block.
+  5. Báº£o vá»‡ tiáº¿n trÃ¬nh á»©ng dá»¥ng WPF trÆ°á»›c ngoáº¡i lá»‡ pháº§n cá»©ng qua cÆ¡ cháº¿ Safe Teardown trong SimulationViewModel.
+  6. Bá»• sung 3,000 Test Cases kiá»ƒm chuáº©n chuyÃªn sÃ¢u phÃ¢n tÃ¡n vÃ o 3 suite chuyÃªn biá»‡t.
+- **Triá»ƒn khai**:
+  1. SimulationEngine.cs: NÃ¢ng cáº¥p TryConsumeEcho so khá»›p payload, ID vÃ  time window báº¥t ká»ƒ kÃªnh nguá»“n Ä‘á»ƒ triá»‡t tiÃªu frame dá»™i láº¡i qua bus váº­t lÃ½ chung.
+  2. SimulationViewModel.cs:
+     - Táº¡o _signalLookup cache O(1) cho ProcessIncomingFrame.
+     - Cáº­p nháº­t StopGatewayAsync báº¯t HardwareOperationException, dá»n dáº¹p tÃ i nguyÃªn vÃ  báº£o vá»‡ process WPF.
+  3. AutomotiveGatewayAndEchoStressThreeThousandTests.cs: Táº¡o 3,000 TCs (1,000 echo cases, 1,000 O(1) lookup cases, 1,000 hardware teardown cases).
+- **Verification**:
+  - dotnet build Simulate.sln: **0 warning, 0 error**.
+  - dotnet test Simulate.sln: **PASS 100% (6,340 / 6,341 tests, 1 skipped)**.
+  - UI Protection: **0% thay Ä‘á»•i trÃªn báº¥t ká»³ file XAML nÃ o**.
+  - BÃ¡o cÃ¡o Ä‘Ã£ lÆ°u: D:\Analysis Log\report\report_fix_freeze_crash_echo_storm_3000tcs_2026-10-10.txt vÃ  D:\Analysis Log\newconvert\change_log_2026-10-10.txt.

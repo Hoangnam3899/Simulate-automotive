@@ -721,6 +721,15 @@ namespace Simulate.Services
                 EngineFaulted?.Invoke(exception.Failure);
                 throw;
             }
+            catch (Exception exception)
+            {
+                var failure = new HardwareFailure(
+                    HardwareOperation.Receive,
+                    HardwareErrorCode.ReceiveFailed,
+                    $"Gateway receive loop encountered an unexpected error: {exception.Message}");
+                CaptureFailure(failure);
+                EngineFaulted?.Invoke(failure);
+            }
         }
 
         private async Task RunSchedulerAsync(CancellationToken cancellationToken)
@@ -1058,8 +1067,7 @@ namespace Simulate.Services
             {
                 RemoveExpiredEchoes(now);
                 int matchIndex = _pendingEchoes.FindIndex(pendingEcho =>
-                    pendingEcho.ExpectedSource == routedFrame.Source
-                    && FramesAreEqual(pendingEcho.Frame, routedFrame.Frame));
+                    FramesAreEqual(pendingEcho.Frame, routedFrame.Frame));
                 if (matchIndex < 0)
                 {
                     return false;

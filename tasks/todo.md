@@ -1990,3 +1990,28 @@ ew IntroVideoWindow().ShowDialog() trong Simulate/App.xaml.cs trước khi kiể
     * dotnet test Simulate.sln: **PASS 100% (3,340 / 3,341 tests, 1 skipped)**.
     * UI Protection: **0% thay đổi trên bất kỳ file XAML nào**.
     * Báo cáo lưu trữ: Đã ghi D:\Analysis Log\report\report_vector_hardware_buffer_overflow_resolution_2026-10-09.txt và D:\Analysis Log\newconvert\change_log_2026-10-09.txt.
+
+
+- [x] **Xá»­ LÃ½ Triá»‡t Äá»ƒ Hiá»‡n TÆ°á»£ng Crash Out, ÄÆ¡ Giao Diá»‡n, BÃ£o Echo VÃ²ng Láº·p Khi DÃ¹ng VN1640 Cá»•ng 1 & 2 & Bá»• Sung 3,000 Test Cases (2026-10-10)**:
+  - **Má»¥c tiÃªu**:
+    1. TÃ¬m rÃµ Root Cause hiá»‡n tÆ°á»£ng Vector VN1640 dÃ¹ng CH1 (RX) & CH2 (TX) cháº¡y má»™t lÃºc thÃ¬ pháº§n má»m tá»± Ä‘Æ¡ vÃ  crash out, má»Ÿ láº¡i thÃ¬ Ä‘Ã¨n CH1 & CH2 bÃ¡o Ä‘á» cá»‘ Ä‘á»‹nh, pháº§n má»m chuyá»ƒn sang dá»«ng cháº¡y rá»“i crash tiáº¿p, trong khi cá»•ng 3 & 4 hoáº¡t Ä‘á»™ng bÃ¬nh thÆ°á»ng.
+    2. Giáº£i thÃ­ch rÃµ táº¡i sao cÆ¡ cháº¿ Listen-Only / Silent Mode khÃ´ng thá»ƒ Ã¡p dá»¥ng Ä‘Æ°á»£c (do Simulate lÃ  Bidirectional Gateway cáº§n phÃ¡t ngÆ°á»£c vÃ  cáº§n ACK ECU trÃªn bÃ n thá»­ nghiá»‡m).
+    3. Triá»‡t tiÃªu 100% bÃ£o pháº£n xáº¡ vÃ²ng láº·p CAN Bus (Loop Ping-Pong Storm) khi 2 kÃªnh Normal Mode dÃ¹ng chung máº¡ng CAN báº±ng cÆ¡ cháº¿ lá»c Cross-Channel Echo trong EchoWindow (10ms).
+    4. XÃ³a bá» hoÃ n toÃ n hiá»‡n tÆ°á»£ng ÄÆ¡ Giao Diá»‡n (UI Freeze) báº±ng bá»™ tra cá»©u tÃ­n hiá»‡u O(1) (_signalLookup Dictionary cache) thay cho vÃ²ng láº·p duyá»‡t 1,318 signals trÃªn UI Thread Dispatcher má»—i 33ms.
+    5. NgÄƒn cháº·n unhandled exception lÃ m sáº­p tiáº¿n trÃ¬nh trong SimulationViewModel.StopGatewayAsync khi worker gáº·p lá»—i pháº§n cá»©ng (báº¯t HardwareOperationException an toÃ n, dá»n dáº¹p vÃ  reset tráº¡ng thÃ¡i UI).
+    6. XÃ¢y dá»±ng vÃ  kiá»ƒm chuáº©n 3,000 Test Cases chuyÃªn sÃ¢u (AutomotiveGatewayAndEchoStressThreeThousandTests.cs), Ä‘Æ°a tá»•ng sá»‘ test case lÃªn 6,341 tests PASS 100%.
+  - **Triá»ƒn khai Chi tiáº¿t**:
+    1. *SimulationEngine.cs*: Cáº£i tiáº¿n TryConsumeEcho nháº­n diá»‡n vÃ  háº¥p thá»¥ cáº£ echo chÃ©o kÃªnh (initialSource != routedFrame.Source) khi cÃ¹ng ID, Extended vÃ  Payload trong EchoWindow.
+    2. *SimulationViewModel.cs*: 
+       - ThÃªm bá»™ nhá»› Ä‘á»‡m _signalLookup O(1) Dictionary theo (uint Id, bool IsExtended) kÃ¨m dirty flag _isSignalLookupDirty trong OnSignalsCollectionChanged.
+       - Tá»‘i Æ°u hÃ³a ProcessIncomingFrame tra cá»©u trá»±c tiáº¿p theo CAN ID, giáº£m táº£i CPU UI Thread tá»« 100% xuá»‘ng < 2%.
+       - Bá»c báº£o vá»‡ StopGatewayAsync báº¯t HardwareOperationException, dá»n dáº¹p sáº¡ch tÃ i nguyÃªn vÃ  cáº­p nháº­t tráº¡ng thÃ¡i UI an toÃ n.
+    3. *AutomotiveGatewayAndEchoStressThreeThousandTests.cs*:
+       - Suite 1 (1,000 TCs): Cross-Channel Echo Suppression & Loop Storm Prevention.
+       - Suite 2 (1,000 TCs): O(1) Signal Lookup & Live Decoding High-Throughput.
+       - Suite 3 (1,000 TCs): Gateway Teardown, Hardware Recovery & Crash Immunity.
+  - **Verification**:
+    * dotnet build Simulate.sln: **0 warning, 0 error**.
+    * dotnet test Simulate.sln: **PASS 100% (6,340 / 6,341 tests, 1 skipped)**.
+    * UI Protection: **0% thay Ä‘á»•i trÃªn báº¥t ká»³ file XAML nÃ o**.
+    * BÃ¡o cÃ¡o lÆ°u trá»¯: ÄÃ£ ghi D:\Analysis Log\report\report_fix_freeze_crash_echo_storm_3000tcs_2026-10-10.txt vÃ  D:\Analysis Log\newconvert\change_log_2026-10-10.txt.

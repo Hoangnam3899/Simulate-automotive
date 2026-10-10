@@ -576,6 +576,8 @@ namespace Simulate.ViewModels
 
         private void OnSignalsCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
         {
+            _isSignalLookupDirty = true;
+
             if (e.NewItems is not null)
             {
                 foreach (SignalModel item in e.NewItems)
@@ -697,6 +699,9 @@ namespace Simulate.ViewModels
             return true;
         }
 
+        private readonly Dictionary<(uint Id, bool IsExtended), List<SignalModel>> _signalLookup = new();
+        private bool _isSignalLookupDirty = true;
+
         public void ProcessIncomingFrame(uint identifier, bool isExtended, ReadOnlySpan<byte> payload, DateTime? timestamp = null)
         {
             if (IsSignalMonitorPaused)
@@ -704,24 +709,62 @@ namespace Simulate.ViewModels
                 return;
             }
 
-            string messageId = FormatIdentifier(identifier, isExtended);
             DateTime time = timestamp ?? DateTime.Now;
 
-            foreach (var signal in Signals)
+            if (_isSignalLookupDirty)
             {
-                bool matches = (signal.RawIdentifier != 0 && signal.RawIdentifier == identifier && signal.IsExtendedIdentifier == isExtended)
-                    || string.Equals(signal.MessageId, messageId, StringComparison.OrdinalIgnoreCase);
-
-                if (matches && signal.DbcSource is not null)
+                _signalLookup.Clear();
+                foreach (SignalModel s in Signals)
                 {
-                    try
+                    if (s.RawIdentifier != 0)
                     {
-                        (ulong raw, double physical) = SignalCodec.Unpack(payload, signal.DbcSource);
-                        signal.UpdateValue(raw, physical, time);
+                        var key = (s.RawIdentifier, s.IsExtendedIdentifier);
+                        if (!_signalLookup.TryGetValue(key, out var list))
+                        {
+                            list = new List<SignalModel>();
+                            _signalLookup[key] = list;
+                        }
+                        list.Add(s);
                     }
-                    catch
+                }
+                _isSignalLookupDirty = false;
+            }
+
+            if (_signalLookup.TryGetValue((identifier, isExtended), out List<SignalModel>? matchingSignals))
+            {
+                foreach (var signal in matchingSignals)
+                {
+                    if (signal.DbcSource is not null)
                     {
-                        // Payload may be shorter or malformed for this signal layout
+                        try
+                        {
+                            (ulong raw, double physical) = SignalCodec.Unpack(payload, signal.DbcSource);
+                            signal.UpdateValue(raw, physical, time);
+                        }
+                        catch
+                        {
+                            // Payload may be shorter or malformed for this signal layout
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // Fallback for signals where RawIdentifier may not be set but MessageId matches
+                string messageId = FormatIdentifier(identifier, isExtended);
+                foreach (var signal in Signals)
+                {
+                    if (string.Equals(signal.MessageId, messageId, StringComparison.OrdinalIgnoreCase) && signal.DbcSource is not null)
+                    {
+                        try
+                        {
+                            (ulong raw, double physical) = SignalCodec.Unpack(payload, signal.DbcSource);
+                            signal.UpdateValue(raw, physical, time);
+                        }
+                        catch
+                        {
+                            // Payload may be shorter or malformed for this signal layout
+                        }
                     }
                 }
             }
@@ -1535,6 +1578,7 @@ namespace Simulate.ViewModels
 
         public async Task StopGatewayAsync()
         {
+            HardwareOperationException? stopFault = null;
             try
             {
                 _executionCts?.Cancel();
@@ -1544,17 +1588,39 @@ namespace Simulate.ViewModels
                     _engine.FrameRouted -= OnEngineFrameRouted;
                     _engine.EngineFaulted -= OnEngineFaulted;
 
-                    if (_engine.IsScheduling)
+                    try
                     {
-                        await _engine.StopSchedulingAsync();
+                        if (_engine.IsScheduling)
+                        {
+                            await _engine.StopSchedulingAsync();
+                        }
+                    }
+                    catch (HardwareOperationException ex)
+                    {
+                        stopFault ??= ex;
                     }
 
-                    if (_engine.IsRunning)
+                    try
                     {
-                        await _engine.StopAsync();
+                        if (_engine.IsRunning)
+                        {
+                            await _engine.StopAsync();
+                        }
+                    }
+                    catch (HardwareOperationException ex)
+                    {
+                        stopFault ??= ex;
                     }
 
-                    await _engine.DisposeAsync();
+                    try
+                    {
+                        await _engine.DisposeAsync();
+                    }
+                    catch (HardwareOperationException ex)
+                    {
+                        stopFault ??= ex;
+                    }
+
                     _engine = null;
                 }
 
@@ -1575,6 +1641,11 @@ namespace Simulate.ViewModels
             {
                 RefreshRuntimeState();
                 NotifyExecutionCommands();
+            }
+
+            if (stopFault is not null)
+            {
+                throw stopFault;
             }
         }
 
