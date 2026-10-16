@@ -1125,6 +1125,9 @@ namespace Simulate.Services
                 SignalOverride[]> overrideSnapshot = Volatile.Read(ref _overrideSnapshot);
             overrideSnapshot.TryGetValue(key, out SignalOverride[]? signalOverrides);
 
+            bool isCounterOverridden = false;
+            bool isChecksumOverridden = false;
+
             foreach (SignalOverride signalOverride in signalOverrides ?? [])
             {
                 DbcSignal signal = message.Signals.First(candidate =>
@@ -1133,6 +1136,19 @@ namespace Simulate.Services
                         signalOverride.SignalName,
                         StringComparison.Ordinal));
                 SignalCodec.PackPhysical(payload, signal, signalOverride.PhysicalValue);
+
+                if (rule.E2eProtection.IsEnabled)
+                {
+                    if (DbcE2eDetector.IsChecksumSignal(signal, rule.E2eProtection))
+                    {
+                        isChecksumOverridden = true;
+                    }
+
+                    if (DbcE2eDetector.IsCounterSignal(signal, rule.E2eProtection))
+                    {
+                        isCounterOverridden = true;
+                    }
+                }
             }
 
             E2eProtectionResult e2eResult;
@@ -1140,7 +1156,8 @@ namespace Simulate.Services
             {
                 e2eResult = E2eProtector.ApplyPreservingCounter(
                     payload,
-                    rule.E2eProtection);
+                    rule.E2eProtection,
+                    isChecksumOverridden: isChecksumOverridden);
                 if (e2eResult.IsApplied)
                 {
                     _e2eCounters[key] = e2eResult.Counter;
@@ -1154,7 +1171,9 @@ namespace Simulate.Services
                 e2eResult = E2eProtector.Apply(
                     payload,
                     rule.E2eProtection,
-                    previousCounter);
+                    previousCounter,
+                    isCounterOverridden: isCounterOverridden,
+                    isChecksumOverridden: isChecksumOverridden);
                 if (e2eResult.IsApplied)
                 {
                     _e2eCounters[key] = e2eResult.Counter;

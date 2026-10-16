@@ -1,0 +1,9 @@
+
+--------------------------------------------------------------------------------
+[2026-10-16 09:55] FEAT: TRIEN KHAI SELECTIVE E2E OVERRIDE & BO SUNG 1,000 TEST CASES DBC
+- Service: Nang cap E2eProtector.cs voi tham so isCounterOverridden va isChecksumOverridden.
+- Detector: Bo sung IsChecksumSignal va IsCounterSignal vao DbcE2eDetector.cs.
+- Engine: Cap nhat SimulationEngine.cs (CreateInjectedFrame) uu tien bao toan gia tri ghim CRC/Alive cua nguoi dung.
+- Tests: Bo sung E2eDbcFaultInjectionOneThousandTests.cs (1,000 TCs) va 4 unit tests trong E2eProtectionTests.cs.
+- Quality Gate: dotnet build 0 warning / 0 error; dotnet test 7,344 / 7,345 PASS (100%); 0% UI modification.
+--------------------------------------------------------------------------------

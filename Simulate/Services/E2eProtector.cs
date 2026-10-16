@@ -8,7 +8,9 @@ namespace Simulate.Services
         public static E2eProtectionResult Apply(
             Span<byte> payload,
             E2eProtectionConfiguration configuration,
-            int previousCounter)
+            int previousCounter,
+            bool isCounterOverridden = false,
+            bool isChecksumOverridden = false)
         {
             ArgumentNullException.ThrowIfNull(configuration);
 
@@ -19,25 +21,43 @@ namespace Simulate.Services
 
             ValidateEnabledConfiguration(payload, configuration, previousCounter);
 
-            int counter = previousCounter == configuration.CounterMaximumValue
-                ? 0
-                : previousCounter + 1;
-            byte existingCounterByte = payload[configuration.CounterByteIndex];
-            byte counterBits = (byte)((counter << configuration.CounterShift) & configuration.CounterMask);
-            payload[configuration.CounterByteIndex] = (byte)(
-                (existingCounterByte & ~configuration.CounterMask) | counterBits);
+            int counter;
+            if (isCounterOverridden)
+            {
+                byte existingCounterByte = payload[configuration.CounterByteIndex];
+                counter = (existingCounterByte & configuration.CounterMask) >> configuration.CounterShift;
+            }
+            else
+            {
+                counter = previousCounter == configuration.CounterMaximumValue
+                    ? 0
+                    : previousCounter + 1;
+                byte existingCounterByte = payload[configuration.CounterByteIndex];
+                byte counterBits = (byte)((counter << configuration.CounterShift) & configuration.CounterMask);
+                payload[configuration.CounterByteIndex] = (byte)(
+                    (existingCounterByte & ~configuration.CounterMask) | counterBits);
+            }
 
-            int crcLength = configuration.CrcEndByteIndex - configuration.CrcStartByteIndex + 1;
-            byte checksum = Crc8SaeJ1850.Calculate(
-                payload.Slice(configuration.CrcStartByteIndex, crcLength));
-            payload[configuration.ChecksumByteIndex] = checksum;
+            byte checksum;
+            if (isChecksumOverridden)
+            {
+                checksum = payload[configuration.ChecksumByteIndex];
+            }
+            else
+            {
+                int crcLength = configuration.CrcEndByteIndex - configuration.CrcStartByteIndex + 1;
+                checksum = Crc8SaeJ1850.Calculate(
+                    payload.Slice(configuration.CrcStartByteIndex, crcLength));
+                payload[configuration.ChecksumByteIndex] = checksum;
+            }
 
             return new E2eProtectionResult(isApplied: true, counter, checksum);
         }
 
         public static E2eProtectionResult ApplyPreservingCounter(
             Span<byte> payload,
-            E2eProtectionConfiguration configuration)
+            E2eProtectionConfiguration configuration,
+            bool isChecksumOverridden = false)
         {
             ArgumentNullException.ThrowIfNull(configuration);
 
@@ -51,10 +71,18 @@ namespace Simulate.Services
             byte existingCounterByte = payload[configuration.CounterByteIndex];
             int currentCounter = (existingCounterByte & configuration.CounterMask) >> configuration.CounterShift;
 
-            int crcLength = configuration.CrcEndByteIndex - configuration.CrcStartByteIndex + 1;
-            byte checksum = Crc8SaeJ1850.Calculate(
-                payload.Slice(configuration.CrcStartByteIndex, crcLength));
-            payload[configuration.ChecksumByteIndex] = checksum;
+            byte checksum;
+            if (isChecksumOverridden)
+            {
+                checksum = payload[configuration.ChecksumByteIndex];
+            }
+            else
+            {
+                int crcLength = configuration.CrcEndByteIndex - configuration.CrcStartByteIndex + 1;
+                checksum = Crc8SaeJ1850.Calculate(
+                    payload.Slice(configuration.CrcStartByteIndex, crcLength));
+                payload[configuration.ChecksumByteIndex] = checksum;
+            }
 
             return new E2eProtectionResult(isApplied: true, currentCounter, checksum);
         }

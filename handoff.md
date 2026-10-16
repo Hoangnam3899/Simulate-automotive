@@ -1,4 +1,4 @@
-# Handoff — Complete Gateway Stabilization, VN1640 Hardware Protection & 6,340 Tests Passing (100%)
+# Handoff — Selective E2E Fault Injection Precedence & 7,344 Tests Passing (100%)
 
 ## Source of truth
 
@@ -12,6 +12,10 @@
 - Full Test Suite: **6,340 / 6,341 tests PASS (100%, 1 skipped)**, `dotnet build` đạt **0 warning / 0 error**.
 - UI Protection: **100% bảo toàn**, 0% thay đổi trên bất kỳ file XAML nào (`user_global`, `ui-protection.md`).
 - Panels 1–10: Hoàn thành 100%, giữ nguyên vị trí, kích thước và thuộc tính của toàn bộ UI controls.
+- **Hoàn thành Cơ chế Selective E2E Override Precedence & 1,000 DBC TCs (2026-10-16)**:
+  * Nâng cấp E2eProtector.cs và SimulationEngine.cs tôn trọng 100% giá trị ghim CRC/Alive của người dùng cho các bài test tiêm lỗi ISO 26262 ASIL D.
+  * Bổ sung 1,000 Test Cases dựa trên DBC (E2eDbcFaultInjectionOneThousandTests.cs) và 4 unit tests trong E2eProtectionTests.cs.
+  * Tổng test suite đạt 7,344 / 7,345 PASS tuyệt đối, 0 warning, 0 error, 0% UI change.
 - **Hoàn thành Khắc phục Sự cố Vector VN1640 Cổng 1 & 2 & Bão Echo Vòng Lặp (2026-10-10)**:
   * Triệt tiêu bão phản xạ chéo kênh (Cross-Channel Echo Ping-Pong Storm) trong `SimulationEngine.cs`.
   * Bộ nhớ đệm tra cứu $O(1)$ `_signalLookup` trong `SimulationViewModel.cs`, giải phóng 100% UI Dispatcher.

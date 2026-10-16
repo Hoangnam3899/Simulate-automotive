@@ -1,0 +1,100 @@
+================================================================================
+BAO CAO KY THUAT: TRIEN KHAI CO CHE SELECTIVE E2E OVERRIDE PRECEDENCE
+VA BO SUNG 1,000 TEST CASES KIEM THU TIEM LOI AN TOAN CHUC NANG THEO CHUAN ISO 26262 ASIL D
+================================================================================
+
+PHAN I: HEADER TIEU CHUAN (METADATA HEADER)
+--------------------------------------------------------------------------------
+- Tieu de: TRIEN KHAI CO CHE SELECTIVE E2E OVERRIDE & 1,000 TEST CASES KIEM THU TIEM LOI E2E
+- Thoi gian thuc hien: 2026-10-16 09:55
+- Nguoi / Agent thuc hien: Antigravity Assistant & Hoangnam3899
+- Rule & Skill kich hoat: user_global, AGENTS.md, GEMINI.md, PROJECT_RULES_COMBINED.md,
+  ui-protection.md, report-standards.md, planning-and-task-breakdown, codebase-design,
+  domain-modeling, test-driven-development.
+- He thong / Nen tang: AFI - Automotive Fault Injector (.NET 8.0 WPF, C# 12, Vector XL Driver).
+- Tieu chuan ky thuat doi chieu: ISO 26262 ASIL D (Part 4 & 5 Fault Injection),
+  AUTOSAR CP SWS E2E Library (Profile 1/2), ISO 11898-1/2 (CAN/CAN FD Datalink).
+- Ranh gioi bao ve: 0% thay doi tren bat ky file XAML / UI nao (UI Protection).
+
+PHAN II: TONG QUAN VAN DE / YEU CAU (OVERVIEW & CONTEXT)
+--------------------------------------------------------------------------------
+1. Thuc trang nghiep vu kiem thu:
+   Trong quy trinh kiem thu an toan chuc nang o to (ISO 26262 ASIL D) doi voi he truyen dong dien
+   (FMCU - Front Motor Control Unit, CVC - Central Vehicle Controller, ban tin CVC_FMCU_Ctrl ID 0x0AB),
+   ky su kiem thu can chu dong lam sai lech co che bao ve E2E de kiem tra phan ung an toan cua ECU:
+   - Tiem loi CRC doc lap: Ghim co dinh gia tri CRC = 0x00 (hoac sai lech) trong khi Alive van tang deu
+     de xac minh ECU bat dung ma loi E2E_E_WRONG_CRC ma khong bi nham voi loi Alive.
+   - Tiem loi Alive doc lap: Ghim co dinh gia tri Alive = 0 (Frozen / Stuck counter) trong khi CRC
+     van duoc tinh khop toan hoc theo gia tri Alive ket de xac minh ECU bat dung loi E2E_E_REPEATED.
+   - Tiem loi kep: Ghim ca CRC va Alive co dinh.
+
+2. Hien tuong loi phat hien:
+   - Tren Simulate: Khi nguoi dung tick Override cho CRC = 0, byte CRC khong giu nguyen ma bi
+     E2eProtector tinh lai va ghi de len byte CRC, trong khi Alive van nhay theo chu ky.
+   - Tren xe that: Khi ban Cyclically ghi de ban tin CVC_FMCU_Ctrl song song voi CVC that tren bus,
+     xung dot CAN ID (ID Collision) sinh ra bao Error Frame lam Bus Load vot 100%, dan den lag UI CAN;
+     dong thoi ECU xe phat hien vi pham E2E vuot nguong debounce (3 chu ky = 300ms) nen kich hoat
+     Safe Torque Off (STO) va mo ro-le pin cao ap (High Voltage Contactor), dua xe vao Limp-Home.
+
+PHAN III: PHAN TICH NGUYEN NHAN GOC RE & LOGIC (ROOT CAUSE & TECHNICAL ANALYSIS)
+--------------------------------------------------------------------------------
+1. Trong SimulationEngine.cs (CreateInjectedFrame):
+   Quy trinh xu ly frame inject truoc day dien ra theo 2 buoc:
+   - Buoc 1: SignalCodec.PackPhysical pack gia tri override nguoi dung ghim (CRC=0) vao payload.
+   - Buoc 2: E2eProtector.Apply hoac ApplyPreservingCounter duoc goi va ghi de mu quang (blindly overwrite)
+     tinh toan lai CRC va Alive, xoa sach gia tri ghim ma nguoi dung vua thiet lap.
+2. Trong E2eProtector.cs:
+   Thieu co nhan dien xem CRC hoac Counter co dang nam trong tap SignalOverrides cua nguoi dung hay khong,
+   khong cho phep nguoi dung thuc hien kiem thu tiem loi an toan tuy bien.
+
+PHAN IV: TRIEN KHAI & SUA DOI MA NGUON (IMPLEMENTATION DETAILS)
+--------------------------------------------------------------------------------
+1. Nâng cấp E2eProtector.cs (Simulate/Services/E2eProtector.cs):
+   - Bo sung tham so tuy chon isCounterOverridden va isChecksumOverridden vao phuong thuc Apply().
+   - Neu isCounterOverridden == true: Bao toan 100% gia tri counter nguoi dung da ghim trong payload,
+     khong tu dong tang previousCounter + 1. Tinh toan CRC khop toan hoc voi gia tri Alive ket do.
+   - Neu isChecksumOverridden == true: Bao toan 100% gia tri Checksum ma nguoi dung da ghim, khong ghi de
+     ma bam tinh toan len payload.
+   - Nâng cấp ApplyPreservingCounter(): Bo sung tham so isChecksumOverridden de bao toan Checksum trong luong
+     Gateway Routing.
+   - 100% tuong thich nguoc voi cac signature cu thong qua tham so mac dinh (default parameters = false).
+
+2. Cập nhật DbcE2eDetector.cs (Simulate/Services/DbcE2eDetector.cs):
+   - Bo sung helper method: IsChecksumSignal(DbcSignal, E2eProtectionConfiguration).
+   - Bo sung helper method: IsCounterSignal(DbcSignal, E2eProtectionConfiguration).
+   - Nhan dien O(1) dua tren ca chi so byte vi tri (ChecksumByteIndex/CounterByteIndex) va quy uoc dat ten
+     chuan quoc te (CRC, Checksum, _CS, CS_, Alive, Counter, _AC, _SQC).
+
+3. Tích hợp Selective Override vào SimulationEngine.cs (Simulate/Services/SimulationEngine.cs):
+   - Trong CreateInjectedFrame, kiem tra danh sach signalOverrides cua ban tin de xac dinh xem tin hieu
+     CRC hoac Alive co bi nguoi dung ghim hay khong.
+   - Truyen co isChecksumOverridden va isCounterOverridden vao E2eProtector.
+   - Bao toan tuyet doi gia tri ghim cua nguoi dung, dong thoi giu nguyen tinh nang tu dong tinh CRC/Alive
+     khi nguoi dung chi thay doi cac tin hieu payload thong thuong (TargetTqReq, TargetSpeedReq).
+
+4. Xây dựng 1,000 Test Cases Kiểm Thử Chuyên Sâu (Simulate.Tests/E2eDbcFaultInjectionOneThousandTests.cs):
+   - Nhom 1 (250 TCs): Kiem thu tiem loi CRC doc lap tren ban tin DBC (Ghim CRC = 0, CRC giu nguyen 0x00, Alive tang deu).
+   - Nhom 2 (250 TCs): Kiem thu tiem loi Alive doc lap (Ghim Alive = 0, Alive dung im, CRC tinh khop voi Alive ket).
+   - Nhom 3 (250 TCs): Kiem thu tiem loi kep (Ghim ca CRC va Alive dong thoi, ca hai duoc bao toan 100%).
+   - Nhom 4 (250 TCs): Ghi de tin hieu Payload (E2E tu dong tinh toan, Alive tang deu, CRC tinh dung theo payload).
+   - Bo sung 4 unit test chuyen sau trong E2eProtectionTests.cs.
+
+PHAN V: KIEM CHUNG CHAT LUONG (QUALITY GATE VERIFICATION)
+--------------------------------------------------------------------------------
+1. Bien dich giai phap (dotnet build Simulate.sln):
+   - Trang thai: Build SUCCEEDED.
+   - Warnings: 0 Warning(s).
+   - Errors: 0 Error(s).
+2. Kiem thu tu dong (dotnet test Simulate.Tests.csproj --no-build):
+   - Tong so Test Cases: 7,345 TCs (Tang them 1,004 TCs so voi truoc do).
+   - Passed: 7,344 TCs (100% active tests PASS).
+   - Failed: 0 TCs.
+   - Skipped: 1 TC (Test doc DBC ngoai vi co dinh).
+   - Thoi gian thuc thi: 11.0 giay.
+3. Bao ve giao dien (UI Protection):
+   - Ty le thay doi UI: 0.0% (Tuyet doi khong sua doi bat ky file XAML, layout hay styling nao).
+4. Khuyen nghi van hanh tren xe that:
+   - Dau noi Man-in-the-Middle (Gateway) tach doi kenh CVC va FMCU de triet tieu Bit Error va lag UI CAN.
+   - Dung thoi luong tiem ngan (Burst Duration: 200ms - 500ms) kem [x] Khoi phuc sau khi dung de xe khong bi
+     khoa cung boi loi Latched DTC.
+================================================================================

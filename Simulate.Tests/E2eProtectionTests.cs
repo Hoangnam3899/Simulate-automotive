@@ -130,5 +130,90 @@ namespace Simulate.Tests
             Assert.IsNotNull(result.Checksum);
             Assert.AreEqual(result.Checksum.Value, payload[0], "Checksum được cập nhật vào byte 0.");
         }
+        [TestMethod]
+        public void Apply_preserves_overridden_checksum_when_flag_is_true()
+        {
+            var configuration = new E2eProtectionConfiguration(isEnabled: true);
+            // Payload with initial Checksum = 0x00 at byte 0, Counter = 0 at byte 1 (nibble 0x00)
+            byte[] payload = [0x00, 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66];
+
+            // When isChecksumOverridden = true, Checksum must NOT be overwritten with calculated CRC
+            E2eProtectionResult result = E2eProtector.Apply(
+                payload,
+                configuration,
+                previousCounter: -1,
+                isCounterOverridden: false,
+                isChecksumOverridden: true);
+
+            Assert.IsTrue(result.IsApplied);
+            Assert.AreEqual(0, result.Counter, "Counter phai tang len 0 tu -1.");
+            Assert.AreEqual((byte)0x00, payload[0], "Byte Checksum phai duoc bao toan 100% o gia tri 0x00.");
+            Assert.AreEqual((byte)0x00, result.Checksum, "Result Checksum phai la gia tri duoc bao toan.");
+        }
+
+        [TestMethod]
+        public void Apply_preserves_overridden_counter_and_calculates_matching_checksum()
+        {
+            var configuration = new E2eProtectionConfiguration(isEnabled: true);
+            // Payload with pinned Counter = 5 (byte 1 = 0x05)
+            byte[] payload = [0xAA, 0x05, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66];
+
+            // When isCounterOverridden = true, Counter must NOT increment to 6, and Checksum must match Counter = 5
+            E2eProtectionResult result = E2eProtector.Apply(
+                payload,
+                configuration,
+                previousCounter: 5,
+                isCounterOverridden: true,
+                isChecksumOverridden: false);
+
+            Assert.IsTrue(result.IsApplied);
+            Assert.AreEqual(5, result.Counter, "Counter phai duoc bao toan o gia tri 5.");
+            Assert.AreEqual((byte)0x05, payload[1], "Byte Counter phai giu nguyen 0x05.");
+            Assert.IsNotNull(result.Checksum);
+            Assert.AreEqual(result.Checksum.Value, payload[0], "Checksum phai duoc tinh toan dua tren Counter = 5.");
+
+            // Calculate expected CRC manually to verify mathematical consistency
+            int crcLength = configuration.CrcEndByteIndex - configuration.CrcStartByteIndex + 1;
+            byte expectedCrc = Crc8SaeJ1850.Calculate(payload.AsSpan(configuration.CrcStartByteIndex, crcLength));
+            Assert.AreEqual(expectedCrc, payload[0]);
+        }
+
+        [TestMethod]
+        public void ApplyPreservingCounter_preserves_overridden_checksum()
+        {
+            var configuration = new E2eProtectionConfiguration(isEnabled: true);
+            byte[] payload = [0x55, 0x07, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66];
+
+            E2eProtectionResult result = E2eProtector.ApplyPreservingCounter(
+                payload,
+                configuration,
+                isChecksumOverridden: true);
+
+            Assert.IsTrue(result.IsApplied);
+            Assert.AreEqual(7, result.Counter);
+            Assert.AreEqual((byte)0x55, payload[0], "Checksum 0x55 phai duoc bao toan.");
+        }
+
+        [TestMethod]
+        public void DbcE2eDetector_correctly_identifies_checksum_and_counter_signals()
+        {
+            var config = new E2eProtectionConfiguration(
+                isEnabled: true,
+                checksumByteIndex: 0,
+                counterByteIndex: 1);
+
+            var crcSig = new DbcSignal("CRC_CVC_FMCU_Ctrl", 7, 8, DbcByteOrder.LittleEndian, false, 1, 0, 0, 255, "", Array.Empty<string>(), Array.Empty<DbcValueDescription>());
+            var aliveSig = new DbcSignal("ALIVE_CVC_FMCU_Ctrl", 11, 4, DbcByteOrder.LittleEndian, false, 1, 0, 0, 15, "", Array.Empty<string>(), Array.Empty<DbcValueDescription>());
+            var torqueSig = new DbcSignal("CVC_FMCU_TargetTqReq", 23, 16, DbcByteOrder.LittleEndian, false, 0.1, -400, -400, 400, "Nm", Array.Empty<string>(), Array.Empty<DbcValueDescription>());
+
+            Assert.IsTrue(DbcE2eDetector.IsChecksumSignal(crcSig, config));
+            Assert.IsFalse(DbcE2eDetector.IsCounterSignal(crcSig, config));
+
+            Assert.IsTrue(DbcE2eDetector.IsCounterSignal(aliveSig, config));
+            Assert.IsFalse(DbcE2eDetector.IsChecksumSignal(aliveSig, config));
+
+            Assert.IsFalse(DbcE2eDetector.IsChecksumSignal(torqueSig, config));
+            Assert.IsFalse(DbcE2eDetector.IsCounterSignal(torqueSig, config));
+        }
     }
 }

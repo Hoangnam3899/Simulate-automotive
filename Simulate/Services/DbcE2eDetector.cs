@@ -117,5 +117,53 @@ namespace Simulate.Services
                 crcStartByteIndex: 1,
                 crcEndByteIndex: safeLength - 1);
         }
+
+        /// <summary>
+        /// Kiem tra xem mot tin hieu co phai la tin hieu Checksum / CRC cua cau hinh E2E hay khong.
+        /// </summary>
+        public static bool IsChecksumSignal(DbcSignal signal, E2eProtectionConfiguration configuration)
+        {
+            ArgumentNullException.ThrowIfNull(signal);
+            ArgumentNullException.ThrowIfNull(configuration);
+
+            if (!configuration.IsEnabled) return false;
+
+            int signalStartByte = (int)(signal.StartBit / 8);
+            if (signalStartByte == configuration.ChecksumByteIndex)
+            {
+                return true;
+            }
+
+            return signal.Name.Contains("CRC", StringComparison.OrdinalIgnoreCase) ||
+                   signal.Name.Contains("CheckSum", StringComparison.OrdinalIgnoreCase) ||
+                   signal.Name.Contains("Checksum", StringComparison.OrdinalIgnoreCase) ||
+                   signal.Name.EndsWith("_CS", StringComparison.OrdinalIgnoreCase) ||
+                   signal.Name.StartsWith("CS_", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Kiem tra xem mot tin hieu co phai la tin hieu Alive / Rolling Counter cua cau hinh E2E hay khong.
+        /// </summary>
+        public static bool IsCounterSignal(DbcSignal signal, E2eProtectionConfiguration configuration)
+        {
+            ArgumentNullException.ThrowIfNull(signal);
+            ArgumentNullException.ThrowIfNull(configuration);
+
+            if (!configuration.IsEnabled) return false;
+
+            int signalStartByte = (int)(signal.StartBit / 8);
+            if (signalStartByte == configuration.CounterByteIndex)
+            {
+                return true;
+            }
+
+            return signal.Name.Contains("Alive", StringComparison.OrdinalIgnoreCase) ||
+                   signal.Name.Contains("RollingCounter", StringComparison.OrdinalIgnoreCase) ||
+                   signal.Name.Contains("SeqCounter", StringComparison.OrdinalIgnoreCase) ||
+                   signal.Name.Contains("CycleCounter", StringComparison.OrdinalIgnoreCase) ||
+                   (signal.Name.Contains("Counter", StringComparison.OrdinalIgnoreCase) && !signal.Name.Contains("Fault", StringComparison.OrdinalIgnoreCase)) ||
+                   signal.Name.EndsWith("_SQC", StringComparison.OrdinalIgnoreCase) ||
+                   signal.Name.EndsWith("_AC", StringComparison.OrdinalIgnoreCase);
+        }
     }
 }
