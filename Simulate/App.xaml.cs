@@ -1,3 +1,4 @@
+using System;
 using System.Windows;
 using Simulate.Services;
 using Simulate.ViewModels;
@@ -10,21 +11,29 @@ namespace Simulate
     /// </summary>
     public partial class App : Application
     {
+        public App()
+        {
+            // Khoi tao he thong giam sat va bao cao su co (Crash Sentinel & Reporter)
+            // ngay tu thoi diem dau tien de bat tat ca cac ngoai le truoc ca OnStartup
+            CrashReporter.Initialize(this);
+        }
+
         protected override void OnStartup(StartupEventArgs e)
         {
             base.OnStartup(e);
 
             ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
-            // Phát clip mở màn (chạy hết clip hoặc người dùng nhấn phím ESC/Skip)
+            // Phat clip mo man (chay het clip hoac nguoi dung nhan phim ESC/Skip)
             try
             {
                 var introWindow = new IntroVideoWindow();
                 introWindow.ShowDialog();
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // Bỏ qua an toàn nếu môi trường không khởi tạo được media
+                // Bo qua an toan neu moi truong khong khoi tao duoc media va ghi log
+                CrashReporter.WriteCrashReport(ex, "IntroVideoWindow Startup Warning", isTerminating: false);
             }
 
             var licenseService = new LicenseService();

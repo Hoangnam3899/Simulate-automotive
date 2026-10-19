@@ -9,9 +9,15 @@
 ## Current repository state
 
 - Branch: chore/merge-agent-skills.
-- Full Test Suite: **12,344 / 12,345 tests PASS (100%, 1 skipped)**, dotnet build đạt **0 warning / 0 error**.
+- Full Test Suite: **12,347 / 12,348 tests PASS (100%, 1 skipped)**, dotnet build đạt **0 warning / 0 error**.
 - UI Protection: **100% bảo toàn**, 0% thay đổi trên bất kỳ file XAML nào (user_global, ui-protection.md).
 - Panels 1–10: Hoàn thành 100%, giữ nguyên vị trí, kích thước và thuộc tính của toàn bộ UI controls.
+- **Hoàn thành Hệ thống Báo cáo Sự cố Tự động (Crash Sentinel & Reporter) & Khắc phục Đơ/Văng App (2026-10-19)**:
+  * Tích hợp CrashReporter.cs giám sát toàn diện 3 kênh: AppDomain.UnhandledException, DispatcherUnhandledException, và TaskScheduler.UnobservedTaskException.
+  * Tự động xuất file chẩn đoán chi tiết CrashReport_yyyyMMdd_HHmmss_fff.txt vào thư mục CrashReports nằm cùng thư mục .exe (mục bin/Debug).
+  * Bảo vệ an toàn callback của System.Threading.Timer trong SimulationViewModel.cs chống crash tiến trình.
+  * Hỗ trợ cơ chế Crash Prevention trên UI: Cảnh báo lỗi kèm file log và cho phép người dùng bấm "Yes" để cứu ứng dụng tiếp tục chạy (e.Handled = true).
+  * Bổ sung unit tests CrashReporterTests.cs, tổng test suite đạt 12,347 tests PASS 100%.
 - **Hoàn thành Cơ chế Toàn diện Ma trận 6 trạng thái E2E & 5,000 Test Cases mới (2026-10-19)**:
   * Nâng cấp SimulationEngine.cs với cơ chế chống sập luồng phát tuần hoàn (Auto-Recovery catch HardwareOperationException), duy trì scheduler sống động khi xe vào Safe State ngắt transceiver hoặc bus mất ACK tạm thời.
   * Chuẩn hóa ma trận 6 trạng thái E2E: Ghim cả CRC và Alive (Double Fault khẩn cấp  \le 10ms$), Chỉ ghim CRC (Safe State 10-30ms), Chỉ ghim Alive (Counter Freeze), Bỏ ghim khôi phục trơn tru ($\Delta = 1$), Ngắt E2E (Payload thô DBC).

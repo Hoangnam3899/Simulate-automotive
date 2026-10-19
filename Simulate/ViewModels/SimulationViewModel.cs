@@ -807,13 +807,20 @@ namespace Simulate.ViewModels
 
         private void OnStatsTimerTick(object? state)
         {
-            if (System.Windows.Application.Current?.Dispatcher is { } dispatcher && !dispatcher.CheckAccess())
+            try
             {
-                dispatcher.BeginInvoke(UpdateStatsSnapshot);
+                if (System.Windows.Application.Current?.Dispatcher is { } dispatcher && !dispatcher.CheckAccess())
+                {
+                    dispatcher.BeginInvoke(UpdateStatsSnapshot);
+                }
+                else
+                {
+                    UpdateStatsSnapshot();
+                }
             }
-            else
+            catch (Exception ex)
             {
-                UpdateStatsSnapshot();
+                CrashReporter.WriteCrashReport(ex, "SimulationViewModel.OnStatsTimerTick", isTerminating: false);
             }
         }
 
@@ -886,26 +893,33 @@ namespace Simulate.ViewModels
 
         private void OnLiveFlushTimerTick(object? state)
         {
-            if (IsSignalMonitorPaused)
+            try
             {
-                return;
-            }
-
-            lock (_liveBufferLock)
-            {
-                if (_liveFrameBuffer.Count == 0)
+                if (IsSignalMonitorPaused)
                 {
                     return;
                 }
-            }
 
-            if (System.Windows.Application.Current?.Dispatcher is { } dispatcher && !dispatcher.CheckAccess())
-            {
-                dispatcher.BeginInvoke(FlushLiveBufferToSignals);
+                lock (_liveBufferLock)
+                {
+                    if (_liveFrameBuffer.Count == 0)
+                    {
+                        return;
+                    }
+                }
+
+                if (System.Windows.Application.Current?.Dispatcher is { } dispatcher && !dispatcher.CheckAccess())
+                {
+                    dispatcher.BeginInvoke(FlushLiveBufferToSignals);
+                }
+                else
+                {
+                    FlushLiveBufferToSignals();
+                }
             }
-            else
+            catch (Exception ex)
             {
-                FlushLiveBufferToSignals();
+                CrashReporter.WriteCrashReport(ex, "SimulationViewModel.OnLiveFlushTimerTick", isTerminating: false);
             }
         }
 
