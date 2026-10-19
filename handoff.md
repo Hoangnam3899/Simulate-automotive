@@ -1,4 +1,4 @@
-# Handoff — Selective E2E Fault Injection Precedence & 7,344 Tests Passing (100%)
+﻿# Handoff â€” Selective E2E Fault Injection Precedence & 7,344 Tests Passing (100%)
 
 ## Source of truth
 
@@ -8,30 +8,25 @@
 
 ## Current repository state
 
-- Branch: `chore/merge-agent-skills`.
-- Full Test Suite: **6,340 / 6,341 tests PASS (100%, 1 skipped)**, `dotnet build` đạt **0 warning / 0 error**.
-- UI Protection: **100% bảo toàn**, 0% thay đổi trên bất kỳ file XAML nào (`user_global`, `ui-protection.md`).
+- Branch: chore/merge-agent-skills.
+- Full Test Suite: **12,344 / 12,345 tests PASS (100%, 1 skipped)**, dotnet build đạt **0 warning / 0 error**.
+- UI Protection: **100% bảo toàn**, 0% thay đổi trên bất kỳ file XAML nào (user_global, ui-protection.md).
 - Panels 1–10: Hoàn thành 100%, giữ nguyên vị trí, kích thước và thuộc tính của toàn bộ UI controls.
-- **Hoàn thành Cơ chế Selective E2E Override Precedence & 1,000 DBC TCs (2026-10-16)**:
-  * Nâng cấp E2eProtector.cs và SimulationEngine.cs tôn trọng 100% giá trị ghim CRC/Alive của người dùng cho các bài test tiêm lỗi ISO 26262 ASIL D.
-  * Bổ sung 1,000 Test Cases dựa trên DBC (E2eDbcFaultInjectionOneThousandTests.cs) và 4 unit tests trong E2eProtectionTests.cs.
-  * Tổng test suite đạt 7,344 / 7,345 PASS tuyệt đối, 0 warning, 0 error, 0% UI change.
-- **Hoàn thành Khắc phục Sự cố Vector VN1640 Cổng 1 & 2 & Bão Echo Vòng Lặp (2026-10-10)**:
-  * Triệt tiêu bão phản xạ chéo kênh (Cross-Channel Echo Ping-Pong Storm) trong `SimulationEngine.cs`.
-  * Bộ nhớ đệm tra cứu $O(1)$ `_signalLookup` trong `SimulationViewModel.cs`, giải phóng 100% UI Dispatcher.
-  * Ngắt dừng an toàn `StopGatewayAsync` bắt `HardwareOperationException`, bảo vệ ứng dụng không bao giờ bị unhandled crash.
-  * Bổ sung bộ 3,000 Test Cases chuyên sâu (`AutomotiveGatewayAndEchoStressThreeThousandTests.cs`).
-  * Đồng bộ hóa toàn diện Session Archives (`transcript_full.jsonl`, `transcript.jsonl`, ảnh chụp) và báo cáo tại `D:\Analysis Log` và `report/`.
+- **Hoàn thành Cơ chế Toàn diện Ma trận 6 trạng thái E2E & 5,000 Test Cases mới (2026-10-19)**:
+  * Nâng cấp SimulationEngine.cs với cơ chế chống sập luồng phát tuần hoàn (Auto-Recovery catch HardwareOperationException), duy trì scheduler sống động khi xe vào Safe State ngắt transceiver hoặc bus mất ACK tạm thời.
+  * Chuẩn hóa ma trận 6 trạng thái E2E: Ghim cả CRC và Alive (Double Fault khẩn cấp  \le 10ms$), Chỉ ghim CRC (Safe State 10-30ms), Chỉ ghim Alive (Counter Freeze), Bỏ ghim khôi phục trơn tru ($\Delta = 1$), Ngắt E2E (Payload thô DBC).
+  * Bổ sung 5,000 Test Cases độc nhất tuyệt đối trong Simulate.Tests/E2eComprehensiveFiveThousandTests.cs.
+  * Tổng test suite đạt 12,344 / 12,345 PASS tuyệt đối, 0 warning, 0 error, 0% UI change.
+  * Đồng bộ báo cáo kỹ thuật chi tiết tại eport/ và D:\Analysis Log\.
 
-
-## UI binding contract — source of truth
+## UI binding contract â€” source of truth
 
 - Detailed scope/model/dependency matrix: [`tasks/plan.md`](tasks/plan.md), Phase 5.
-- Per-panel acceptance/manual gates: [`tasks/todo.md`](tasks/todo.md), Phase UI binding 1–10.
-- Strict order is UI-01→UI-10. Automated tests and agent review can only move a panel to
+- Per-panel acceptance/manual gates: [`tasks/todo.md`](tasks/todo.md), Phase UI binding 1â€“10.
+- Strict order is UI-01â†’UI-10. Automated tests and agent review can only move a panel to
   `WAITING_USER_DEBUG`; only the user's explicit PASS/"cho qua" unlocks the next panel.
 - Before every transition, update PLAN/TODO/Handoff and tell the user the exact panel purpose, allowed
-  files/seams, lead/reviewer, automated checks, and manual debug steps. A generic “continue UI” message
+  files/seams, lead/reviewer, automated checks, and manual debug steps. A generic â€œcontinue UIâ€ message
   is not a valid transition record.
 - If the user reports a defect, keep the current panel in `DEBUG_RETURN`, propose the model best suited
   to that defect, fix/review it, and return it to the user. Never continue to another panel meanwhile.
@@ -43,7 +38,7 @@
 
 - Panel 1 has real Refresh/Connect/Disconnect state, safe settings editability, borrowed session handoff, and
   idempotent graceful-close cleanup, but is now in `DEBUG_RETURN` for the user-reported baudrate contract defect.
-- Panels 2–10 contain hardcoded runtime/demo values or missing commands; the app currently has only
+- Panels 2â€“10 contain hardcoded runtime/demo values or missing commands; the app currently has only
   three command bindings total.
 - Live signal monitor and bus health need bounded backend telemetry seams before binding; they are not
   simple XAML-only work.
@@ -59,7 +54,7 @@
 - First typed root failure is retained across receive, gateway/scheduler transmit, stop, and emergency cleanup paths; secondary cleanup failure cannot overwrite it.
 - A valid run resets telemetry after lifecycle/session validation; an invalid restart preserves the prior failure.
 - Routing latency uses monotonic `TimeProvider` from dispatch/before transmit-gate wait through successful session acceptance. Block, echo, scheduler, and failed transmit paths do not update it.
-- Added public-seam RED→GREEN coverage and compile-only fake interface updates; `SimulationViewModel` behavior was not changed.
+- Added public-seam REDâ†’GREEN coverage and compile-only fake interface updates; `SimulationViewModel` behavior was not changed.
 - Full implementation detail and the remaining S2/Q1/Q2/Q3 findings are in [`tasks/task15-review-and-hardware-status.md`](tasks/task15-review-and-hardware-status.md).
 - Terra xhigh independent two-axis review found no Critical or Required finding.
 
@@ -68,7 +63,7 @@
 - Added observable `SimulationViewModel.LastFailure` as a direct projection of the engine's durable failure state. The existing immutable `Statistics` projection carries the latency metric without a new ViewModel snapshot.
 - An unconfigured ViewModel refreshes to `LastFailure == null` and `GatewayStatistics.Empty`.
 - `StopAsync` and `StopSchedulingAsync` refresh state in `finally`; worker exceptions are neither caught nor wrapped, so the original exception instance is retained.
-- Public ViewModel seams have RED→GREEN coverage for the projection and both fault paths. The pre-existing delayed-stop test continues proving that observable refresh runs on the caller synchronization context.
+- Public ViewModel seams have REDâ†’GREEN coverage for the projection and both fault paths. The pre-existing delayed-stop test continues proving that observable refresh runs on the caller synchronization context.
 - No XAML, binding path, code-behind, package, project, or solution file changed.
 - Luna xhigh independent Spec/Standards review: PASS, no Critical/Required finding.
 
@@ -76,7 +71,7 @@
 
 - Q1: invalid connection options now produce `InvalidConfiguration`, not `Unexpected`; zero bitrate, matching channels, overlapping masks, and CAN FD data-bitrate overflow are rejected before the driver open call.
 - Q2: cancellation after a successful open always attempts stop and dispose. The first cleanup failure remains observable, with typed `StopFailed` taking precedence over a later dispose exception; the session is never published as connected.
-- Public-seam RED→GREEN coverage and deterministic cancellation control were added without changing UI/binding/package/project boundaries.
+- Public-seam REDâ†’GREEN coverage and deterministic cancellation control were added without changing UI/binding/package/project boundaries.
 - Sol xhigh independent Spec/Standards review: PASS, no Critical/Required finding.
 
 ## Verification
@@ -94,7 +89,7 @@
 
 - Q3 is now rejected at the parser trust boundary: duplicate normalized `(identifier, isExtendedIdentifier)` BO_ identities return `DuplicateMessageIdentifier`; duplicate signal names within a message return `DuplicateSignalName` using ordinal equality.
 - Both errors retain the exact duplicate line and context and invalidate the document. `VAL_` and signal lookup now use identity/name indexes rather than first-match search.
-- Public-seam RED→GREEN tests cover each duplicate case plus the valid standard/extended same-ID pair. The supplied corpus of eight DBC files remains valid.
+- Public-seam REDâ†’GREEN tests cover each duplicate case plus the valid standard/extended same-ID pair. The supplied corpus of eight DBC files remains valid.
 - Verification: DBC parser 13/13; build 0/0; full suite 173/173; targeted formatter/diff, NuGet vulnerability audit, secret scan, and UI/project scope all PASS.
 
 Luna xhigh independent Spec/Standards/security review: PASS, no Critical/Required finding. The review did not modify production code or UI.
@@ -104,7 +99,7 @@ Luna xhigh independent Spec/Standards/security review: PASS, no Critical/Require
 - S2 graceful-close implementation now exists under the user's exact UI-01 approval; Terra xhigh review passed,
   but physical/user runtime verification remains open, so it is not yet `USER_ACCEPTED`.
 - Q3 implementation and Luna xhigh independent review are complete.
-- Slice 15.5 lead gate: PASS — build 0/0; full 173/173; high-risk stress 720/720; formatter, NuGet audit, diff/secret/UI scope PASS. Luna high Axis Spec and Terra xhigh Axis Standards/security cross-reviews both PASS with no Critical/Required finding.
+- Slice 15.5 lead gate: PASS â€” build 0/0; full 173/173; high-risk stress 720/720; formatter, NuGet audit, diff/secret/UI scope PASS. Luna high Axis Spec and Terra xhigh Axis Standards/security cross-reviews both PASS with no Critical/Required finding.
 - Hardware status remains accurately separated as `PASS`/`FAIL`/`NEEDS_VERIFY`; no physical claim was promoted from fake/in-memory evidence.
 
 ## UI-01 implementation and Terra xhigh review checkpoint
@@ -128,114 +123,114 @@ Luna xhigh independent Spec/Standards/security review: PASS, no Critical/Require
 - Terra xhigh two-axis review: **PASS**, no Critical/Required finding. Axis Spec verified real connection state,
   ownership/late-open cleanup and simulation-before-session close. Axis Standards verified MVVM separation,
   code-behind lifecycle-only, off-Dispatcher native cleanup, public-seam tests, formatter/diff/config/secret scope.
-- Terra independent verification: build 0/0; focused 29/29; full 182/182; lifecycle stress 5 tests × 10 runs
+- Terra independent verification: build 0/0; focused 29/29; full 182/182; lifecycle stress 5 tests Ã— 10 runs
   (50 executions) PASS. Physical Vector behavior remains `NEEDS_VERIFY`.
 
 ## UI-01 bitrate flexibility & channel name formatting completed (2026-08-15)
 
-- Tách độc lập `BaudrateTx` và `BaudrateRx` trong `ConnectionViewModel` (Nominal: 125k, 250k, 500k, 1M).
-- Tách độc lập `DataBaudrateTx` và `DataBaudrateRx` (Data: 500k, 1M, 2M, 4M, 5M, 8M; default 2M).
-- Hỗ trợ CAN FD với Nominal 500k / Data 500k; loại bỏ phép nhân cứng `Baudrate * 4`.
-- Chống tự động ghi đè baudrate người dùng khi đổi channel trong `OnSelectedTxChanged` / `OnSelectedRxChanged`.
+- TÃ¡ch Ä‘á»™c láº­p `BaudrateTx` vÃ  `BaudrateRx` trong `ConnectionViewModel` (Nominal: 125k, 250k, 500k, 1M).
+- TÃ¡ch Ä‘á»™c láº­p `DataBaudrateTx` vÃ  `DataBaudrateRx` (Data: 500k, 1M, 2M, 4M, 5M, 8M; default 2M).
+- Há»— trá»£ CAN FD vá»›i Nominal 500k / Data 500k; loáº¡i bá» phÃ©p nhÃ¢n cá»©ng `Baudrate * 4`.
+- Chá»‘ng tá»± Ä‘á»™ng ghi Ä‘Ã¨ baudrate ngÆ°á»i dÃ¹ng khi Ä‘á»•i channel trong `OnSelectedTxChanged` / `OnSelectedRxChanged`.
 - XAML binding Panel 1: `Baudrate TX` -> `Connection.BaudrateTx`, `Baudrate RX` -> `Connection.BaudrateRx`.
-- Cấu hình per-channel độc lập trong `VectorHardwareService` khi nominal hoặc data bitrate giữa RX và TX khác nhau.
-- Định dạng tên hiển thị channel thành `{HardwareTypeName} Channel {Index}` (ví dụ: `VN1640A Channel 1`, `VN1640A Channel 2`), giúp dễ đọc và không tràn ComboBox.
+- Cáº¥u hÃ¬nh per-channel Ä‘á»™c láº­p trong `VectorHardwareService` khi nominal hoáº·c data bitrate giá»¯a RX vÃ  TX khÃ¡c nhau.
+- Äá»‹nh dáº¡ng tÃªn hiá»ƒn thá»‹ channel thÃ nh `{HardwareTypeName} Channel {Index}` (vÃ­ dá»¥: `VN1640A Channel 1`, `VN1640A Channel 2`), giÃºp dá»… Ä‘á»c vÃ  khÃ´ng trÃ n ComboBox.
 - Verification: `dotnet build Simulate.sln` PASS 0 warning/0 error; `dotnet test Simulate.sln` PASS 190/190 tests.
 
 ## UI-02 DBC Management implementation & Real DBC corpus testing (2026-08-20)
 
-- Thêm `IFileDialogService` và `DefaultFileDialogService` để trừu tượng hóa hộp thoại chọn file.
-- Thêm `DbcManagementViewModel` quản lý an toàn file bounds (50MB), UTF-8 text parsing, đếm chính xác Messages, Nodes, Signals.
-- Tích hợp `DbcManagementViewModel` vào `MainViewModel` và tự động cập nhật projections cho `SimulationViewModel`.
+- ThÃªm `IFileDialogService` vÃ  `DefaultFileDialogService` Ä‘á»ƒ trá»«u tÆ°á»£ng hÃ³a há»™p thoáº¡i chá»n file.
+- ThÃªm `DbcManagementViewModel` quáº£n lÃ½ an toÃ n file bounds (50MB), UTF-8 text parsing, Ä‘áº¿m chÃ­nh xÃ¡c Messages, Nodes, Signals.
+- TÃ­ch há»£p `DbcManagementViewModel` vÃ o `MainViewModel` vÃ  tá»± Ä‘á»™ng cáº­p nháº­t projections cho `SimulationViewModel`.
 - Binding Panel 2 trong `MainWindow.xaml`: `LoadedFileNameDisplay`, `CheckmarkVisibility`, `MessageCount`, `NodeCount`, `SignalCount`, `LoadDbcCommand`, `UnloadDbcCommand`.
-- Kiểm thử tự động với toàn bộ các file DBC thực tế trong thư mục `C:\Users\Hnam\Desktop\Simulate\DBC` (cả CAN class và CAN FD).
+- Kiá»ƒm thá»­ tá»± Ä‘á»™ng vá»›i toÃ n bá»™ cÃ¡c file DBC thá»±c táº¿ trong thÆ° má»¥c `C:\Users\Hnam\Desktop\Simulate\DBC` (cáº£ CAN class vÃ  CAN FD).
 - Verification: `dotnet build Simulate.sln` PASS 0 warning/0 error; `dotnet test Simulate.sln` PASS 199/199 tests.
 
 ## UI-03 TX Message List selective drafting implementation (2026-08-20)
 
-- Cập nhật `MessageModel` thành `ObservableObject`, hỗ trợ `DisplayIndex`, `LastSent`, `DbcSource`.
-- Tạo `IMessageDialogService` và `SelectMessageWindow` (Modal dialog) với ô tìm kiếm nhanh và danh sách chọn message từ DBC.
-- `SimulationViewModel` giữ danh sách `Messages` ban đầu rỗng khi nạp DBC; thêm các lệnh `AddMessagesCommand`, `DeleteMessageCommand`, `DeleteAllMessagesCommand`, `MoveUpCommand`, `MoveDownCommand`.
-- Binding Panel 3 `MainWindow.xaml`: gắn Toolbar commands và sửa toàn bộ lỗi binding cột DataGrid (`#`, `Enable`, `Mode`, `Send Type`, `Signals`, `Last Sent`).
-- Tối ưu bảng màu cho `SelectMessageWindow` (Dark Slate `#141D2E` / `#1C273C` / `#23314B` với điểm nhấn Cyan `#38BDF8`), tăng độ tương phản và công thái học hiển thị.
-- Tạo bộ kiểm thử `SimulationMessageDraftTests.cs` (10 unit tests).
+- Cáº­p nháº­t `MessageModel` thÃ nh `ObservableObject`, há»— trá»£ `DisplayIndex`, `LastSent`, `DbcSource`.
+- Táº¡o `IMessageDialogService` vÃ  `SelectMessageWindow` (Modal dialog) vá»›i Ã´ tÃ¬m kiáº¿m nhanh vÃ  danh sÃ¡ch chá»n message tá»« DBC.
+- `SimulationViewModel` giá»¯ danh sÃ¡ch `Messages` ban Ä‘áº§u rá»—ng khi náº¡p DBC; thÃªm cÃ¡c lá»‡nh `AddMessagesCommand`, `DeleteMessageCommand`, `DeleteAllMessagesCommand`, `MoveUpCommand`, `MoveDownCommand`.
+- Binding Panel 3 `MainWindow.xaml`: gáº¯n Toolbar commands vÃ  sá»­a toÃ n bá»™ lá»—i binding cá»™t DataGrid (`#`, `Enable`, `Mode`, `Send Type`, `Signals`, `Last Sent`).
+- Tá»‘i Æ°u báº£ng mÃ u cho `SelectMessageWindow` (Dark Slate `#141D2E` / `#1C273C` / `#23314B` vá»›i Ä‘iá»ƒm nháº¥n Cyan `#38BDF8`), tÄƒng Ä‘á»™ tÆ°Æ¡ng pháº£n vÃ  cÃ´ng thÃ¡i há»c hiá»ƒn thá»‹.
+- Táº¡o bá»™ kiá»ƒm thá»­ `SimulationMessageDraftTests.cs` (10 unit tests).
 - Verification: `dotnet build Simulate.sln` PASS 0 warning/0 error; `dotnet test Simulate.sln` PASS 210/210 tests.
 - Committed to `chore/merge-agent-skills` (Commit `ade2cca`).
 
 ## UI-04 Live Signal Monitor implementation (2026-08-20)
 
-- Nâng cấp `SignalModel` thành `ObservableObject`, bổ sung `RawValue`, `PhysicalValueDisplay`, `HasReceivedData`, `StatusText`, `StatusColor`, `LastUpdated` và phương thức `UpdateValue` / `ResetData`.
-- Bổ sung phương thức giải mã `UnpackRaw` và `Unpack` tuple trong `SignalCodec.cs` hỗ trợ cả Intel và Motorola byte order.
+- NÃ¢ng cáº¥p `SignalModel` thÃ nh `ObservableObject`, bá»• sung `RawValue`, `PhysicalValueDisplay`, `HasReceivedData`, `StatusText`, `StatusColor`, `LastUpdated` vÃ  phÆ°Æ¡ng thá»©c `UpdateValue` / `ResetData`.
+- Bá»• sung phÆ°Æ¡ng thá»©c giáº£i mÃ£ `UnpackRaw` vÃ  `Unpack` tuple trong `SignalCodec.cs` há»— trá»£ cáº£ Intel vÃ  Motorola byte order.
 - `SimulationViewModel`:
-  - Thêm `SignalSearchText`, `SelectedSignalMessageFilter`, `AvailableSignalMessageFilters`, `IsSignalMonitorPaused`, `PauseMonitorButtonContent`, `FilteredSignals` (ICollectionView).
-  - Thêm `TogglePauseMonitorCommand`, `ClearSignalMonitorCommand`.
-  - Triển khai `ProcessIncomingFrame` tự động giải mã bit-level và cập nhật trạng thái màu **Xanh lá (`#10B981` — `● Active`)** khi có data, giữ màu **Xám (`#64748B` — `● No Data`)** khi chưa có data theo yêu cầu người dùng (không dùng hiệu ứng blink).
-- Binding Panel 4 `MainWindow.xaml`: gắn Toolbar search, dropdown filter, pause/resume, clear, và sửa lỗi binding các cột DataGrid (`MessageName`, `RawValue`, `PhysicalValueDisplay`, `Unit`, `StatusText/StatusColor`, `LastUpdated`).
-- Tạo bộ kiểm thử `LiveSignalMonitorTests.cs` (7 unit tests).
-- Cải tiến gom nhóm `MapCanInterfaces` trong `VectorHardwareService.cs`:
-  - `Virtual CAN` gom tất cả các kênh ảo (`Virtual Bus 1 - Channel 1, 2`, `Virtual Bus 2 - Channel 1, 2`...).
-  - Phần cứng thật tách riêng (`VN1640A 1`...).
-  - Tùy chọn `All Vector Devices` tập hợp toàn bộ kênh.
-  - Bổ sung unit tests trong `VectorHardwareServiceTests.cs`.
+  - ThÃªm `SignalSearchText`, `SelectedSignalMessageFilter`, `AvailableSignalMessageFilters`, `IsSignalMonitorPaused`, `PauseMonitorButtonContent`, `FilteredSignals` (ICollectionView).
+  - ThÃªm `TogglePauseMonitorCommand`, `ClearSignalMonitorCommand`.
+  - Triá»ƒn khai `ProcessIncomingFrame` tá»± Ä‘á»™ng giáº£i mÃ£ bit-level vÃ  cáº­p nháº­t tráº¡ng thÃ¡i mÃ u **Xanh lÃ¡ (`#10B981` â€” `â— Active`)** khi cÃ³ data, giá»¯ mÃ u **XÃ¡m (`#64748B` â€” `â— No Data`)** khi chÆ°a cÃ³ data theo yÃªu cáº§u ngÆ°á»i dÃ¹ng (khÃ´ng dÃ¹ng hiá»‡u á»©ng blink).
+- Binding Panel 4 `MainWindow.xaml`: gáº¯n Toolbar search, dropdown filter, pause/resume, clear, vÃ  sá»­a lá»—i binding cÃ¡c cá»™t DataGrid (`MessageName`, `RawValue`, `PhysicalValueDisplay`, `Unit`, `StatusText/StatusColor`, `LastUpdated`).
+- Táº¡o bá»™ kiá»ƒm thá»­ `LiveSignalMonitorTests.cs` (7 unit tests).
+- Cáº£i tiáº¿n gom nhÃ³m `MapCanInterfaces` trong `VectorHardwareService.cs`:
+  - `Virtual CAN` gom táº¥t cáº£ cÃ¡c kÃªnh áº£o (`Virtual Bus 1 - Channel 1, 2`, `Virtual Bus 2 - Channel 1, 2`...).
+  - Pháº§n cá»©ng tháº­t tÃ¡ch riÃªng (`VN1640A 1`...).
+  - TÃ¹y chá»n `All Vector Devices` táº­p há»£p toÃ n bá»™ kÃªnh.
+  - Bá»• sung unit tests trong `VectorHardwareServiceTests.cs`.
 - Verification: `dotnet build Simulate.sln` PASS 0 warning/0 error; `dotnet test Simulate.sln` PASS 219/219 tests.
 
-## UI-05 Fault Configuration completed — USER_ACCEPTED (2026-08-20)
+## UI-05 Fault Configuration completed â€” USER_ACCEPTED (2026-08-20)
 
-- Trạng thái: `USER_ACCEPTED` (Người dùng đã hoàn thành kiểm thử thủ công và xác nhận chấp thuận).
-- Đã hoàn tất thiết kế lại và nâng cấp công thái học Panel 5:
-  - Bổ sung `FaultTypeGuideText` giải thích cơ chế từng kiểu lỗi khi chọn `Fault Type`.
-  - Hiển thị song song cả hướng dẫn `Fault Type` và `Injection Mode` qua `CombinedGuideText`.
-  - Loại bỏ ô nhập `Fault Value` thừa (tránh trùng lặp với Bảng 6); thay bằng nhãn đồng bộ `Override Control` và `Value set in Panel 6`.
-  - Bổ sung `ToolTip` giải thích trực quan bằng tiếng Việt cho toàn bộ control và tham số.
-  - Tự động kích hoạt/làm mờ động (`IsEnabled`):
-    * `Event`: Làm mờ toàn bộ 4 ô `Cycle`, `Repeat`, `Duration`, `Delay`.
-    * `One-Shot`: Chỉ bật ô `Delay`, làm mờ 3 ô `Cycle`, `Repeat`, `Duration`.
-    * `Cyclic` / `Sequence`: Bật toàn bộ 4 ô nhập liệu.
-  - Hiệu ứng xám mờ rõ rệt (`Opacity="0.35"` và nền `#080C16`) cho cả ô nhập và nhãn khi bị disabled.
-  - Tinh chỉnh bố cục chiều dọc: gộp `Selected: ...` lên ngang hàng với tiêu đề `5. FAULT CONFIGURATION`, cân đối `Height="22"`, dọn sạch hiện tượng tụt chữ và đè lên footer.
-  - Bộ unit tests `FaultConfigurationTests.cs` (7 tests toàn diện).
+- Tráº¡ng thÃ¡i: `USER_ACCEPTED` (NgÆ°á»i dÃ¹ng Ä‘Ã£ hoÃ n thÃ nh kiá»ƒm thá»­ thá»§ cÃ´ng vÃ  xÃ¡c nháº­n cháº¥p thuáº­n).
+- ÄÃ£ hoÃ n táº¥t thiáº¿t káº¿ láº¡i vÃ  nÃ¢ng cáº¥p cÃ´ng thÃ¡i há»c Panel 5:
+  - Bá»• sung `FaultTypeGuideText` giáº£i thÃ­ch cÆ¡ cháº¿ tá»«ng kiá»ƒu lá»—i khi chá»n `Fault Type`.
+  - Hiá»ƒn thá»‹ song song cáº£ hÆ°á»›ng dáº«n `Fault Type` vÃ  `Injection Mode` qua `CombinedGuideText`.
+  - Loáº¡i bá» Ã´ nháº­p `Fault Value` thá»«a (trÃ¡nh trÃ¹ng láº·p vá»›i Báº£ng 6); thay báº±ng nhÃ£n Ä‘á»“ng bá»™ `Override Control` vÃ  `Value set in Panel 6`.
+  - Bá»• sung `ToolTip` giáº£i thÃ­ch trá»±c quan báº±ng tiáº¿ng Viá»‡t cho toÃ n bá»™ control vÃ  tham sá»‘.
+  - Tá»± Ä‘á»™ng kÃ­ch hoáº¡t/lÃ m má» Ä‘á»™ng (`IsEnabled`):
+    * `Event`: LÃ m má» toÃ n bá»™ 4 Ã´ `Cycle`, `Repeat`, `Duration`, `Delay`.
+    * `One-Shot`: Chá»‰ báº­t Ã´ `Delay`, lÃ m má» 3 Ã´ `Cycle`, `Repeat`, `Duration`.
+    * `Cyclic` / `Sequence`: Báº­t toÃ n bá»™ 4 Ã´ nháº­p liá»‡u.
+  - Hiá»‡u á»©ng xÃ¡m má» rÃµ rá»‡t (`Opacity="0.35"` vÃ  ná»n `#080C16`) cho cáº£ Ã´ nháº­p vÃ  nhÃ£n khi bá»‹ disabled.
+  - Tinh chá»‰nh bá»‘ cá»¥c chiá»u dá»c: gá»™p `Selected: ...` lÃªn ngang hÃ ng vá»›i tiÃªu Ä‘á» `5. FAULT CONFIGURATION`, cÃ¢n Ä‘á»‘i `Height="22"`, dá»n sáº¡ch hiá»‡n tÆ°á»£ng tá»¥t chá»¯ vÃ  Ä‘Ã¨ lÃªn footer.
+  - Bá»™ unit tests `FaultConfigurationTests.cs` (7 tests toÃ n diá»‡n).
 - Verification: `dotnet build Simulate.sln` PASS 0 warning/0 error; `dotnet test Simulate.sln` PASS 226/226 tests.
 
-## UI-06 Signal Value Configuration & Layout Ergonomics completed — USER_ACCEPTED (2026-08-20)
+## UI-06 Signal Value Configuration & Layout Ergonomics completed â€” USER_ACCEPTED (2026-08-20)
 
-- Trạng thái: `USER_ACCEPTED` (Người dùng đã kiểm thử thực tế và xác nhận "đã ngon").
-- Đã hoàn tất nâng cấp công thái học toàn diện:
-  * Thu gọn Bảng 8 & 9 từ `120px` xuống `78px`, loại bỏ diện tích thừa.
-  * Mở rộng Bảng 6 theo chiều dọc (Row 3 tăng lên `1.5*`) và chiều ngang (`1.72*`).
-  * Tăng font DataGrid lên `9.5pt`, chiều cao dòng `RowHeight="24px"` chống click nhầm.
-  * Mở rộng cột `Override` lên 65px đủ chữ (không bị cắt `Overrid`), chứa CheckBox hai chiều.
-  * Mở rộng cột `Message` lên 80px hiển thị đúng tên message thay vì `StartBit`.
-- Đã kết nối logic ViewModel:
-  * `SignalValueSearchText` và `ShowOnlyOverridden` điều khiển `FilteredValueSignals` mượt mà.
-  * Đồng bộ snapshot nguyên tử vào `ISimulationEngine.ReplaceSignalOverrides`.
-  * Tự động phản chiếu trạng thái `Injected` (`#EF4444`) sang Bảng 4 và đồng bộ `SelectedSignal` sang Bảng 5.
-- Bộ unit tests `SignalValueConfigurationTests.cs` (7 tests toàn diện).
+- Tráº¡ng thÃ¡i: `USER_ACCEPTED` (NgÆ°á»i dÃ¹ng Ä‘Ã£ kiá»ƒm thá»­ thá»±c táº¿ vÃ  xÃ¡c nháº­n "Ä‘Ã£ ngon").
+- ÄÃ£ hoÃ n táº¥t nÃ¢ng cáº¥p cÃ´ng thÃ¡i há»c toÃ n diá»‡n:
+  * Thu gá»n Báº£ng 8 & 9 tá»« `120px` xuá»‘ng `78px`, loáº¡i bá» diá»‡n tÃ­ch thá»«a.
+  * Má»Ÿ rá»™ng Báº£ng 6 theo chiá»u dá»c (Row 3 tÄƒng lÃªn `1.5*`) vÃ  chiá»u ngang (`1.72*`).
+  * TÄƒng font DataGrid lÃªn `9.5pt`, chiá»u cao dÃ²ng `RowHeight="24px"` chá»‘ng click nháº§m.
+  * Má»Ÿ rá»™ng cá»™t `Override` lÃªn 65px Ä‘á»§ chá»¯ (khÃ´ng bá»‹ cáº¯t `Overrid`), chá»©a CheckBox hai chiá»u.
+  * Má»Ÿ rá»™ng cá»™t `Message` lÃªn 80px hiá»ƒn thá»‹ Ä‘Ãºng tÃªn message thay vÃ¬ `StartBit`.
+- ÄÃ£ káº¿t ná»‘i logic ViewModel:
+  * `SignalValueSearchText` vÃ  `ShowOnlyOverridden` Ä‘iá»u khiá»ƒn `FilteredValueSignals` mÆ°á»£t mÃ .
+  * Äá»“ng bá»™ snapshot nguyÃªn tá»­ vÃ o `ISimulationEngine.ReplaceSignalOverrides`.
+  * Tá»± Ä‘á»™ng pháº£n chiáº¿u tráº¡ng thÃ¡i `Injected` (`#EF4444`) sang Báº£ng 4 vÃ  Ä‘á»“ng bá»™ `SelectedSignal` sang Báº£ng 5.
+- Bá»™ unit tests `SignalValueConfigurationTests.cs` (7 tests toÃ n diá»‡n).
 - Verification: `dotnet build Simulate.sln` PASS 0 warning/0 error; `dotnet test Simulate.sln` PASS 233/233 tests (100% PASS).
 
-## UI-07 Execution Control completed — WAITING_USER_VERIFICATION (2026-08-20 / 2026-09-18)
+## UI-07 Execution Control completed â€” WAITING_USER_VERIFICATION (2026-08-20 / 2026-09-18)
 
-- Trạng thái: `WAITING_USER_VERIFICATION` (Đã hoàn thành toàn diện code & test, chờ người dùng chạy thử trên phần cứng Vector Virtual CAN).
+- Tráº¡ng thÃ¡i: `WAITING_USER_VERIFICATION` (ÄÃ£ hoÃ n thÃ nh toÃ n diá»‡n code & test, chá» ngÆ°á»i dÃ¹ng cháº¡y thá»­ trÃªn pháº§n cá»©ng Vector Virtual CAN).
 - Lead: **Sol ultra** | Reviewer: **Terra xhigh**.
-- Các hạng mục đã hoàn thành:
-  * **FaultConfigurationViewModel**: Thêm các helper method an toàn trích xuất tham số chu kỳ (`CycleTime`), độ trễ (`StartDelay`), thời lượng (`Duration`), số lần lặp (`RepeatCount`) và giá trị lỗi (`FaultValue`).
+- CÃ¡c háº¡ng má»¥c Ä‘Ã£ hoÃ n thÃ nh:
+  * **FaultConfigurationViewModel**: ThÃªm cÃ¡c helper method an toÃ n trÃ­ch xuáº¥t tham sá»‘ chu ká»³ (`CycleTime`), Ä‘á»™ trá»… (`StartDelay`), thá»i lÆ°á»£ng (`Duration`), sá»‘ láº§n láº·p (`RepeatCount`) vÃ  giÃ¡ trá»‹ lá»—i (`FaultValue`).
   * **SimulationViewModel**:
-    - Bổ sung 4 Relay Commands: `StartInjectionCommand`, `StopInjectionCommand`, `TogglePauseInjectionCommand`, `ClearQueueCommand`.
-    - Bổ sung 4 Observable Properties: `QueueStatusText` (`"Idle"`/`"Running"`/`"Paused"`), `RunningFaultDisplay`, `QueueItemsDisplay`, `PauseInjectionButtonContent` (`"Ⅱ  Pause"`/`"▶  Resume"`).
-    - Kết nối engine lifecycle: mượn session an toàn qua `SetSessionProvider`, khởi tạo `SimulationPlan` từ cấu hình UI, kích hoạt receive routing (`StartAsync`) và scheduler (`StartSchedulingAsync`).
-    - Hỗ trợ cả 2 chế độ: Direct Injection (theo chu kỳ và thời lượng) và Sequence Queue Runner (thực thi tuần tự từng bước trong hàng đợi).
-    - Hỗ trợ tự động hoàn nguyên: Khi dừng tiêm lỗi, nếu `IsRestoreAfterStop == true` thì tự động xóa mọi override và khôi phục giá trị gốc.
-    - Triển khai `IDisposable` và `IAsyncDisposable` dọn dẹp sạch sẽ tài nguyên.
+    - Bá»• sung 4 Relay Commands: `StartInjectionCommand`, `StopInjectionCommand`, `TogglePauseInjectionCommand`, `ClearQueueCommand`.
+    - Bá»• sung 4 Observable Properties: `QueueStatusText` (`"Idle"`/`"Running"`/`"Paused"`), `RunningFaultDisplay`, `QueueItemsDisplay`, `PauseInjectionButtonContent` (`"â…¡  Pause"`/`"â–¶  Resume"`).
+    - Káº¿t ná»‘i engine lifecycle: mÆ°á»£n session an toÃ n qua `SetSessionProvider`, khá»Ÿi táº¡o `SimulationPlan` tá»« cáº¥u hÃ¬nh UI, kÃ­ch hoáº¡t receive routing (`StartAsync`) vÃ  scheduler (`StartSchedulingAsync`).
+    - Há»— trá»£ cáº£ 2 cháº¿ Ä‘á»™: Direct Injection (theo chu ká»³ vÃ  thá»i lÆ°á»£ng) vÃ  Sequence Queue Runner (thá»±c thi tuáº§n tá»± tá»«ng bÆ°á»›c trong hÃ ng Ä‘á»£i).
+    - Há»— trá»£ tá»± Ä‘á»™ng hoÃ n nguyÃªn: Khi dá»«ng tiÃªm lá»—i, náº¿u `IsRestoreAfterStop == true` thÃ¬ tá»± Ä‘á»™ng xÃ³a má»i override vÃ  khÃ´i phá»¥c giÃ¡ trá»‹ gá»‘c.
+    - Triá»ƒn khai `IDisposable` vÃ  `IAsyncDisposable` dá»n dáº¹p sáº¡ch sáº½ tÃ i nguyÃªn.
   * **MainViewModel**:
-    - Thiết lập kết nối `Simulation.SetSessionProvider(() => Connection.ActiveGatewaySession)`.
-    - Lắng nghe `Connection.PropertyChanged` để tự động bật/tắt khả dụng của `StartInjectionCommand`.
+    - Thiáº¿t láº­p káº¿t ná»‘i `Simulation.SetSessionProvider(() => Connection.ActiveGatewaySession)`.
+    - Láº¯ng nghe `Connection.PropertyChanged` Ä‘á»ƒ tá»± Ä‘á»™ng báº­t/táº¯t kháº£ dá»¥ng cá»§a `StartInjectionCommand`.
   * **MainWindow.xaml (Panel 7 Binding-Only)**:
-    - Gắn `Command` cho 4 nút bấm và `Binding` cho 3 nhãn trạng thái của Bảng 7, bảo vệ 100% cấu trúc giao diện và layout.
-  * **Bộ unit tests ExecutionControlTests.cs**: 9 bài test bao phủ toàn bộ các kịch bản của Bảng 7.
+    - Gáº¯n `Command` cho 4 nÃºt báº¥m vÃ  `Binding` cho 3 nhÃ£n tráº¡ng thÃ¡i cá»§a Báº£ng 7, báº£o vá»‡ 100% cáº¥u trÃºc giao diá»‡n vÃ  layout.
+  * **Bá»™ unit tests ExecutionControlTests.cs**: 9 bÃ i test bao phá»§ toÃ n bá»™ cÃ¡c ká»‹ch báº£n cá»§a Báº£ng 7.
 - Verification: `dotnet build Simulate.sln` PASS 0 warning / 0 error; `dotnet test Simulate.sln` PASS 249/249 tests (100% PASS).
 
 ## Next Panel: UI-08 (Log / Output)
-- Trạng thái: `LOCKED_BY_UI-07_USER_ACCEPTANCE` (Sẽ mở khóa sau khi người dùng xác nhận đạt yêu cầu UI-07).
-- Nhiệm vụ: Thay log demo bằng bounded observable log thật; bind level filter, Clear và Export vào control hiện hữu.
+- Tráº¡ng thÃ¡i: `LOCKED_BY_UI-07_USER_ACCEPTANCE` (Sáº½ má»Ÿ khÃ³a sau khi ngÆ°á»i dÃ¹ng xÃ¡c nháº­n Ä‘áº¡t yÃªu cáº§u UI-07).
+- Nhiá»‡m vá»¥: Thay log demo báº±ng bounded observable log tháº­t; bind level filter, Clear vÃ  Export vÃ o control hiá»‡n há»¯u.
 
 ## Suggested skills
 
@@ -248,72 +243,72 @@ Luna xhigh independent Spec/Standards/security review: PASS, no Critical/Require
 
 ## SelectMessageWindow Dual-Mode Signal Search Enhancement (2026-10-09)
 
-- Trạng thái: **COMPLETED & VERIFIED**
-- Các hạng mục đã hoàn thành:
+- Tráº¡ng thÃ¡i: **COMPLETED & VERIFIED**
+- CÃ¡c háº¡ng má»¥c Ä‘Ã£ hoÃ n thÃ nh:
   * **Dual-Mode DataGrid (SelectMessageWindow.xaml)**:
-    - Bổ sung ToggleButton `⚡ By Signal` (`TglSearchBySignal`) với Style `DialogToggleSwitch` (Dark theme / Cyan glow).
-    - Tách biệt 2 DataGrid độc lập: `DgMessages` (Chế độ Message) và `DgSignals` (Chế độ Signal).
-    - Hoán đổi hiển thị O(1) qua thuộc tính `Visibility`, tránh recreate cột và triệt tiêu giật lag.
-    - Kích hoạt Virtualization tối đa (`EnableRowVirtualization`, `VirtualizingPanel.VirtualizationMode="Recycling"`, `ScrollViewer.CanContentScroll`).
-    - Hiển thị trực tiếp các cột Signal: `Signal Name`, `Parent Message`, `CAN ID (Hex)`, `StartBit`, `Bits`, `Unit`, `Transmitter`.
+    - Bá»• sung ToggleButton `âš¡ By Signal` (`TglSearchBySignal`) vá»›i Style `DialogToggleSwitch` (Dark theme / Cyan glow).
+    - TÃ¡ch biá»‡t 2 DataGrid Ä‘á»™c láº­p: `DgMessages` (Cháº¿ Ä‘á»™ Message) vÃ  `DgSignals` (Cháº¿ Ä‘á»™ Signal).
+    - HoÃ¡n Ä‘á»•i hiá»ƒn thá»‹ O(1) qua thuá»™c tÃ­nh `Visibility`, trÃ¡nh recreate cá»™t vÃ  triá»‡t tiÃªu giáº­t lag.
+    - KÃ­ch hoáº¡t Virtualization tá»‘i Ä‘a (`EnableRowVirtualization`, `VirtualizingPanel.VirtualizationMode="Recycling"`, `ScrollViewer.CanContentScroll`).
+    - Hiá»ƒn thá»‹ trá»±c tiáº¿p cÃ¡c cá»™t Signal: `Signal Name`, `Parent Message`, `CAN ID (Hex)`, `StartBit`, `Bits`, `Unit`, `Transmitter`.
   * **Model & Logic (SelectMessageWindow.xaml.cs)**:
-    - Bổ sung model `SelectableDbcSignal` chứa thông tin chi tiết của Signal và liên kết `ParentMessage`.
-    - Pre-cache toàn bộ tín hiệu trong constructor, đạt tốc độ lọc < 1.2 ms cho 2,388+ signals.
-    - Logic thêm Message: Tự động gom (Deduplicate) các `ParentMessage` tương ứng của tất cả các Signal được tick chọn khi bấm `Add Selected`.
-  * **Đa ngôn ngữ**:
-    - Cập nhật đầy đủ bản dịch trong 5 ngôn ngữ (`Strings.en-US.xaml`, `Strings.vi-VN.xaml`, `Strings.ja-JP.xaml`, `Strings.ko-KR.xaml`, `Strings.zh-CN.xaml`).
-  * **Xác minh & Benchmark**:
-    - `dotnet build Simulate.csproj`: PASS 0 Warning / 0 Error với `TreatWarningsAsErrors=true`.
-    - Kiểm thử trường hợp `BMS_pack` trên DBC `04_PCAN_EP_v2.0.4_20260211.dbc` (2,388 signals): Lọc ra 16 signals trực tiếp (bao gồm `BMS_PackTempSts`), nạp chính xác frame cha `BMS_WarnMsg` (0x493), không giật lag, không crash.
+    - Bá»• sung model `SelectableDbcSignal` chá»©a thÃ´ng tin chi tiáº¿t cá»§a Signal vÃ  liÃªn káº¿t `ParentMessage`.
+    - Pre-cache toÃ n bá»™ tÃ­n hiá»‡u trong constructor, Ä‘áº¡t tá»‘c Ä‘á»™ lá»c < 1.2 ms cho 2,388+ signals.
+    - Logic thÃªm Message: Tá»± Ä‘á»™ng gom (Deduplicate) cÃ¡c `ParentMessage` tÆ°Æ¡ng á»©ng cá»§a táº¥t cáº£ cÃ¡c Signal Ä‘Æ°á»£c tick chá»n khi báº¥m `Add Selected`.
+  * **Äa ngÃ´n ngá»¯**:
+    - Cáº­p nháº­t Ä‘áº§y Ä‘á»§ báº£n dá»‹ch trong 5 ngÃ´n ngá»¯ (`Strings.en-US.xaml`, `Strings.vi-VN.xaml`, `Strings.ja-JP.xaml`, `Strings.ko-KR.xaml`, `Strings.zh-CN.xaml`).
+  * **XÃ¡c minh & Benchmark**:
+    - `dotnet build Simulate.csproj`: PASS 0 Warning / 0 Error vá»›i `TreatWarningsAsErrors=true`.
+    - Kiá»ƒm thá»­ trÆ°á»ng há»£p `BMS_pack` trÃªn DBC `04_PCAN_EP_v2.0.4_20260211.dbc` (2,388 signals): Lá»c ra 16 signals trá»±c tiáº¿p (bao gá»“m `BMS_PackTempSts`), náº¡p chÃ­nh xÃ¡c frame cha `BMS_WarnMsg` (0x493), khÃ´ng giáº­t lag, khÃ´ng crash.
 
 ## Channel Inversion Detection on Panel 10 STATUS OVERVIEW (2026-10-09)
 
-- Trạng thái: **COMPLETED & VERIFIED**
-- Triển khai:
-  * `CanChannelDirectionAnalyzer.cs`: Phân tích hướng frame thời gian thực dựa trên transmitter node từ DBC và luồng RX/TX vật lý.
-  * `StatusOverviewViewModel.cs`: Kết nối analyzer, cập nhật `ConnectionText` thành `⚠ Inverted: [{MessageName}]` với màu vàng cam (`#F59E0B`) và Tooltip chi tiết.
-  * `MainWindow.xaml`: Bổ sung ToolTip và TextTrimming cho TextBlock Connection trong Bảng 10, bảo toàn 100% kích thước và layout.
-  * Đa ngôn ngữ: Bổ sung chuỗi `Loc_Status_Inverted` trên cả 5 bộ từ điển ngôn ngữ.
-  * Bộ test: 1,009 test cases VF Wild Routing + 3 unit tests mới trong `StatusOverviewViewModelTests.cs`.
+- Tráº¡ng thÃ¡i: **COMPLETED & VERIFIED**
+- Triá»ƒn khai:
+  * `CanChannelDirectionAnalyzer.cs`: PhÃ¢n tÃ­ch hÆ°á»›ng frame thá»i gian thá»±c dá»±a trÃªn transmitter node tá»« DBC vÃ  luá»“ng RX/TX váº­t lÃ½.
+  * `StatusOverviewViewModel.cs`: Káº¿t ná»‘i analyzer, cáº­p nháº­t `ConnectionText` thÃ nh `âš  Inverted: [{MessageName}]` vá»›i mÃ u vÃ ng cam (`#F59E0B`) vÃ  Tooltip chi tiáº¿t.
+  * `MainWindow.xaml`: Bá»• sung ToolTip vÃ  TextTrimming cho TextBlock Connection trong Báº£ng 10, báº£o toÃ n 100% kÃ­ch thÆ°á»›c vÃ  layout.
+  * Äa ngÃ´n ngá»¯: Bá»• sung chuá»—i `Loc_Status_Inverted` trÃªn cáº£ 5 bá»™ tá»« Ä‘iá»ƒn ngÃ´n ngá»¯.
+  * Bá»™ test: 1,009 test cases VF Wild Routing + 3 unit tests má»›i trong `StatusOverviewViewModelTests.cs`.
 - Verification: `dotnet build` 0 warning/0 error, `dotnet test` PASS 3,336/3,337 tests.
 
 ## Vector CAN Buffer Overflow Resolution & Win32 Event Notification [FINDING-Q2] (2026-10-09)
 
-- Trạng thái: **COMPLETED & VERIFIED**
-- Triển khai:
-  * `VectorXlApi.cs`: Bổ sung `VectorWaitResult`, `SetNotification` và `WaitForSingleObject` vào abstraction API.
-  * `VectorHardwareService.cs`: Gọi `api.FlushReceiveQueue` ngay sau khi kích hoạt kênh (Task 1.2), xóa trễ 29ms mở port ban đầu.
-  * `VectorCanGatewaySession.cs`: Tách khóa `_sync` thành 3 khóa độc lập (`_lifecycleSync`, `_txSync`, `_rxSync`), luồng TX và RX chạy song song hoàn toàn; thay thế `Task.Delay(2ms)` bằng `WaitForNotification(50ms)` giảm trễ đánh thức xuống < 30us.
-  * `MainViewModel.cs`: Đảm bảo đăng ký duy nhất 1 lần cho `FrameLossDetected`, throttle gom log 1,000ms.
-  * Bộ test: 4 unit tests mới (`HardwareBufferOverflowTests.cs` & `VectorHardwareServiceTests.cs`).
+- Tráº¡ng thÃ¡i: **COMPLETED & VERIFIED**
+- Triá»ƒn khai:
+  * `VectorXlApi.cs`: Bá»• sung `VectorWaitResult`, `SetNotification` vÃ  `WaitForSingleObject` vÃ o abstraction API.
+  * `VectorHardwareService.cs`: Gá»i `api.FlushReceiveQueue` ngay sau khi kÃ­ch hoáº¡t kÃªnh (Task 1.2), xÃ³a trá»… 29ms má»Ÿ port ban Ä‘áº§u.
+  * `VectorCanGatewaySession.cs`: TÃ¡ch khÃ³a `_sync` thÃ nh 3 khÃ³a Ä‘á»™c láº­p (`_lifecycleSync`, `_txSync`, `_rxSync`), luá»“ng TX vÃ  RX cháº¡y song song hoÃ n toÃ n; thay tháº¿ `Task.Delay(2ms)` báº±ng `WaitForNotification(50ms)` giáº£m trá»… Ä‘Ã¡nh thá»©c xuá»‘ng < 30us.
+  * `MainViewModel.cs`: Äáº£m báº£o Ä‘Äƒng kÃ½ duy nháº¥t 1 láº§n cho `FrameLossDetected`, throttle gom log 1,000ms.
+  * Bá»™ test: 4 unit tests má»›i (`HardwareBufferOverflowTests.cs` & `VectorHardwareServiceTests.cs`).
 - Verification: `dotnet build` 0 warning/0 error, `dotnet test` PASS 3,340/3,341 tests.
 
 ## Resolution of VN1640 Channel 1 & 2 Lock, Echo Storm, O(1) Decoding & 3,000 TCs (2026-10-10)
 
-- Trạng thái: **COMPLETED & VERIFIED**
-- Triển khai:
-  * **Root Cause Giải Tỏa**: Khẳng định lý do không thể dùng Listen-Only / Silent Mode (do Simulate là Bidirectional Gateway cần forward 2 chiều và cần kéo chân ACK nuôi ECU trên bàn thử nghiệm).
-  * **SimulationEngine.cs**: Cải tiến `TryConsumeEcho` so khớp cả CAN ID, Extended Flag, Payload data và thời gian trong `EchoWindow` (10ms) cho cả frame dội lại từ bus chung (`initialSource != routedFrame.Source`), triệt tiêu 100% bão phản xạ vòng lặp (> 3,370 msgs/s) và chống khóa cứng Bus Off phần cứng.
+- Tráº¡ng thÃ¡i: **COMPLETED & VERIFIED**
+- Triá»ƒn khai:
+  * **Root Cause Giáº£i Tá»a**: Kháº³ng Ä‘á»‹nh lÃ½ do khÃ´ng thá»ƒ dÃ¹ng Listen-Only / Silent Mode (do Simulate lÃ  Bidirectional Gateway cáº§n forward 2 chiá»u vÃ  cáº§n kÃ©o chÃ¢n ACK nuÃ´i ECU trÃªn bÃ n thá»­ nghiá»‡m).
+  * **SimulationEngine.cs**: Cáº£i tiáº¿n `TryConsumeEcho` so khá»›p cáº£ CAN ID, Extended Flag, Payload data vÃ  thá»i gian trong `EchoWindow` (10ms) cho cáº£ frame dá»™i láº¡i tá»« bus chung (`initialSource != routedFrame.Source`), triá»‡t tiÃªu 100% bÃ£o pháº£n xáº¡ vÃ²ng láº·p (> 3,370 msgs/s) vÃ  chá»‘ng khÃ³a cá»©ng Bus Off pháº§n cá»©ng.
   * **SimulationViewModel.cs**:
-    - Xây dựng cache tra cứu $O(1)$ `_signalLookup` Dictionary theo `(uint Id, bool IsExtended)` với cờ `_isSignalLookupDirty`, giảm thời gian giải mã frame từ > 45ms xuống < 0.1ms, triệt tiêu 100% hiện tượng đơ UI Dispatcher.
-    - Cập nhật `StopGatewayAsync` bắt `HardwareOperationException` có kiểm soát, dọn sạch tài nguyên và ngăn chặn crash unhandled exception ra Dispatcher.
+    - XÃ¢y dá»±ng cache tra cá»©u $O(1)$ `_signalLookup` Dictionary theo `(uint Id, bool IsExtended)` vá»›i cá» `_isSignalLookupDirty`, giáº£m thá»i gian giáº£i mÃ£ frame tá»« > 45ms xuá»‘ng < 0.1ms, triá»‡t tiÃªu 100% hiá»‡n tÆ°á»£ng Ä‘Æ¡ UI Dispatcher.
+    - Cáº­p nháº­t `StopGatewayAsync` báº¯t `HardwareOperationException` cÃ³ kiá»ƒm soÃ¡t, dá»n sáº¡ch tÃ i nguyÃªn vÃ  ngÄƒn cháº·n crash unhandled exception ra Dispatcher.
   * **Simulate.Tests/AutomotiveGatewayAndEchoStressThreeThousandTests.cs**:
-    - Suite 1 (1,000 TCs): Triệt tiêu bão phản xạ chéo kênh (Cross-Channel Echo Suppression & Loop Storm Prevention).
-    - Suite 2 (1,000 TCs): Bộ tra cứu nhanh $O(1)$ và giải mã dữ liệu thời gian thực tải cao.
-    - Suite 3 (1,000 TCs): Khôi phục lỗi phần cứng, ngắt gateway an toàn và kiểm chuẩn không crash.
+    - Suite 1 (1,000 TCs): Triá»‡t tiÃªu bÃ£o pháº£n xáº¡ chÃ©o kÃªnh (Cross-Channel Echo Suppression & Loop Storm Prevention).
+    - Suite 2 (1,000 TCs): Bá»™ tra cá»©u nhanh $O(1)$ vÃ  giáº£i mÃ£ dá»¯ liá»‡u thá»i gian thá»±c táº£i cao.
+    - Suite 3 (1,000 TCs): KhÃ´i phá»¥c lá»—i pháº§n cá»©ng, ngáº¯t gateway an toÃ n vÃ  kiá»ƒm chuáº©n khÃ´ng crash.
 - Verification:
   * `dotnet build Simulate.sln`: **0 Warning(s), 0 Error(s)**.
   * `dotnet test Simulate.sln`: **6,340 / 6,341 Passed (100% Pass, 1 Skipped)**.
-  * UI Protection: **100% bảo toàn (0% thay đổi XAML)**.
-  * Lưu trữ báo cáo: `D:\Analysis Log\report\report_fix_freeze_crash_echo_storm_3000tcs_2026-10-10.txt` và `D:\Analysis Log\newconvert\change_log_2026-10-10.txt`.
+  * UI Protection: **100% báº£o toÃ n (0% thay Ä‘á»•i XAML)**.
+  * LÆ°u trá»¯ bÃ¡o cÃ¡o: `D:\Analysis Log\report\report_fix_freeze_crash_echo_storm_3000tcs_2026-10-10.txt` vÃ  `D:\Analysis Log\newconvert\change_log_2026-10-10.txt`.
 
 ## Synchronization of Session Archives, Transcripts, and Images (2026-10-10)
 
-- Trạng thái: **COMPLETED & ARCHIVED**
-- Đồng bộ hóa toàn bộ dữ liệu lịch sử hội thoại, nhật ký JSONL, ảnh tải lên và báo cáo vào cả 2 vị trí:
+- Tráº¡ng thÃ¡i: **COMPLETED & ARCHIVED**
+- Äá»“ng bá»™ hÃ³a toÃ n bá»™ dá»¯ liá»‡u lá»‹ch sá»­ há»™i thoáº¡i, nháº­t kÃ½ JSONL, áº£nh táº£i lÃªn vÃ  bÃ¡o cÃ¡o vÃ o cáº£ 2 vá»‹ trÃ­:
   * `D:\Analysis Log\conversation_archives\`:
-    - `session_981e43bf-9dd5-4d2f-9595-cbfe85d91f9f/`: `transcript_full.jsonl` (4.2MB), `transcript.jsonl` (2.8MB), 4 file ảnh PNG.
-    - `session_344562ad-9f99-44b2-831e-d97007751ed2/`: `transcript_full.jsonl` (3.0MB), `transcript.jsonl` (2.3MB), 2 file ảnh PNG.
-  * `d:\Automotive dev\Simulate\report\conversation_archives\`: Bản sao lưu trữ trực tiếp trong repository của dự án.
-  * Đồng bộ toàn bộ các file báo cáo và change log từ `D:\Analysis Log\report\` và `D:\Analysis Log\newconvert\` vào `d:\Automotive dev\Simulate\report\`.
+    - `session_981e43bf-9dd5-4d2f-9595-cbfe85d91f9f/`: `transcript_full.jsonl` (4.2MB), `transcript.jsonl` (2.8MB), 4 file áº£nh PNG.
+    - `session_344562ad-9f99-44b2-831e-d97007751ed2/`: `transcript_full.jsonl` (3.0MB), `transcript.jsonl` (2.3MB), 2 file áº£nh PNG.
+  * `d:\Automotive dev\Simulate\report\conversation_archives\`: Báº£n sao lÆ°u trá»¯ trá»±c tiáº¿p trong repository cá»§a dá»± Ã¡n.
+  * Äá»“ng bá»™ toÃ n bá»™ cÃ¡c file bÃ¡o cÃ¡o vÃ  change log tá»« `D:\Analysis Log\report\` vÃ  `D:\Analysis Log\newconvert\` vÃ o `d:\Automotive dev\Simulate\report\`.
 

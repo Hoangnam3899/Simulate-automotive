@@ -1,724 +1,146 @@
-# Implementation Plan: Vector Hardware Gateway & CAN Simulation Backend
+# Kế Hoạch Toàn Diện: Ma Trận Bắn Lỗi E2E (CRC/Alive), Khôi Phục & Bảo Vệ Bus CAN
 
-## 1. Mục tiêu
+> **Phân loại Task:** `T2 - Complex / Hardware / Architecture`  
+> **Kỹ năng điều phối (Skill):** `planning-and-task-breakdown`, `codebase-design`, `test-driven-development`, `security-and-hardening`  
+> **Quy tắc tuân thủ (Rules):** `AGENTS.md`, `PROJECT_RULES_COMBINED.md`, `ui-protection.md` (**0% thay đổi UI/XAML**), `savedata.md`, `report-standards.md`  
+> **Nguyên tắc cốt lõi:** Ít xâm lấn nhất (Least-Invasive), bảo toàn 100% tính năng Simulate hiện tại, bao quát toàn bộ các trạng thái Ghim / Bỏ ghim / Ngắt E2E theo chuẩn quốc tế.
 
-Nâng dự án `Simulate` từ trạng thái kết nối Vector XL cơ bản và dữ liệu mô phỏng tĩnh thành một backend có thể:
+---
 
-- khám phá và quản lý vòng đời phần cứng Vector an toàn;
-- vận hành CAN Classic và CAN FD qua cùng một seam;
-- mở hai phía RX/TX cho gateway hai chiều;
-- nhận, chuyển tiếp, chặn và inject CAN frame;
-- parse DBC, mã hóa/giải mã signal, override giá trị và hỗ trợ E2E;
-- cung cấp state/command qua ViewModel mà không khóa UI thread;
-- kiểm thử được bằng adapter in-memory khi không có hardware.
+## I. Ma Trận Toàn Diện Các Trạng Thái E2E (E2E State & Fault Matrix)
 
-Nguồn tham chiếu hành vi là dự án `D:\TEST_DEV\TOOL ĐỌC DTC DID EBUS\V1.5\TreeViews and Value Converters`, nhưng implementation mới phải phù hợp .NET 8, MVVM và rule của dự án hiện tại; không sao chép cấu trúc manager/code-behind nguyên khối của dự án cũ.
+Hệ thống điều khiển truyền động ô tô (bản tin `0xAB` / ID 171 `CVC_FMCU_Ctrl`, chu kỳ 10ms, CAN FD 24-byte) vận hành theo ma trận 6 trạng thái sau:
 
-## 2. Rào chắn bắt buộc
+| STT | Kịch bản thao tác | Cờ Engine (`isCounterOverridden`, `isChecksumOverridden`) | Dữ liệu Payload phát ra Bus CAN | Phản ứng chuẩn của ECU xe (AUTOSAR & ISO 26262) | Hiện tượng thực tế trên xe & Tool |
+|:---:|:---|:---|:---|:---|:---|
+| **1** | **Simulate bình thường (Không ghim)** | `counter: false`<br/>`checksum: false` | Alive đếm tăng đều $0 \to 14 \to 0$.<br/>CRC8 SAE J1850 được tự động tính đúng trên toàn bộ 23 bytes dữ liệu. | E2E State = `VALID`.<br/>FMCU chấp nhận lệnh điều khiển `TargetTqReq`, điều khiển biến tần Inverter trơn tru. | ✅ **Xe chạy ổn định 100%**.<br/>Đèn LED kênh Vector Xanh lá. |
+| **2** | **Chỉ ghim Alive (Counter Freeze)** | `counter: true`<br/>`checksum: false` | Alive giữ cố định (ví dụ = 5).<br/>*Hành vi cũ:* Engine tự động bù CRC mới hợp lệ.<br/>*Hành vi mới:* Kiểm soát tính toàn vẹn để tạo lỗi Counter Freeze thực sự. | Khi Alive đứng im mà CRC đúng: AUTOSAR coi là Repetition, lọc qua cửa sổ debounce.<br/>Khi Alive lỗi không bù: ECU chuyển sang `INVALID`. | Xe trơ 5-10s (nếu CRC bị bù đúng) hoặc ngắt Torque sau thời gian debounce quy định. |
+| **3** | **Chỉ ghim CRC (Data Corruption)** | `counter: false`<br/>`checksum: true` | Alive tiếp tục nhảy tăng đều chu kỳ.<br/>CRC mang giá trị sai lệch do user chỉ định (không bị tính toán đè). | E2E State = `INVALID` ngay trong **1-3 chu kỳ (10ms - 30ms)**.<br/>MCU lập tức ngắt Torque về 0 Nm (Safe State). | ⚠️ **Xe treo 1 lúc (chân ga mất tác dụng hoàn toàn)**.<br/>Đèn TX đỏ nếu xe ngắt transceiver làm mất ACK. |
+| **4** | **Ghim ĐỒNG THỜI CẢ CRC VÀ ALIVE** *(User yêu cầu bổ sung)* | `counter: true`<br/>`checksum: true` | **Cả 2 trường đều bị khóa cứng** theo đúng giá trị user cấu hình trên Panel 6.<br/>Engine **KHÔNG can thiệp tính toán đè bất kỳ byte nào**. | **Lỗi kép (Double Fault):** Vừa sai lệch tính toàn vẹn (CRC mismatch) vừa tê liệt bộ đếm trình tự (Sequence freeze).<br/>ECU xe kích hoạt Safe State khẩn cấp ở chu kỳ đầu tiên ($T \le 10\text{ms}$). | 🚨 **Xe sập điều khiển ngay lập tức (Hard Cutoff)**.<br/>Không có độ trễ debounce; đáp ứng tức thời trong phạm vi FTTI. |
+| **5** | **Bỏ ghim / Phục hồi (Unpin / Restore)** *(User yêu cầu bổ sung)* | Chuyển từ `true` $\to$ `false`<br/>(User bỏ tick Pin hoặc bấm Stop/Restore) | Alive **bắt đầu đếm tiếp tục trơn tru** từ $(\text{pinned\_counter} + 1) \pmod{15}$, bước nhảy $\Delta = 1$.<br/>CRC **tự động tính toán lại hợp lệ ngay lập tức** ở frame đầu tiên. | Theo chuẩn AUTOSAR, ECU nhận cần $K$ frame liên tiếp hợp lệ (`MinOkStateInit`, thường 3-5 frame = 30-50ms) để chuyển từ `INVALID` $\to$ `VALID`.<br/>MCU vào quy trình Re-arming an toàn. | 🔄 **Xe hồi phục lại lực kéo**.<br/>*(Lưu ý an toàn: Nhiều hãng xe yêu cầu nhả chân ga về 0% để giải phóng chốt Interlock trước khi cấp lại Torque)*. |
+| **6** | **Ngắt hẳn tính năng E2E (Disable E2E)** *(User yêu cầu bổ sung)* | `rule.E2eProtection.IsEnabled = false` | Toàn bộ wrapper E2E bị bỏ qua.<br/>Frame phát ra mang byte CRC và Alive thô/tĩnh từ baseline DBC (không tăng counter, không tính CRC). | Firmware của MCU/FMCU trên xe vốn bắt buộc E2E sẽ thấy CRC/Alive hoàn toàn sai lệch liên tục.<br/>Coi đây là lỗi mất liên lạc an toàn nghiêm trọng (Permanent Safety Fault). | 🛑 **Xe bị khóa Safe State vĩnh viễn**.<br/>Không thể hồi phục cho đến khi bật lại E2E hoặc tắt bật lại nguồn xe (Power Cycle). |
 
-1. **Không sửa UI khi chưa có yêu cầu và cho phép rõ ràng từ người dùng.** Trong phạm vi PLAN hiện tại, các file sau bị khóa:
-   - `Simulate/App.xaml`
-   - `Simulate/MainWindow.xaml`
-   - `Simulate/MainWindow.xaml.cs`
-   - mọi file XAML hoặc code-behind UI được thêm sau này
-2. Giữ nguyên mọi binding path hiện hữu: `Connection.*`, `Messages`, `Signals`, `FaultQueue`.
-3. Không thêm/xóa NuGet package nếu chưa được duyệt.
-4. Không thêm test project hoặc sửa `Simulate.sln`/`Simulate.csproj` nếu chưa được duyệt.
-5. Mọi thay đổi code phải kết thúc bằng `dotnet build` với 0 warning, 0 error; khi test project được duyệt thì chạy thêm `dotnet test`.
-6. Không commit/push nếu người dùng chưa yêu cầu.
-7. Không lấy license key, private key, credential hoặc file nhạy cảm từ dự án tham chiếu.
+---
 
-## 3. So sánh hiện trạng, tham chiếu và thiết kế đích
+## II. Tham Chiếu Tiêu Chuẩn Kỹ Thuật Quốc Tế (Automotive Standards)
 
-| Mảng | Dự án hiện tại | Dự án tham chiếu | Thiết kế đích |
-|---|---|---|---|
-| Hardware seam | `ICanHardwareDriver` chỉ discover/connect/disconnect | `ICANBusManager` có channel I/O, UDS và MITM | Seam nhỏ cho discovery/session; complexity nằm trong adapter/session |
-| CAN/CAN FD | Một `VectorHardwareService` với nhánh `isCanFd` | Hai manager Classic/FD lớn và trùng lặp | Một external seam; strategy/session Classic và FD là implementation nội bộ |
-| Vòng đời native | Chưa bảo đảm cleanup trên mọi nhánh lỗi | Có cleanup port riêng cho main/RX/TX | Session sở hữu handle; idempotent cleanup bằng `IAsyncDisposable`/`finally` |
-| Gateway | Chưa có frame I/O | `MitmEngine` chạy hai chiều RX→TX và TX→RX | `SimulationEngine` độc lập UI, cancellable, test được qua in-memory session |
-| Error model | `bool` | `(bool, string)` | Typed result/error, giữ status code Vector để chẩn đoán |
-| Concurrency | Gọi hardware đồng bộ từ ViewModel constructor/command | Background gateway nhưng còn chờ frame bằng `Thread.Sleep` trên UI | Async command, cancellation, bounded receive loop; không block Dispatcher |
-| Simulation data | Placeholder trong `MainViewModel` | DBC + signal override + E2E + scheduler | Domain model riêng; ViewModel chỉ chiếu state ra binding hiện hữu |
-| UI architecture | MVVM một phần | Nhiều logic trong code-behind | Logic hardware/simulation không đi vào XAML/code-behind |
-| Tests | Chưa có test project | Không phải mẫu kiểm thử chính | Test tại seam bằng adapter in-memory; hardware thật là manual gate |
+### 1. AUTOSAR E2E Protocol Specification (Profile 1 & Profile 2)
+* **Quy chuẩn Lỗi kép (CRC & Alive cùng lúc):**  
+  AUTOSAR định nghĩa bộ lọc trạng thái E2E: `Check(Data, Length)`. Khi cả Checksum và Counter cùng sai, mã lỗi trả về là `E2E_E_WRONGCRC | E2E_E_WRONGSEQUENCE`. Trạng thái chuyển trực tiếp sang `E2E_STATUS_INVALID`.
+* **Quy chuẩn Phục hồi (Recovery / Unpin):**  
+  AUTOSAR yêu cầu cơ chế **Sync Window**: Khi luồng frame hợp lệ trở lại sau sự cố, ECU không được phép kích hoạt lại ngay ở frame đầu tiên (để tránh nhiễu chập chờn). Cần tối thiểu `MinOkStateInit` (thường 3 đến 5 frame liên tiếp không có lỗi) thì biến trạng thái mới chuyển sang `E2E_STATUS_OK`.
+* **Quy chuẩn Ngắt E2E (Disable):**  
+  Với các bản tin được cấu hình E2E trong DBC, nếu phát đi frame không có E2E (hoặc E2E tĩnh), tầng E2E Receiver sẽ đánh giá là `E2E_STATUS_INITIAL` hoặc `E2E_STATUS_INVALID` liên tục, dẫn tới việc Application ngắt toàn bộ chức năng liên quan.
 
-## 4. Module và seam mục tiêu
+### 2. ISO 26262:2018 — Functional Safety ASIL-D
+* **Fault Tolerant Time Interval (FTTI):** 50ms – 100ms đối với biến tần truyền động EV.
+* **Safe State Transition & Recovery:**
+  * Khi xuất hiện lỗi (gim CRC, gim cả 2, hoặc ngắt E2E): Xe chuyển sang Safe State (Torque = 0) trong thời gian $T < \text{FTTI}$.
+  * Khi lỗi biến mất (Unpin/Restore): Xe không được tự ý vọt ga đột ngột (tránh nguy cơ mất an toàn). Quá trình phục hồi yêu cầu chân ga phải ở vị trí nhả hoặc có xác nhận từ người lái.
 
-```text
-MainViewModel
-├── ConnectionViewModel
-│   └── ICanHardwareDriver
-│       ├── VectorHardwareService        (adapter thật)
-│       └── MockHardwareService          (adapter in-memory)
-│
-└── SimulationViewModel                  (backend-ready; UI binding là approval gate)
-    └── ISimulationEngine
-        └── SimulationEngine
-            ├── ICanGatewaySession       (session do hardware driver tạo)
-            ├── DbcParser                (pure module)
-            ├── SignalCodec              (pure module)
-            └── E2E protection           (pure module)
+### 3. ISO 11898-1:2015 — CAN FD Data Link & Fault Confinement
+* **Tách bạch giữa Data Link và Application:**  
+  Dù ghim CRC, ghim Alive, ghim cả hai hay ngắt E2E, ở tầng phần cứng CAN (Vector Transceiver) frame vẫn phải đảm bảo cấu trúc CAN FD hợp lệ.
+* **Phân tích đèn CAN TX đỏ:**
+  * Xảy ra khi mất phản hồi ACK (do ECU xe chuyển sang Safe State và tắt transceiver) hoặc xung đột bus với ECU CVC thật.
+  * Giải pháp trong Tool: Bổ sung bộ đệm tự khôi phục (Auto-Recovery), không để driver Vector bị treo hoặc rơi vào Bus-Off kéo dài.
+
+---
+
+## III. Đánh Giá Mức Độ Ảnh Hưởng (Impact Assessment)
+
+| Thành phần | Mức độ ảnh hưởng | Đánh giá an toàn & Biện pháp kiểm soát |
+|:---|:---:|:---|
+| **Giao diện người dùng (UI / XAML)** | **0% (Tuyệt đối không đổi)** | **0% chỉnh sửa XAML.** Giữ nguyên toàn bộ layout, checkbox "Pin", bảng cấu hình, nút bấm và luồng tương tác hiện có. |
+| **Chế độ Simulate bình thường (Kịch bản 1)** | **0% (Bảo toàn 100%)** | Khi không ghim tín hiệu E2E nào, luồng tính toán tự động và phát cyclic 10ms giữ nguyên 100% độ chính xác và ổn định. |
+| **Kịch bản Ghim cả CRC và Alive (Kịch bản 4)** | **Thấp / Tích cực** | Đảm bảo `CreateInjectedFrame` chuyển trọn vẹn cả 2 giá trị ghim của người dùng vào frame mà không bị logic nào ghi đè. |
+| **Kịch bản Bỏ ghim / Phục hồi (Kịch bản 5)** | **Tích cực vượt trội** | Đảm bảo Counter tiếp tục tăng trơn tru $(\text{pinned} + 1)$, không bị giật bước nhảy quá lớn làm xe hiểu nhầm là lỗi `CounterJump`. |
+| **Kịch bản Ngắt hoàn toàn E2E (Kịch bản 6)** | **An toàn & Minh bạch** | Khi E2E bị tắt trên cấu hình, engine bỏ qua bước bọc E2E, gửi payload nguyên bản theo DBC. |
+| **Khả năng chịu lỗi phần cứng (Hardware Resilience)** | **Rất cao** | Ngăn ngừa việc đứt luồng scheduler khi gặp lỗi truyền thông tạm thời; duy trì tính sẵn sàng của thiết bị Vector. |
+
+---
+
+## IV. Phương Án Kỹ Thuật Tối Ưu Ít Xâm Lấn Nhất (Least-Invasive Technical Fixes)
+
+### 1. Tại `CreateInjectedFrame` ([SimulationEngine.cs](file:///D:/Automotive%20dev/Simulate/Simulate/Services/SimulationEngine.cs#L1128-L1180)):
+```csharp
+// Khi user override cả 2 hoặc từng phần:
+bool isCounterOverridden = false;
+bool isChecksumOverridden = false;
+
+foreach (SignalOverride signalOverride in signalOverrides ?? [])
+{
+    // ... Pack signal vào payload ...
+    if (rule.E2eProtection.IsEnabled)
+    {
+        if (DbcE2eDetector.IsChecksumSignal(signal, rule.E2eProtection))
+            isChecksumOverridden = true;
+        if (DbcE2eDetector.IsCounterSignal(signal, rule.E2eProtection))
+            isCounterOverridden = true;
+    }
+}
+
+// Xử lý E2eProtector:
+// - Nếu isChecksumOverridden && isCounterOverridden: Giữ nguyên CẢ HAI giá trị của user (Kịch bản 4)
+// - Nếu isChecksumOverridden: Giữ CRC user, Counter vẫn tăng bình thường (Kịch bản 3)
+// - Nếu isCounterOverridden: Giữ Counter user, KHÔNG tự động tính bù CRC mới làm triệt tiêu lỗi (Kịch bản 2)
+// - Nếu không ghim: Tăng Counter tự động và tính CRC tự động (Kịch bản 1)
 ```
 
-### Quyết định kiến trúc
+### 2. Tại Cơ chế Unpin / Khôi phục ([SimulationViewModel.cs](file:///D:/Automotive%20dev/Simulate/Simulate/ViewModels/SimulationViewModel.cs#L1838-L1850)):
+* Khi user bỏ tick Pin (hoặc bấm Stop/Restore), signal được xóa khỏi `_overrideSnapshot`.
+* Ở chu kỳ transmit tiếp theo, engine phát hiện `isCounterOverridden == false`: tự động lấy `_e2eCounters[key]` làm `previousCounter` và tăng lên $+1$.
+* Điều này đảm bảo bước nhảy Counter luôn là $\Delta = 1$ (chuẩn AUTOSAR), không gây hiện tượng `CounterJump` khi khôi phục.
 
-- `ICanHardwareDriver` là seam thật vì có ít nhất hai adapter: Vector và Mock.
-- Handle/port/mask/permission của Vector nằm hoàn toàn trong session; ViewModel và simulation engine không được biết `XLDriver`.
-- Session nhận cấu hình typed gồm RX channel, TX channel, CAN mode, nominal bitrate và data bitrate.
-- Frame dùng model typed: CAN ID chuẩn hóa, cờ extended, payload, DLC/length, source side và timestamp.
-- Simulation engine xử lý ba gateway mode cốt lõi: `PassThrough`, `Block`, `Inject`.
-- DBC parser, signal codec và E2E là pure module; test trực tiếp, không tạo interface hình thức khi chưa có adapter thứ hai.
-- Không đưa UDS/DID/DTC vào phase này. `ICanHardwareDriver` không được phình ra theo toàn bộ `ICANBusManager` của dự án tham chiếu.
-- Không dùng string để biểu diễn mode/state nội bộ; chỉ format string tại ViewModel.
+### 3. Tại Luồng Transmit Cyclic ([SimulationEngine.cs](file:///D:/Automotive%20dev/Simulate/Simulate/Services/SimulationEngine.cs#L934-L945)):
+* Bọc an toàn khối `TransmitAsync`: Nếu gặp lỗi `TransmitFailed` (ví dụ xe vừa vào Safe State ngắt transceiver), ghi nhận lỗi chẩn đoán nhưng **không để ném exception làm sập vĩnh viễn task chạy ngầm**.
+* Tự động thử lại ở chu kỳ tiếp theo để khi xe khôi phục, kết nối được tái lập tức thì.
 
-## 5. Dependency graph
+---
 
-```text
-Approval gates + baseline
-        │
-        ▼
-Domain contracts + hardware/session seams
-        ├──────────────┐
-        ▼              ▼
-In-memory adapter   Vector lifecycle/discovery
-        │              │
-        │              ├── Classic CAN frame I/O
-        │              └── CAN FD frame I/O
-        └──────┬───────┘
-               ▼
-      Async connection orchestration
+## V. Kế Hoạch Triển Khai Chi Tiết (Phase Breakdown)
 
-DBC parser ──► Signal codec/E2E ──► Simulation configuration
-                                         │
-Hardware session ────────────────────────┤
-                                         ▼
-                             Gateway pass/block/inject
-                                         │
-                                         ▼
-                              Scheduler + emergency stop
-                                         │
-                                         ▼
-                     ViewModel projection + integration tests
+```mermaid
+flowchart TD
+    P1["Phase 1: Test Cases cho 6 Kịch bản (TDD)"] --> P2["Phase 2: Sửa CreateInjectedFrame & E2eProtector"]
+    P2 --> P3["Phase 3: Cơ chế Unpin & Hardware Auto-Recovery"]
+    P3 --> P4["Phase 4: Chạy kiểm thử hồi quy 100% Pass"]
+    P4 --> P5["Phase 5: Báo cáo kỹ thuật chuẩn savedata"]
 ```
 
-## 6. Chiến lược phân bổ model AI
-
-Giả định các tên Luna/Terra/Sol là ba profile model nội bộ; nếu capability thực tế khác, giữ nguyên mức reasoning nhưng đổi profile trước khi triển khai.
-
-| Profile | Dùng cho | Không giao chính |
-|---|---|---|
-| **Luna mid/high/xhigh** | inventory, fixture, test case, tài liệu, kiểm tra spec và các thay đổi cơ học | quyết định lifecycle native hoặc concurrency khó |
-| **Terra high/xhigh** | C#/.NET 8, MVVM, domain model, parser/codec, integration chuẩn | quyết định cuối cùng về race/handle leak có rủi ro hardware |
-| **Sol xhigh/ultra** | seam architecture, Vector XL interop, resource lifetime, gateway concurrency, final risk review | việc lặp lại/boilerplate đơn giản |
-
-Nguyên tắc:
-
-- `ultra` chỉ dùng cho phần có rủi ro native handle, CAN FD, race condition hoặc safety.
-- Lead và reviewer không dùng cùng profile khi có thể.
-- Mỗi task chỉ có một lead; reviewer chỉ kiểm tra acceptance criteria và diff.
-- Model không được tự mở rộng phạm vi sang UI.
-
-## 7. Kế hoạch theo phase
-
-### Phase 0 — Governance và baseline
-
-- [x] Task 0: Chốt approval gates và baseline hiện tại — **Luna high**, review **Terra high**. Baseline pass và approval decisions đã được người dùng xác nhận.
-- [x] Task 1: Thiết kế domain contracts và session seam — **Sol xhigh**, review **Terra xhigh**. Terra review PASS; contract đã được freeze.
-
-### Checkpoint A — Contract freeze
-
-- [x] Người dùng duyệt mọi thay đổi project/package cần thiết.
-- [x] Contract đủ cho Vector và Mock nhưng không lộ `vxlapi_NET` ra caller.
-- [x] Không có diff ở XAML/code-behind UI.
-- [x] `dotnet build Simulate.sln` thành công.
-
-### Phase 1 — Hardware foundation
-
-- [x] Task 2: Nâng Mock adapter thành in-memory gateway session — **Terra high**, review **Luna high**. Luna review PASS; task đã hoàn tất.
-- [x] Task 3: Hardening discovery và native lifecycle — **Sol ultra**, review **Terra xhigh** PASS. Build 0 warning/0 error, test 21/21 PASS, UI diff bằng không; hardware thật còn `NEEDS_VERIFY`.
-- [x] Task 4: Classic CAN receive/transmit hai chiều — **Sol ultra** implementation COMPLETE; test review **Luna xhigh** PASS và code review **Terra xhigh** PASS. Build 0 warning/0 error, 35/35 tests PASS, UI diff bằng không; hardware thật còn `NEEDS_VERIFY` theo [`tasks/vector-classic-can-hardware-checklist.md`](vector-classic-can-hardware-checklist.md).
-- [x] Task 5: CAN FD receive/transmit hai chiều — **Sol ultra** implementation và review **Terra xhigh** PASS; 65/65 tests PASS, hardware thật còn `NEEDS_VERIFY`.
-- [x] Task 6: Chuyển connection orchestration sang async/cancellation — **Terra xhigh** implementation, Required-finding fix và **Luna high** re-review PASS; test 71/71, build 0 warning/0 error, UI không đổi.
-
-### Checkpoint B — Hardware session
-
-- [x] Mock session chứng minh connect, receive, transmit, flush và disconnect qua contract tests; review độc lập `Luna high` PASS.
-- [x] Mọi nhánh lỗi Vector lifecycle đã mô phỏng đều giải phóng port/driver và giữ cleanup status; hardware thật còn `NEEDS_VERIFY`.
-- [x] Classic dùng interface V3; CAN FD dùng V4 và API receive/transmit tương ứng. Task 5 đã review PASS.
-- [x] Connect/refresh/disconnect không block UI thread.
-- [x] Build/test sạch và không đổi UI tại checkpoint Task 5 implementation: 0 warning/0 error, 65/65 tests PASS.
-
-### Phase 2 — Simulation domain
-
-- [x] Task 7: DBC domain và parser tối thiểu — implementation/fix **Terra xhigh** PASS; re-review **Luna xhigh** PASS; DBC tests 9/9, full suite 80/80, build 0 warning/0 error, UI diff bằng không.
-- [x] Task 8: Signal codec và E2E protection — implementation **Sol xhigh** PASS; independent review **Luna xhigh** PASS, không có finding Critical/Required; focused tests 18/18, full suite 98/98, build 0 warning/0 error, UI diff bằng không.
-- [x] Task 9: Simulation configuration và validation — implementation **Terra high** PASS; independent review **Luna high** PASS, không có finding Critical/Required; focused tests 17/17, full suite 115/115, build 0 warning/0 error, UI diff bằng không.
-
-### Checkpoint C — Pure simulation logic
-
-- [x] Parse được standard/extended CAN ID, DLC, endian, signedness, factor/offset và min/max trong phạm vi đã định.
-- [x] Pack/unpack signal có golden vectors độc lập.
-- [x] E2E chỉ chạy khi cấu hình bật; counter/CRC có test vector.
-- [x] Không phụ thuộc WPF hoặc Vector XL trong các pure module.
-
-### Phase 3 — Gateway engine
-
-- [x] Task 10: Gateway hai chiều và mode PassThrough/Block — **Sol ultra**, review **Terra xhigh**.
-- [x] Task 11: Inject/override, live baseline và echo filtering — **Sol ultra implementation PASS**, **Terra xhigh review PASS**, **Luna xhigh final review PASS** (build 0/0, full test 134/134, 10x engine stress pass, UI diff 0); commit `dd60366`. Signal value contract đã hiện thực: numeric physical value; typed `VAL_` label/key map raw → physical trước khi pack; live baseline chỉ là nguồn giữ bit/hiển thị, không tự thành override. Hardware echo/latency thực vẫn `NEEDS_VERIFY`.
-- [x] Task 12: One-shot/Cyclic/Event, pause/resume và emergency stop — **Sol xhigh implementation/self-review PASS**, **Sol ultra Required-finding fix PASS** và **Terra xhigh re-review PASS**. Pause/transmit-gate interleaving không vượt pause boundary; emergency luôn cleanup session dù scheduler fault và vẫn giữ typed root failure. Focused 14/14 lặp 20 vòng (280/280), full 148/148, build 0/0, formatter/diff/secret/UI diff 0. Chưa commit/push.
-
-### Checkpoint D — Simulation engine
-
-- [x] RX→TX và TX→RX hoạt động qua in-memory session.
-- [x] Frame không có rule được pass-through; Block không phát; Inject chỉ sửa signal được override.
-- [x] Cancellation dừng receive/scheduler hữu hạn thời gian, không phát thêm frame sau stop; Emergency Stop await in-flight Event transmit trước session cleanup.
-- [x] Counter quan sát được qua immutable `GatewayStatistics`; typed worker failure được giữ và ném lại qua stop/emergency paths.
-- [x] Slices 15.1–15.2 engine telemetry và ViewModel projection đã PASS qua implementation/review gates. Physical hardware latency vẫn `NEEDS_VERIFY`.
-
-### Phase 4 — Application integration không đổi UI
-
-- [x] Task 13: SimulationViewModel và projection sang binding hiện hữu — implementation/fix **Terra xhigh** PASS; independent re-review **Sol xhigh** PASS. Build 0/0, focused 6/6, full 154/154, formatter/diff/UI scope sạch; chưa commit/push.
-
-**Task 13 contract (2026-08-14):** `SimulationViewModel` nhận `SimulationPlan` và `ISimulationEngine` đã được tạo ở composition boundary; không gọi Vector API, không sở hữu/mở/đóng `ICanGatewaySession`. Nó project DBC/rule typed thành `Messages`, `Signals`, `FaultQueue`, phản chiếu runtime engine state qua method backend explicit, và không tự start/stop. `MainViewModel` chỉ forward đúng các binding path hiện hữu, thay demo data bằng collection typed rỗng hoặc plan projection. Start/Stop/Pause/Emergency command binding là `UI_GATED`: chưa thêm RelayCommand, XAML hay code-behind. Public test seams: `SimulationViewModel` và constructor injected của `MainViewModel`; fake `ISimulationEngine` được dùng để kiểm tra lifecycle/state mà không dùng Vector/hardware.
-
-**Task 13 implementation checkpoint (2026-08-14):** Terra xhigh đã hoàn tất projection typed, composition boundary và test seam. Build 0 warning/0 error; focused 5/5 và full suite 153/153 PASS; `git diff --check` và UI/XAML/code-behind scope PASS. Chưa đánh dấu DONE hay commit/push trước independent review `Sol xhigh`.
-
-**Task 13 Sol xhigh review (2026-08-14):** Spec/ownership/UI scope PASS; Standards trả 2 Required findings về CRLF formatter và WPF continuation context.
-
-**Task 13 Terra xhigh fix (2026-08-14):** PASS — đã chạy targeted formatter để chuẩn hóa 5 file C# Task 13 sang CRLF; `dotnet format --verify-no-changes` PASS. Bỏ mọi `ConfigureAwait(false)` khỏi `SimulationViewModel` để observable state trở về caller synchronization context. Regression test dùng fake engine hoàn thành bất đồng bộ + queueing synchronization context đã RED trước fix/GREEN sau fix. Build 0/0; focused 6/6 và full suite 154/154 PASS; diff/UI scope sạch. Chờ `Sol xhigh` re-review, chưa DONE/commit/push.
-
-**Task 13 Sol xhigh re-review (2026-08-14):** PASS — hai Required finding đã được giải quyết đúng phạm vi. Re-review độc lập xác nhận targeted formatter/CRLF PASS; continuation sau `ValueTask` chưa hoàn tất quay lại caller synchronization context trước khi phát `PropertyChanged`; không còn `ConfigureAwait(false)` trong ViewModel. Build 0 warning/0 error; focused 6/6 và full suite 154/154 PASS; `git diff --check` cùng UI/XAML/code-behind/project/solution scope PASS. Không có finding Critical/Required; Task 13 DONE, chưa commit/push.
-- [x] Task 14: Integration/soak tests bằng in-memory session — implementation/fix **Luna xhigh** PASS; independent re-review **Sol xhigh** PASS. Focused 4/4, soak 10/10 (500 vòng), build 0/0, full 158/158, formatter/diff/UI scope sạch; chưa commit/push.
-
-**Task 14 implementation checkpoint (2026-08-14):** Luna xhigh đã thêm integration path qua `MockHardwareService`/`MockCanGatewaySession`: Classic PassThrough/Block/Inject, CAN FD one-shot Inject với DLC/BRS, soak 50 vòng connect/start/schedule/stop/disconnect và reconnect sau typed transmit failure. Focused 4/4; soak lặp 10/10 (500 vòng); build 0 warning/0 error; full suite 158/158; targeted formatter, `git diff --check` và UI/XAML/code-behind/project/solution scope PASS. Chưa đánh dấu DONE hay commit/push trước independent review `Sol xhigh`.
-**Task 14 Sol xhigh review (2026-08-14):** Axis Standards/build/scope PASS nhưng Axis Spec có 2 Required test gaps. (1) Soak chỉ kiểm tra enqueue/output sau khi `session.StopAsync()`, nên session đóng đã che mất bằng chứng rằng `SimulationEngine.StopAsync()` không còn route/schedule frame trong lúc caller-owned session vẫn mở. (2) Reconnect tạo `healthyDriver` mới, nên chưa chứng minh cùng driver instance có thể mở session mới sau typed transmit failure và cleanup. Task 14 chưa DONE; chuyển lại Luna xhigh để sửa test theo RED→GREEN, không mở rộng UI/production ngoài test seam cần thiết.
-
-**Task 14 Luna xhigh fix (2026-08-14):** PASS — soak giữ session mở sau `engine.StopAsync()`, enqueue vẫn thành công nhưng không có transmission/counter tăng trong bounded window rồi mới disconnect; reconnect dùng fail-once `ICanHardwareDriver` cùng instance cho lần mở lỗi và lần mở khỏe. Targeted formatter PASS; focused 4/4; soak lặp 10/10 (500 vòng); build 0/0; full suite 158/158; `git diff --check` và UI/XAML/code-behind/project/solution scope PASS. Chờ Sol xhigh re-review, chưa DONE/commit/push.
-
-**Task 14 Sol xhigh re-review (2026-08-14):** PASS — hai Required findings được giải quyết đúng contract. Post-stop proof quan sát session vẫn mở, input được session nhận nhưng không có TX/counter tăng sau engine stop; reconnect dùng chính fail-once driver instance để mở session khỏe thứ hai. Không có finding Critical/Required mới. Formatter PASS; build 0/0; focused 4/4; full 158/158; `git diff --check` và UI/XAML/code-behind/project/solution scope PASS. Task 14 DONE, chưa commit/push.
-
-- [x] Task 15: Code review đa trục và hardware verification checklist — **backend/review closure DONE**: slices 15.1–15.5, Sol ultra lead, Luna high Axis Spec và Terra xhigh Axis Standards/security đều PASS. S2 graceful-close vẫn `UI_GATED`; Vector bench thật vẫn `NEEDS_VERIFY`, được theo dõi tại [`tasks/task15-review-and-hardware-status.md`](task15-review-and-hardware-status.md).
-
-**Task 15 Sol ultra lead review (2026-08-14):** build 0/0, full 158/158, high-risk stress 350/350, targeted formatter, dependency/secret/log/UI scope gates PASS. Không sửa production/UI và không commit/push. Review phát hiện Required gaps về durable error/latency observability, graceful application-close cleanup (`UI_GATED`), typed connection validation/cancel cleanup failure và duplicate DBC identity validation. Hardware thật chưa chạy; consolidated status phân biệt `PASS`/`FAIL`/`NEEDS_VERIFY` trong tài liệu Task 15. Task chưa DONE.
-
-**Task 15 Luna high Axis Spec review (2026-08-14):** PASS độc lập ở phạm vi đối chiếu spec/reference. Xác nhận S1 là Required vì `ISimulationEngine`/`SimulationViewModel` chưa expose durable error state và latency snapshot; xác nhận S2 là Required nhưng `UI_GATED` vì close path thiếu cleanup như reference và mọi sửa WPF code-behind đều cần user approval. Không sửa production/UI, không commit/push. Next reviewer: **Terra xhigh** cho Axis Standards/security Q1–Q3.
-
-**Task 15 Terra xhigh Axis Standards/security review (2026-08-14):** PASS độc lập ở phạm vi review, không có Critical finding mới. Xác nhận Q1 Required (validation exception bị map thành `Unexpected`), Q2 Required (cancel-after-open nuốt typed `StopFailed`), Q3 Required (duplicate DBC identity/signal được chấp nhận rồi fail/ambiguous downstream); Q4/Q5 giữ Optional. Build 0/0, full 158/158, NuGet vulnerability audit và tracked-source secret scan PASS. Không sửa production/UI/package/project, không commit/push. Next model: **Sol ultra** thiết kế remediation S1 và sequence Q1–Q3 trước RED→GREEN implementation.
-
-**Task 15 Sol ultra remediation design (2026-08-14):** DESIGN COMPLETE, chưa implementation. S1 dùng API additive: `ISimulationEngine.LastFailure` giữ first typed root failure mỗi run; immutable `GatewayStatistics.LastRoutingLatency` dùng `TimeSpan?` và monotonic `TimeProvider`, chỉ đo software gateway route thành công, không tuyên bố physical-bus latency. `SimulationViewModel` chỉ project state backend, không thêm binding/UI. Raw ticks, incoming hardware timestamp và runtime snapshot type trùng lặp đã bị loại. Build baseline 0/0; không sửa production/UI/package/project, không commit/push.
-
-**Task 15 slice 15.1 Sol xhigh implementation (2026-08-15):** IMPLEMENTATION COMPLETE, chờ **Terra xhigh** review. Public engine seam đã thêm first-root `LastFailure` và immutable nullable `LastRoutingLatency`; failure được giữ qua receive/gateway/scheduler/emergency paths, cleanup thứ cấp không ghi đè root, valid restart reset telemetry còn invalid start giữ state cũ. Latency dùng monotonic `TimeProvider`, bao gồm transmit-gate wait đến session acceptance và không cập nhật bởi block/echo/scheduler/failure. RED→GREEN tests PASS; focused 39/39, full 162/162, stress 390/390, build 0/0, targeted formatter/diff/secret/UI/project scope PASS. Không sửa ViewModel behavior/UI/XAML/code-behind, package/project/solution; không commit/push.
-
-**Task 15 slice 15.1 Terra xhigh review (2026-08-15):** PASS — không có finding Critical/Required. Axis Spec xác nhận first-root/reset/latency interval và các exclusion; Axis Standards xác nhận atomic capture/reset, seam/interface boundary, deterministic manual-clock tests và không có security/performance regression. Independent build 0/0, focused 39/39, full 162/162, stress 390/390, formatter/diff/secret/UI/project scope PASS. Slice 15.1 DONE; không sửa file, không commit/push.
-
-**Task 15 remediation sequence:**
-
-1. [x] Slice 15.1 — S1 engine telemetry contract: **Sol xhigh implementation PASS**, **Terra xhigh review PASS**.
-2. [x] Slice 15.2 — S1 ViewModel projection/failure refresh: **Terra high implementation PASS**, **Luna xhigh review PASS**; phụ thuộc 15.1.
-3. [x] Slice 15.3 — Q1/Q2 connection validation/cancel cleanup: **Terra xhigh implementation PASS**, **Sol xhigh review PASS**; độc lập sau design freeze.
-4. [x] Slice 15.4 — Q3 duplicate DBC boundary: **Terra high implementation PASS**, **Luna xhigh review PASS**; độc lập sau design freeze.
-5. [x] Slice 15.5 — full re-review/closure gate: **Sol ultra lead PASS**, **Luna high Axis Spec PASS**, **Terra xhigh Axis Standards/security PASS**; phụ thuộc 15.1–15.4.
-
-S2 graceful application-close cleanup tiếp tục `UI_GATED`; không nằm trong các backend slice và chỉ được triển khai sau user approval riêng cho `MainWindow.xaml.cs`/UI lifecycle.
-
-### Checkpoint E — Backend complete
-
-- [x] `dotnet build Simulate.sln` đạt 0 warning, 0 error tại Task 15 lead gate.
-- [x] `dotnet test Simulate.sln` đạt 173/173 tại closure gate Task 15.
-- [x] Slice 15.1 implementation gate: build 0/0; full 162/162; high-risk stress 390/390; targeted formatter/diff/secret/UI/project scope PASS.
-- [x] `git diff -- Simulate/App.xaml Simulate/MainWindow.xaml Simulate/MainWindow.xaml.cs` không có output.
-- [x] Không còn dữ liệu placeholder làm nguồn sự thật của simulation backend; default simulation projection là typed empty state/plan data.
-- [x] Hardware checklist ghi rõ software evidence `PASS`, known static gap `FAIL` và physical bench `NEEDS_VERIFY`.
-- [x] Task 15 closure: không có finding Critical/Required trong lead và hai cross-review; S2 giữ `UI_GATED`, không bị đánh dấu sai là PASS.
-- [ ] Sẵn sàng xin phép riêng cho UI integration nếu người dùng muốn kích hoạt toàn bộ thao tác từ giao diện.
-
-## 8. Phase 5 — Binding backend vào 10 khu vực UI, user-gated tuần tự
-
-### 8.1. Phạm vi được phép và rào chắn tuyệt đối
-
-Phase này chỉ liên kết backend/ViewModel đã có hoặc seam tối thiểu còn thiếu vào **control hiện hữu**.
-Yêu cầu lập kế hoạch này không tự động cho phép sửa source UI. Trước mỗi khu vực, người dùng phải cho
-phép rõ ràng đúng khu vực đó.
-
-`Binding-only` được hiểu là:
-
-- chỉ thêm/sửa `Binding`, `Command`, `ItemsSource`, `SelectedItem`, `IsChecked`, `IsEnabled` hoặc
-  state projection trên control đã tồn tại, sau khi có approval của khu vực;
-- có thể thêm ViewModel command/property, composition/lifecycle seam và test cần thiết để binding hoạt động;
-- không thêm, xóa, đổi loại hoặc đổi thứ tự control; không sửa layout, kích thước, màu, font, style,
-  resource, label, icon hoặc nội dung thiết kế;
-- không biến placeholder thành dữ liệu giả mới; giá trị chưa có evidence phải hiển thị từ typed state
-  hoặc trạng thái không khả dụng, không được hardcode;
-- `MainWindow.xaml.cs` chỉ được chạm cho graceful shutdown của UI-01 sau approval exact; không đưa
-  business/hardware logic vào code-behind;
-- không thêm package, không sửa `.csproj`/`.sln`, không commit/push nếu chưa có lệnh riêng.
-
-### 8.2. State machine bắt buộc cho từng khu vực
-
-```text
-LOCKED
-  └─ user cho phép đúng khu vực ─► IMPLEMENTING
-       └─ build/test/review PASS ─► WAITING_USER_DEBUG
-            ├─ user báo lỗi ──────► DEBUG_RETURN ─► WAITING_USER_DEBUG
-            └─ user nói PASS/cho qua ─► USER_ACCEPTED ─► mở khóa khu vực kế tiếp
-```
-
-- Agent/reviewer không được tự đổi `WAITING_USER_DEBUG` thành `USER_ACCEPTED`.
-- Không triển khai song song hai khu vực. Việc chia model là chia lead/reviewer/debug specialist trong
-  cùng một gate, không phải quyền bỏ qua thứ tự 1→10.
-- Nếu user tìm thấy lỗi, coordinator giữ nguyên task hiện tại, phân loại lỗi và đề xuất model phù hợp
-  trước khi sửa; không được chuyển sang khu vực kế tiếp.
-
-Mỗi lần chuyển trạng thái hoặc mở khu vực mới, coordinator phải cập nhật đồng thời `tasks/plan.md`,
-`tasks/todo.md`, `handoff.md` và báo rõ cho user 5 điểm: (1) UI nào đang mở, (2) UI đó làm những gì,
-(3) files/seam được phép chạm, (4) lead/reviewer model nào, (5) tiêu chí manual debug để user xác nhận.
-Không dùng câu chung chung như “tiếp tục UI”; phải ghi tên panel và hành vi cụ thể.
-
-### 8.3. Dependency và phân bổ model
-
-| UI | Khu vực | Backend/seam chính | Lead | Independent review | Trạng thái |
-|---|---|---|---|---|---|
-| 1 | Connection / Setup | `ConnectionViewModel`, baudrate contract, session ownership, graceful close | **Terra xhigh → Sol ultra** | **Terra xhigh** | `USER_ACCEPTED` |
-| 2 | DBC Management | safe file input, `DbcParser`, document/composition state | **Terra xhigh** | **Sol xhigh** | `USER_ACCEPTED` |
-| 3 | TX Message List | DBC projection và editable simulation draft | **Terra xhigh** | **Luna xhigh** | `USER_ACCEPTED` |
-| 4 | Live Signal Monitor | bounded live-frame/signal telemetry, Dispatcher projection | **Sol ultra** | **Terra xhigh** | `USER_ACCEPTED` |
-| 5 | Fault Configuration | selected signal, direct fault (Cyclic/One-Shot), sequence queue, conditional Add to Queue | **Terra xhigh** | **Luna high** | `USER_ACCEPTED` |
-| 6 | Signal Value Configuration | physical value/`VAL_` selection, Min/Max validation, message-filtered isolation | **Terra xhigh** | **Sol xhigh** | `USER_ACCEPTED` |
-| 7 | Execution Control | engine/session start-stop-pause lifecycle, injection runner, DBC-independent raw gateway bridge | **Sol ultra** | **Terra xhigh** | `USER_ACCEPTED` |
-| 9 | Bus Monitor / Health | health indicators & telemetry (load/errors/lost/warn), status line color (Xanh/Vàng/Đỏ/Xám) | **Terra high** | **Luna high** | `USER_ACCEPTED` |
-| 10 | Status Overview | aggregate connection/DBC/engine/health + footer projection | **Terra xhigh** | **Luna high** | `WAITING_USER_DEBUG` |
-
-Sau UI-10, **Sol ultra** thực hiện final lifecycle/race review; người dùng vẫn là final runtime gate.
-
-**UI-07 Benchmark Test Data & Hardware Setup (2026-08-20):**
-- **DBC Test Database**: `DBC/VF EBUS6M_PCAN_V2.0.0_20250524.dbc` (61 messages, 370 signals, Powertrain CAN).
-- **Phần cứng Virtual CAN**:
-  - TX Channel: `Virtual CAN Bus 1 (000100) - Channel 1` (`Virtual Bus 1 - Channel 1`).
-  - RX Channel: `Virtual CAN Bus 2 (000101) - Channel 1` (`Virtual Bus 2 - Channel 1`).
-  - Baudrate: TX 500k, RX 500k, CAN FD Enabled.
-- **Yêu cầu hành vi cốt lõi**: Khi simulator phát dữ liệu PCAN qua TX (`Virtual Bus 1 - Channel 1`), bất kỳ can thiệp thay đổi tín hiệu nào (qua Bảng 5 & 6) khi TX phát ra thì phía RX (`Virtual Bus 2 - Channel 1`) bắt buộc phải nhận được chính xác giá trị đã can thiệp đó.
-
-**UI-01 / UI-06 / UI-09 Triage & Remediation (2026-09-22):**
-- **Sự cố 1**: Nhấn Disconnect làm Visual Studio Debugger nhảy ngoại lệ unhandled `OperationCanceledException` tại `VectorCanGatewaySession.cs:133`.
-  * *Khắc phục*: Kiểm tra channel active/cleanup trước lệnh cancellation token throw; bắt `OperationCanceledException` khi session dừng để `yield break;` êm thắm; bổ sung catch trong `SimulationEngine.RunReceiveLoopAsync`.
-- **Sự cố 2**: Lỗi nhảy data simulate tại Bảng 6 (`SIGNAL VALUE CONFIGURATION`). Dữ liệu frame CAN trên bus liên tục đè lên ComboBox/TextBox của Bảng 6.
-  * *Khắc phục*: Tách bạch `_configuredValue` trong `SignalModel`. Khi chưa override, `UpdateValue` chỉ cập nhật Bảng 4 (`PhysicalValueDisplay`, `RawValue`, `StatusText`), tuyệt đối không bắn `PropertyChanged` của `PhysicalValueInput` làm giật Bảng 6. Bảng 6 đứng yên 100% theo giá trị cấu hình của kỹ sư.
-- **Sự cố 3**: Bảng 9 (`BUS MONITOR HEALTH`) báo vàng khi đẩy tải 1ms nhưng khi khôi phục tải bình thường không chuyển về xanh.
-  * *Khắc phục*: Tách biệt giữa bộ đếm tích lũy lịch sử (`WarningCountDisplay`, `LostCountDisplay`) và trạng thái sức khỏe thời gian thực (`HealthStrokeColor`, `HealthStatusText`). Áp dụng cửa sổ cooldown (~1.5s): khi tải 1ms kết thúc và không còn lỗi mới, đường line và nhãn trạng thái tự động phục hồi về **MÀU XANH TỐI ƯU (`#10B981` - `● Optimal`)**.
-- **Kết quả xác minh**: `dotnet build` đạt 0 warning / 0 error; **2,278 / 2,278 unit tests PASS (100%)**; UI XAML 0% diff.
-
-**UI-04 / UI-06 Remediation (2026-09-21) — Signal Jitter & Multi-Source Collision Fix:**
-- **Sự cố**: Khi tiêm lỗi đè tín hiệu `VCU_SourceAddress` (Value = 100), tín hiệu không override trong cùng message (`VCU_CBV`) bị nhảy số liên tục.
-- **Nguyên nhân gốc rễ**: Multi-Source Event Collision từ 2 lệnh `FrameRouted?.Invoke(...)` mới thêm trong `SimulationEngine.cs` (gây xung đột payload) kết hợp Feedback Loop trong `SimulationViewModel.OnSignalItemPropertyChanged` (mọi thay đổi `Value` kích hoạt `SyncSignalOverrides` -> `UpdatePlan`).
-- **Khắc phục**:
-  1. Khôi phục `SimulationEngine.cs` về nguyên bản (duy nhất 1 sự kiện `FrameRouted` tại cửa ngõ gateway khi frame đến).
-  2. Chặn feedback loop trong `SimulationViewModel.cs` (chỉ đồng bộ xuống engine khi `IsOverridden == true`).
-  3. `SignalModel` hiển thị ổn định `● Injected` (#EF4444) cho signal tiêm và `● Active` (#10B981) cho signal từ bus thật.
-- **Kết quả**: Build 0/0, 1,261/1,261 tests PASS, UI XAML 0% diff.
-
-**UI-08 Spec & Implementation Architecture (2026-09-21) — User Action & System Diagnostic Log:**
-- **Lead model**: `Terra high`; **Reviewer model**: `Luna high`.
-- **Trạng thái**: `PLANNING_ESTABLISHED` (Đã tái phân tích và chuẩn hóa theo đúng bản chất: Nhật ký thao tác người dùng & Báo cáo sự cố/lỗi hệ thống).
-- **Phạm vi & Nguyên tắc cốt lõi**:
-  1. **TUYỆT ĐỐI KHÔNG GHI SIGNAL/FRAME CAN CHẠY NGẦM**: Tránh rác log (log spam) và lãng phí tài nguyên; việc hiển thị trạng thái frame/signal đã do Bảng 4 (Live Signal Monitor) và công cụ chuyên dụng (CANoe/TSMaster) đảm nhiệm.
-  2. **CHỈ GHI LẠI 3 NHÓM SỰ KIỆN CỐT LÕI**:
-     - **Nhóm 1 - Thao tác người dùng (User Actions / Operations)**:
-       * *Connection*: Nhấn Connect (kèm thông tin Interface, TX/RX, Baudrate, FD), Disconnect.
-       * *DBC*: Chọn file nạp DBC, kết quả nạp (tên file, số lượng message/signal), Unload DBC.
-       * *Fault / Overrides*: Thao tác tick/untick Override trên từng tín hiệu (kèm tên và giá trị), nhập giá trị mới, thêm lỗi vào hàng đợi (Add to Queue), xóa hàng đợi (Clear Queue).
-       * *Execution Control*: Nhấn Start Injection (kèm mode), Pause, Resume, Stop Injection.
-       * *Log Controls*: Nhấn Clear Log, Export Log thành công ra file đĩa.
-     - **Nhóm 2 - Cảnh báo vận hành (Operational Warnings)**:
-       * Nhập giá trị vượt dải Min/Max của tín hiệu.
-       * Nhấn Start Injection khi hàng đợi rỗng hoặc chưa chọn cấu hình lỗi hợp lệ.
-       * Cảnh báo cấu hình phần cứng không tối ưu.
-     - **Nhóm 3 - Sự cố & Lỗi hệ thống (System Errors & Failures)**:
-       * Lỗi kết nối phần cứng CAN (không tìm thấy thiết bị, mở kênh thất bại, lỗi baudrate).
-       * Lỗi nạp hoặc parse file DBC không hợp lệ.
-       * Lỗi ngắt kết nối đột ngột hoặc Bus-Off, Transmit Error trong quá trình chạy.
-       * Ngoại lệ hệ thống chưa bắt được (Unhandled Exceptions) được ghi nhận chi tiết để chẩn đoán sự cố.
-  3. **Định dạng Log chuẩn**:
-     `[HH:mm:ss.fff]  [LEVEL]  [Module]  Nội dung thông điệp`
-  4. **Tương tác**:
-     - *Level Filter ComboBox*: `All Levels`, `Info`, `Warning`, `Error` (lọc nhanh để cô lập sự cố).
-     - *Clear Button*: Xóa sạch log hiện có.
-     - *Export Button*: Mở `SaveFileDialog` lưu snapshot log ra file `.log` hoặc `.txt` an toàn.
-  5. **Bảo vệ ranh giới UI**: 0% thay đổi layout, controls hay styles trong `MainWindow.xaml`; chỉ thêm data binding biểu thức.
-
-
-**UI-01 DEBUG_RETURN — baudrate contract (2026-08-15):** User reported three related defects: TX/RX baudrate
-controls bind to one `Connection.Baudrate`; selecting TX implicitly overwrites the user's baudrate from
-`HardwareChannel.DefaultBaudrate`; and CAN FD data bitrate is forced to `nominal * 4`. This is one cross-layer
-contract issue, not a UI redesign request. First route to **Terra xhigh** to freeze independent `BaudrateTx`,
-`BaudrateRx` and explicit CAN FD data-bitrate state/selection without changing visual controls. Then route to
-**Sol ultra** for Vector/native `CanGatewayOptions` and `VectorHardwareService` per-channel bitrate configuration.
-Do not return to `WAITING_USER_DEBUG` or open UI-02 until both slices are reviewed, built/tested, and user retests.
-
-**UI-01 DEBUG_RETURN — CAN/CAN FD flexibility extension (2026-08-15):** User additionally reported that the
-current backend is only an On/Off CAN FD switch. The four recorded gaps are: (1) data bitrate remains derived from
-nominal bitrate; (2) Vector FD bit timing uses fixed SJW/TSEG values instead of a selectable/calculated timing
-profile; (3) one global FD flag prevents heterogeneous Classic-CAN ↔ CAN-FD gateway sides; and (4) protocol mode
-is fixed to ISO, with no Bosch Non-ISO option. This expands the same baudrate/configuration contract and does not
-authorize a UI redesign. **Terra xhigh** must first define typed per-side CAN/FD mode, nominal/data bitrate, timing
-profile and ISO/Non-ISO protocol state. **Sol ultra** then maps that contract to `VectorXlApi`/Vector XL timing and
-native configuration. A new Data Bitrate ComboBox or per-channel mode controls are `UI_SHAPE_GATED` and require
-explicit user approval; do not add them under the existing binding-only approval.
-
-**Terra xhigh assessment and slice 1 (2026-08-15):** The shared TX/RX binding, current-bitrate overwrite,
-combined-mask configuration, global FD mode and `nominal * 4` calculation are confirmed by the source. The
-Non-ISO diagnosis is partly refined: `VectorXlApi` already maps `VectorCanFdProtocolMode.NonIso` to Vector's
-`XL_CANFD_CONFOPT_NO_ISO`, but `VectorHardwareService` always supplies `Iso`, so the application contract does
-not expose the capability. The fixed `SJW/TSEG` values are a real flexibility defect; however a universal 80 MHz
-or 80% timing lookup is not justified for every Vector/Virtual channel without confirmed controller clock/device
-documentation. Slice 1 fixes the proven user-state defect: selecting TX retains the user-selected bitrate while
-still adding the channel's observed bitrate to the selectable list. TDD regression test was RED (500000 became
-250000) then GREEN. Build 0/0, Connection tests 19/19, full 183/183, targeted formatter and diff check PASS.
-No XAML or UI-shape change, commit, or push.
-
-**UI-01 bitrate flexibility & binding fix (2026-08-15):** Đã hoàn tất sửa toàn diện theo yêu cầu người dùng:
-1. `Baudrate TX` và `Baudrate RX` tách binding riêng tới `Connection.BaudrateTx` và `Connection.BaudrateRx` trên XAML hiện hữu.
-2. Dải Nominal Bitrates chuẩn độc lập: 125k, 250k, 500k, 1M (default 500k).
-3. Dải Data Bitrates chuẩn: 500k, 1M, 2M, 4M, 5M, 8M (default 2M).
-4. CAN FD hỗ trợ Nominal 500k / Data 500k hợp lệ; loại bỏ phép nhân cứng `Baudrate * 4`.
-5. Chọn kênh không tự động ghi đè giá trị baudrate do người dùng đã chọn.
-6. `VectorHardwareService` áp dụng cấu hình độc lập trên `TxChannel.ChannelMask` và `RxChannel.ChannelMask` khi bitrate hai bên khác nhau.
-7. Verification: `dotnet build Simulate.sln` PASS 0 warning/0 error; `dotnet test Simulate.sln` PASS 189/189 tests.
-
-**UI-01 review checkpoint (2026-08-15):** binding-only implementation và independent review
-đều PASS; trạng thái hiện tại là `WAITING_USER_DEBUG`. Sáu control cấu hình hiện hữu chỉ thêm `IsEnabled` binding;
-không đổi visual tree/layout/style/content. `ConnectionViewModel` giữ single-owner session, handoff borrowed
-session cho composition, khóa double action và shutdown idempotent; `MainViewModel` dừng simulation trước
-connection cleanup; `MainWindow.xaml.cs` chỉ có closing delegation tối thiểu. Build 0/0, full 189/189,
-lifecycle stress 10/10 vòng, formatter/diff/secret/config scope PASS. User cần manual debug
-Refresh → chọn TX/RX → Connect → Disconnect, close khi connected/đang open, mở lại và reconnect; UI-02 vẫn khóa
-cho đến khi user nói UI-01 PASS.
-
-### 8.4. Kết quả bắt buộc theo từng khu vực
-
-| UI | Binding outcome | Manual debug gate của người dùng |
-|---|---|---|
-| 1 | Refresh/select/connect/disconnect/status dùng state thật; pending operation và session cleanup hữu hạn | Cắm/chọn interface, connect/disconnect, đóng app khi đang connect, mở lại và reconnect |
-| 2 | Load/unload DBC, filename/valid state/counts thật; external file có size/regex bounds | Chọn DBC hợp lệ/sai/trùng, unload/reload và kiểm tra message/node/signal count |
-| 3 | Grid dùng đúng message fields; Add/Delete/Delete All/Move dùng selected row và draft state | Kiểm tra thứ tự, enable, mode/send type/cycle/signal count; xác nhận behavior cell-action bị gate nếu cần đổi control |
-| 4 | Raw/physical/unit/status/timestamp cập nhật bounded; search/filter/pause/clear hoạt động | Chạy traffic, pause/resume/clear, lọc theo message và kiểm tra UI không freeze |
-| 5 | Selected signal, direct single fault (Cyclic/One-Shot), sequence queue (chỉ hiện Add to Queue khi ở Sequence mode), validation | Chọn signal, chuyển mode Cyclic/One-Shot (Add to Queue ẩn, active fault trực tiếp), chuyển mode Sequence (Add to Queue hiện, thêm vào FaultQueue) |
-| 6 | Value edit/`VAL_` map thành physical override; min/max/step và filter đúng | Đổi numeric/label value, bật/tắt override, kiểm tra payload qua Mock/hardware phù hợp |
-| 7 | Start/Stop/Pause/Resume/Clear Queue và status dùng engine thật, command state chống double action | Chạy injection, pause/resume/stop, lặp nhanh và kiểm tra cleanup; `Emergency` không được tuyên bố có UI nếu chưa có control |
-| 8 | Log thật, bounded, lọc level, clear và export an toàn | Tạo connect/load/run/error events, lọc/clear/export rồi đối chiếu file |
-| 9 | Health indicators/counters dùng telemetry thật; line đổi màu trạng thái (Xanh/Vàng/Đỏ/Xám), không sóng động | Chạy traffic/fault/soak, đối chiếu bus load, dropped/lost frames, errors và kiểm tra đổi màu trạng thái |
-| 10 | Status overview/footer tổng hợp đúng 1–9, không còn chuỗi demo làm runtime truth | Chạy full flow connect→DBC→configure→inject→stop→disconnect và kiểm tra mọi trạng thái |
-
-### 8.5. Routing model khi user báo lỗi
-
-| Loại lỗi debug | Model đề xuất |
-|---|---|
-| Native Vector, connect/disconnect, close app, race, leak, scheduler/emergency | **Sol ultra** |
-| Binding path, command/CanExecute, validation, ViewModel/composition, DBC projection | **Terra xhigh** |
-| Reproduce test, fixture/corpus, kiểm tra field mapping và regression cơ học | **Luna xhigh** |
-| Parser/file input resource bound, regex/performance hoặc codec/override edge | **Sol xhigh** phối hợp **Terra xhigh** |
-
-### 8.6. Quy trình user báo lỗi và coordinator phân agent
-
-User không cần tự phân biệt lỗi thuộc model nào. User chỉ cần gửi mô tả lỗi cho coordinator; coordinator
-sẽ đọc symptom, log/screenshot và bước tái hiện để phân loại, cập nhật khu vực hiện tại thành `DEBUG_RETURN`,
-sau đó trả lại đúng model cần chuyển sang. Coordinator phải nói rõ model trước khi user chuyển; không tự mở
-khu vực tiếp theo trong lúc lỗi chưa được đóng.
-
-Thông tin user nên gửi (có gì gửi nấy): panel đang test, thao tác vừa làm, expected, actual, thông báo lỗi/log,
-và lỗi có tái hiện lại được không. Nếu thiếu dữ liệu để phân loại, coordinator hỏi bổ sung trước, không đoán
-model và không sửa code.
-
-| Dấu hiệu user quan sát được | Phân loại coordinator | Model user chuyển sang |
-|---|---|---|
-| Vector không mở/đóng, connect/disconnect sai, app đóng treo, double-open, race, leak | Native/lifecycle/concurrency | **Sol ultra** |
-| Nút/ComboBox không enable đúng, binding không cập nhật, Connected state sai, command không chạy | Binding/CanExecute/ViewModel state | **Terra xhigh** |
-| Không tái hiện ổn định, sai mapping field, cần thêm fixture/regression test | Reproduction/test fixture | **Luna xhigh** |
-| DBC/file input, giới hạn tài nguyên, regex/performance hoặc codec/override edge | Parser/resource/domain edge | **Sol xhigh**, phối hợp **Terra xhigh** |
-
-Sau khi user chuyển model và model sửa xong, coordinator sẽ yêu cầu review/build/test lại rồi trả UI-01 về
-`WAITING_USER_DEBUG`. Chỉ câu `UI-01 PASS` của user mới được đổi thành `USER_ACCEPTED` và mở UI-02.
-
-Coordinator phải nêu model cần chuyển cùng lý do sau mỗi lỗi; model sửa và model review nên khác nhau.
-
-## 9. Verification bắt buộc cho mỗi task
-
-```powershell
-dotnet build Simulate.sln
-dotnet test Simulate.sln   # sau khi test project được phê duyệt
-git diff -- Simulate/App.xaml Simulate/MainWindow.xaml Simulate/MainWindow.xaml.cs
-```
-
-Ngoài ra:
-
-- pure module: focused unit tests với golden vectors;
-- hardware adapter: contract tests chạy qua Mock và manual test có Vector hardware;
-- gateway: bidirectional integration test, cancellation test và soak test;
-- mọi lỗi native phải giữ lại `XL_Status` trong result/log chẩn đoán.
-
-## 9.1. Task completion reminder bắt buộc
-
-Sau khi một task đạt acceptance criteria, coordinator phải nhắc và thực hiện đủ chuỗi sau trước khi chuyển model/task:
-
-1. Đánh dấu task và checkpoint tương ứng trong `tasks/todo.md`/`tasks/plan.md`.
-2. Chạy `dotnet build`; chạy `dotnet test` nếu test project đã được duyệt.
-3. Kiểm tra `git diff --check`, UI diff và danh sách file thay đổi.
-4. Ghi work log, `NEEDS_VERIFY` hoặc approval còn thiếu.
-5. Tạo/cập nhật `handoff.md` với next action và model lead/reviewer.
-6. Báo cáo cho người dùng: task đã xong, verification, file thay đổi và model tiếp theo.
-
-Không được tự chuyển sang task tiếp theo nếu bước nhắc/bàn giao này chưa hoàn tất.
-
-## 10. Rủi ro và giảm thiểu
-
-| Rủi ro | Mức | Giảm thiểu |
-|---|---|---|
-| Leak/crash native handle khi lỗi giữa chuỗi Open→Configure→Activate | High | Session ownership, `finally`, cleanup idempotent, Sol ultra review |
-| RX/TX chọn cùng physical channel | High | Typed validation trước khi mở port |
-| Sai API giữa CAN Classic và CAN FD | High | Source-driven đối chiếu `Doc/XLDriver.txt`, `XLClass.txt`, manual; contract test riêng |
-| UI freeze | High | Async command, cancellation; cấm polling/sleep trên Dispatcher |
-| Echo loop khi gateway hai chiều | High | Source metadata + sent-frame cache có timeout và integration tests |
-| DBC encode sai endian/signed/scale | High | Golden vectors độc lập, property/boundary tests |
-| Khác biệt timing/hardware chỉ xuất hiện trên thiết bị thật | Medium | Manual hardware checkpoint và `NEEDS_VERIFY`, không giả định từ Mock |
-| PLAN backend hoàn tất nhưng thao tác UI chưa bấm được | Expected | UI approval gate rõ ràng; không vi phạm lệnh khóa UI |
-
-## 11. Approval gates trước implementation
-
-Trước Task 0/1 cần người dùng phê duyệt riêng nếu thực hiện:
-
-1. tạo test project và sửa `Simulate.sln`;
-2. thêm test NuGet packages;
-3. thay đổi `Simulate.csproj` như ép target x64;
-4. tạo thêm cấu trúc thư mục/module mới;
-5. bất kỳ thay đổi nào ở UI/XAML/code-behind.
-
-## 12. Definition of Done toàn chương trình
-
-- Acceptance criteria của từng task đạt đủ.
-- Build 0 warning/0 error; test 100% pass khi test infrastructure được duyệt.
-- Resource cleanup idempotent và được kiểm thử trên mọi nhánh lỗi có thể mô phỏng.
-- Simulation engine độc lập WPF và Vector implementation.
-- Diff UI bằng không, trừ khi có approval mới bằng văn bản từ người dùng.
-- PLAN/todo được cập nhật sau mỗi checkpoint.
-- Sau mỗi task phải hoàn tất task completion reminder và handoff checkpoint.
-- Không commit/push khi chưa được yêu cầu.
-
-## 13. Checkpoint: Live Telemetry & Simulation Control Footer (2026-09-23)
-- **Trạng thái**: `DONE` — Đã triển khai và xác minh toàn diện theo phê duyệt của người dùng.
-- **Nội dung**: Thay thế dòng Footer tĩnh (Row 5) bằng các Badges viễn thám sống động (Status, Elapsed, Sent, RX, Injected, Latency, Tx/Rx rates, Bus Load, Reset Counters) kết nối MVVM trực tiếp từ `SimulationEngine` và `BusHealthViewModel`.
-- **Kiến trúc**: Throttled Sampling 200ms (5 Hz), CPU UI < 0.05%, triệt tiêu 100% rủi ro crash.
-- **Verification**: `dotnet build` 0 error/0 warning; `dotnet test` 2,287/2,287 PASS.
-
-## 14. Checkpoint: UI-10 Status Overview Dynamic Integration (2026-09-24)
-- **Trạng thái**: `DONE` (chờ User Debug) — Đã triển khai và xác minh toàn diện theo phê duyệt của người dùng.
-- **Nội dung**: Thay thế toàn bộ text tĩnh Bảng 10 bằng data binding động tới `StatusOverview.*` (Connection, Driver, Bus State, DBC, Bus Health, CAN FD).
-- **Bảo vệ UI**: 100% không làm thay đổi bất kỳ thuộc tính hay layout của Bảng 1 đến Bảng 9 và dòng Footer.
-- **Verification**: `dotnet build` 0 error/0 warning; `dotnet test` 2,293/2,293 PASS (100%).
-
-## 15. Checkpoint: E2E Auto-Detection & UI-6 Indicator & Manual Fallback (2026-09-24)
-- **Trạng thái**: `DONE` (chờ User Review / Debug) — Đã triển khai và xác minh toàn diện theo yêu cầu người dùng.
-- **Nội dung**:
-  1. Tự động nhận diện cấu hình E2E (CRC8 + Alive Counter) cho từng Message từ ma trận DBC (`DbcE2eDetector.cs`).
-  2. Hiển thị nhãn trạng thái E2E động ở đầu khung Bảng 6 (`6. SIGNAL VALUE CONFIGURATION`) khi chọn signal:
-     - `● E2E: Active (Auto CRC8)` (màu xanh lá `#10B981`)
-     - `● E2E: Active (Manual)` (màu xanh ngọc `#06B6D4`)
-     - `○ E2E: Inactive` (màu xám `#64748B`)
-  3. Bổ sung CheckBox `E2E Protection` cho phép người dùng chủ động bật/tắt (manual fallback chuẩn: Byte 0 CRC, Byte 1 Counter) phòng trường hợp DBC không nhận diện được signal E2E hoặc kiểm thử phản ứng của ECU khi nhận frame Checksum lỗi.
-  4. Đồng bộ cấu hình E2E thời gian thực xuống simulation engine gateway `_engine.UpdatePlan(BuildSimulationPlan())`.
-- **Bảo vệ UI**: Tận dụng khoảng trống tiêu đề Bảng 6 (Row 0), giữ nguyên 100% layout, kích thước của Bảng 1–5, Bảng 7–10 và Footer.
-- **Verification**:
-  - `dotnet build`: 0 warning / 0 error.
-  - `dotnet test`: 2,300 / 2,300 tests PASS (100%).
-
-## 16. Checkpoint: License Lock Window & License Verification Engine (2026-09-24)
-- **Trạng thái**: `DONE` (chờ User Review / Test) — Đã triển khai và xác minh toàn diện theo yêu cầu người dùng.
-- **Nội dung**:
-  1. Tạo XAML riêng biệt `LicenseLockWindow.xaml` khớp 100% hình ảnh mẫu của người dùng:
-     - Header: Icon ổ khóa đỏ nền hồng bo góc mềm + Tiêu đề 'Ứng dụng đang bị khóa' + Phụ đề + Hình ảnh minh họa hacker nghệ thuật (`license_hacker_art.png`) + Nút đóng ✕.
-     - Card 1: Machine ID + TextBox ReadOnly hiển thị ID + Nút 'Sao chép' (Icon Copy + chữ xanh dương).
-     - Card 2: License Key + TextBox có Icon chìa khóa & Placeholder mờ + Nút 'Dán' + Khung thông báo lỗi (Error Banner đỏ hồng).
-     - Footer: Nút 'Hướng dẫn kích hoạt' (icon ?) + Nút 'Kích hoạt' màu xanh dương phẳng (icon ✓).
-  2. Xây dựng dịch vụ bản quyền `ILicenseService` và `LicenseService`:
-     - Tự động lấy/sinh Machine ID duy nhất cho thiết bị (Registry GUID hoặc UUID).
-     - Thuật toán xác thực License Key (SHA-256 băm kèm Secret Salt hoặc Master Key).
-     - Lưu trữ trạng thái bản quyền an toàn.
-  3. Xây dựng ViewModel `LicenseLockViewModel` với đầy đủ commands: `CopyMachineId`, `PasteLicenseKey`, `Activate`, `OpenGuide`, `Close`.
-  4. Tích hợp trực tiếp vào luồng khởi động ứng dụng (`App.xaml` & `App.xaml.cs`):
-     - Kiểm tra `IsLicensed()` trước khi nạp `MainWindow`.
-     - Nếu chưa kích hoạt: Hiển thị `LicenseLockWindow.ShowDialog()`. Kích hoạt thành công mới nạp `MainWindow`.
-     - Nếu đóng hoặc hủy: Thoát ứng dụng an toàn.
-- **Bảo vệ UI**: Là một Window XAML độc lập, giữ nguyên 100% không làm thay đổi bất kỳ UI nào đã tồn tại trong ứng dụng.
-- **Verification**:
-  - `dotnet build`: 0 warning / 0 error.
-  - `dotnet test`: 2,306 / 2,306 tests PASS (100%).
-
-## 17. Checkpoint: RSA-2048 Asymmetric Signature & License Expiry Engine with Key Manager Integration (2026-09-24)
-- **Trạng thái**: `DONE` — Đã triển khai và xác minh toàn diện theo yêu cầu người dùng.
-- **Nội dung**:
-  1. Nâng cấp hệ thống bản quyền sang mã hóa bất đối xứng **RSA-2048**:
-     - Client (`Simulate`): Chứa **Public Key** dùng để verify chữ ký số (SHA256withRSA) và kiểm tra hạn sử dụng.
-     - Server / Tool (`Key Manager`): Giữ **Private Key** được bảo vệ bằng chữ ký quản trị `Tr@nHo@ngN@m*4`.
-  2. Hỗ trợ khóa bản quyền theo thời hạn linh hoạt: 7 ngày, 30 ngày, 60 ngày, 90 ngày, 180 ngày, 365 ngày (1 năm), Vĩnh viễn (Permanent).
-  3. Tích hợp trực tiếp vào màn hình `SimulateActivationWindow` của công cụ `C:\Users\Hnam\Desktop\Key Manager`:
-     - Bổ sung ô nhập Chữ ký quản trị (Passphrase).
-     - Kiểm tra đúng `Tr@nHo@ngN@m*4` mới cho phép tạo key.
-     - Sinh mã kích hoạt RSA-2048 định dạng `UTK-SM25-{PayloadB64}.{SignatureB64}`.
-  4. Xuất bản toàn bộ ứng dụng `Key Manager` sang `D:\TEST_DEV\Unlock key cac tool tu lam\Unlock ley Simulate\`:
-     - Chạy `dotnet publish -c Release`.
-     - Xuất bản đầy đủ `Key Manager.exe`, DLLs, Assets, Data.
-- **Verification**:
-  - `dotnet build Simulate.sln`: 0 warning / 0 error.
-  - `dotnet test Simulate.sln`: 2,309 / 2,309 tests PASS (100%).
-  - `dotnet test "Key Manager.sln"`: 12 / 12 tests PASS (100%).
-
-
-## 18. Checkpoint: Khắc Phục Lỗi Hiển Thị LicenseLockWindow & Nhúng Tài Nguyên Assembly (2026-09-25)
-- **Trạng thái**: DONE — Đã hoàn tất và kiểm chứng thành công.
-- **Nội dung**:
-  1. Đăng ký Assets\license_hacker_art.png và Assets\splash.png vào <Resource> trong Simulate.csproj để WPF Pack URI đọc được hình ảnh minh họa hacker lúc runtime.
-  2. Cập nhật LicenseLockWindow.xaml: Chuyển Window.Background sang Transparent để loại bỏ dải viền mờ 10px, giúp hiệu ứng bóng đổ DropShadowEffect mềm mại, khớp 100% thiết kế gốc trong Designer.
-- **Verification**:
-  - Trích xuất tài nguyên từ Simulate.dll qua Reflection: ssets/license_hacker_art.png đã hiện diện trong Simulate.g.resources.
-  - dotnet build Simulate.sln: 0 warning / 0 error.
-  - dotnet test Simulate.sln: 2,309 / 2,309 tests PASS (100%).
-
-## 19. Kế Hoạch Chi Tiết: Triển Khai Hệ Thống Đa Ngôn Ngữ (Localization - i18n 5 Ngôn Ngữ)
-- **Mục tiêu**: Hỗ trợ 5 ngôn ngữ (Tiếng Việt, Tiếng Anh, Tiếng Hàn, Tiếng Nhật, Tiếng Trung) chuyển đổi động (Zero-restart Live Switching) qua nút ⚙ (Settings) trên Title Bar, đồng bộ 100% từ giao diện tĩnh, icon tooltip, thông báo lỗi đến trạng thái động mà không ảnh hưởng logic vận hành.
-- **Rào chắn an toàn (Guardrails)**:
-  1. Bảo vệ code logic: Tuyệt đối không thay đổi các giá trị string nội bộ dùng để so sánh (QueueStatusText == "Running"). Áp dụng quy tắc Decoupling State from Display bằng ValueConverters hoặc Display properties.
-  2. Bảo vệ UI: Giữ nguyên toàn bộ cấu trúc Grid, Layout, Dark Theme Styling, chỉ thay thế chuỗi hiển thị tĩnh bằng {DynamicResource Loc_...}.
-  3. Duy trì chất lượng: Build 0 warning / 0 error; 2,318 tests PASS 100%.
-- **Các giai đoạn thực hiện**:
-  - [x] **Task 19.1**: Xây dựng Core Service & 5 Bộ Từ Điển XAML đầy đủ (`ILanguageService`, `LanguageService`, `Strings.vi-VN.xaml`, `Strings.en-US.xaml`, `Strings.ko-KR.xaml`, `Strings.ja-JP.xaml`, `Strings.zh-CN.xaml`, Unit Tests).
-  - [x] **Task 19.2**: Xây dựng bộ `StatusToLocalizedConverter` và tách biệt State vs Display trong ViewModels (`QueueStatusText`, `HealthStatusText`, `SimulationStatusText`, Signal `StatusText`).
-  - [x] **Task 19.3**: Đồng bộ hóa toàn bộ Icon Tooltips, Thông báo lỗi (Validation Banners), Hộp thoại (`SelectMessageWindow`, `LicenseLockWindow`).
-  - [x] **Task 19.4**: Tích hợp ContextMenu chọn 5 ngôn ngữ vào nút ⚙ trên Title Bar và liên kết `{DynamicResource Loc_...}` cho 10 bảng điều khiển trên `MainWindow.xaml`.
-  - [x] **Task 19.5**: Verification Gate (Build 0 warning / 0 error, Run test suite 2,318/2,318 tests PASS 100%, Test chuyển đổi 5 ngôn ngữ, kiểm tra persistence tại `%LocalAppData%\Simulate\settings.json`).
-- **Trạng thái**: DONE — Đã hoàn thành và kiểm chứng thành công.
-- **Verification**:
-  - `dotnet build Simulate.sln`: **0 warning, 0 error**.
-  - `dotnet test Simulate.sln`: **2,318 / 2,318 tests PASS (100%)**.
-
-## 20. Kế Hoạch Chi Tiết & Triển Khai: Nhúng Video Mở Đầu (Intro Video Splash Screen) & Tối Ưu Menu Ngôn Ngữ (2026-09-25)
-- **Mục tiêu**:
-  1. Khắc phục màu sắc ContextMenu chọn ngôn ngữ tại nút Settings (⚙) bị tối, khó đọc; đồng bộ icon cờ/địa cầu và dấu tích `✓` xanh lục cho ngôn ngữ đang chọn.
-  2. Nhúng video clip mở màn `C:\Users\Hnam\Downloads\clipStart.mp4` vào ứng dụng: khi khởi động sẽ mở cửa sổ video phát hết (hoặc nhấn phím bỏ qua) rồi mới chuyển sang luồng kiểm tra bản quyền / mở giao diện chính. Kích thước vừa phải (720x405 chuẩn 16:9), bo góc 14px mềm mại, không chiếm toàn màn hình, không giật lag.
-- **Rào chắn an toàn (Guardrails)**:
-  1. Bảo vệ code logic & quy tắc startup: Giữ nguyên vẹn quy trình kiểm tra bản quyền RSA-2048 (`LicenseService.IsLicensed()`) và nạp `MainWindow`.
-  2. Xử lý ngoại lệ an toàn: Bọc toàn bộ quá trình phát video và đóng cửa sổ trong `try-catch` để đảm bảo nếu máy tính thiếu codec hoặc video lỗi thì ứng dụng vẫn tiếp tục khởi động bình thường.
-  3. Ranh giới Git: Tuyệt đối không commit hay push khi chưa có lệnh tường minh từ người dùng.
-- **Các bước đã hoàn tất**:
-  - [x] **Task 20.1**: Tối ưu màu sắc ContextMenu nút ⚙ trong `MainWindow.xaml`: Template phẳng nền `#141E30`, viền `#334B73`, bo góc 8px, đổ bóng mềm, triệt tiêu dải trắng icon gutter, chữ trắng sáng `#F8FAFC`, hover xanh lam `#2563EB`, tiêu đề `🌐 Chọn ngôn ngữ / Select Language`, dấu `✓` màu xanh lục `#10B981` cho ngôn ngữ kích hoạt.
-  - [x] **Task 20.2**: Sao chép `clipStart.mp4` vào `Simulate/Assets/clipStart.mp4` và cấu hình trong `Simulate.csproj` dưới dạng `<Content Include="Assets\clipStart.mp4"><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>`.
-  - [x] **Task 20.3**: Thiết kế `IntroVideoWindow.xaml` và code-behind `IntroVideoWindow.xaml.cs`:
-    + Kích thước 720x405 px, `WindowStyle="None"`, `AllowsTransparency="True"`, `Background="Transparent"`, `WindowStartupLocation="CenterScreen"`, bo góc 14px, `DropShadowEffect`.
-    + `MediaElement` phát tự động, nút `[ Bỏ qua / Skip (ESC) ]` mờ ở góc dưới phải.
-    + Bắt sự kiện `MediaEnded`, `MediaFailed`, phím tắt `ESC`, `Space`, `Enter` và `DispatcherTimer` an toàn 11s để tự động đóng cửa sổ.
-    + Bọc an toàn `try-catch (InvalidOperationException)` khi gán `DialogResult = true`.
-  - [x] **Task 20.4**: Tích hợp vào `Simulate/App.xaml.cs`: Gọi `new IntroVideoWindow().ShowDialog()` trong `OnStartup` trước khi kiểm tra bản quyền `LicenseService.IsLicensed()`.
-  - [x] **Task 20.5**: Bổ sung Unit Tests trong `Simulate.Tests/IntroVideoTests.cs` (kiểm tra file tồn tại trong build output, kiểm tra khởi tạo và đóng cửa sổ an toàn trên STA thread).
-- **Trạng thái**: DONE — Đã hoàn thành và kiểm chứng thành công.
-- **Verification**:
-  - `dotnet build Simulate.sln`: **0 warning, 0 error**.
-  - `dotnet test Simulate.sln`: **PASS 100% (2,320 / 2,320 tests)**.
-## 21. Sửa Lỗi Sóng Vuông & Xung Lên Xuống Khi Inject Tín Hiệu SS_Fault (E2E & Double Transmission) (2026-09-27)
-- **Triệu chứng**: Khi inject tín hiệu SS_Fault trên xe thật (mô hình Breakout Box ngắt đôi đường CAN), trên đồ thị TSMaster tín hiệu SS_Fault bị dao động dạng xung vuông lên/xuống giữa normal (0) và Shifter failure (1), không giữ được mức cao. Trong khi các tín hiệu khác không có E2E thì chạy bình thường.
-- **Nguyên nhân gốc rễ**:
-  1. *Double Transmission (Xung đột phát kép)*: Khi message SS_DriveReq_0x108 được kích hoạt rule Inject và SendType Cyclic, cả luồng Gateway (RunReceiveLoopAsync) và luồng Scheduler (RunCyclicAsync) cùng phát frame 0x108 ra Tx sang xe. Xe nhận gấp đôi số lượng frame, vi phạm Cycle Time và gây xung nhấp nháy.
-  2. *Alive Counter bị ghi đè thay vì bảo toàn nhịp Cần số thật*: Hàm E2eProtector.Apply tự sinh counter riêng thay vì kế thừa Alive Counter của frame gốc Cần số. Khi counter bị lệch nhịp hoặc nhảy cóc, hộp điều khiển CVC trên xe phát hiện E2E Sequence Error nên drop 1 frame và fallback về normal, rồi frame sau lại nhận Shifter failure -> tạo thành xung vuông 50/50.
-- **Khắc phục**:
-  1. *E2eProtector.cs*: Bổ sung phương thức ApplyPreservingCounter(payload, configuration) để bảo toàn 100% Alive Counter gốc của ECU thật trên live frame và chỉ tính toán lại mã kiểm tra toàn vẹn CRC8 trên payload mới.
-  2. *SimulationEngine.cs*:
-     - Trong RunReceiveLoopAsync: Khi nhận live frame từ Rx chuyển tiếp sang Tx, gọi CreateInjectedFrame với cờ preserveLiveCounter: true để giữ nguyên nhịp Alive Counter phần cứng của Cần số thật.
-     - Trong TransmitScheduledFrameAsync: Thêm cơ chế kiểm tra _lastRxTimestamps. Nếu luồng live traffic từ Rx đang chảy (< 500ms), Scheduler Loop sẽ tự động bỏ qua (skip) không phát lặp Cyclic để triệt tiêu hoàn toàn hiện tượng Double Transmission.
-- **Verification**:
-  - dotnet build Simulate.sln: **0 warning, 0 error**.
-  - dotnet test Simulate.sln: **PASS 100% (2,321 / 2,321 tests)**.
-
-## 22. Khắc Phục Các Lỗi Tiềm Ẩn & Nâng Cấp Hệ Thống Bộ Định Thì 1ms (F-01 đến F-05) (2026-10-02)
-- **Mục tiêu**: Xử lý triệt để 5 điểm Required từ đợt Review toàn diện:
-  1. **F-01**: Bọc try-catch phòng thủ quanh `CreateInjectedFrame` trong `RunReceiveLoopAsync`, tăng `_droppedFrames` khi gặp frame DLC ngắn hoặc giá trị ngoài biên, loại bỏ hoàn toàn nguy cơ sập ngầm Worker Task.
-  2. **F-02**: Phòng thủ `KeyNotFoundException` khi Scheduler chạy ở chế độ Raw (`Document == null`) hoặc CAN ID ngoài DBC; tự động fallback tạo baseline payload 8-byte chuẩn qua `GetRawScheduledBaseline`.
-  3. **F-03**: Dọn dẹp sạch `_lastRxTimestamps.Clear()` trong `StartAsync()` để ngăn chặn stale timestamp từ phiên trước.
-  4. **F-04**: Tái kích hoạt (dynamically spawn) các task cyclic / oneshot trong `UpdatePlan()` khi đang chạy scheduling, cho phép thay đổi chu kỳ và thêm rule tức thì trong runtime.
-  5. **F-05**: P/Invoke `timeBeginPeriod(1)` và `timeEndPeriod(1)` từ `winmm.dll` tuân thủ quy chuẩn `vector-hardware-mitm.md`, đưa độ phân giải timer Windows từ 15.6ms xuống 1ms.
-- **Verification**:
-  - Bổ sung 4 unit test trong `Simulate.Tests/SimulationEngineTests.cs`:
-    + `Malformed_frame_with_short_payload_is_dropped_safely_without_crashing_gateway_worker`
-    + `Scheduler_runs_with_raw_plan_without_dbc_document`
-    + `StartAsync_clears_stale_rx_timestamps_from_previous_session`
-    + `UpdatePlan_dynamically_schedules_new_cyclic_rule_while_scheduling_is_active`
-  - `dotnet build Simulate.sln`: **0 warning, 0 error**.
-  - `dotnet test Simulate.sln`: **PASS 100% (2,325 / 2,325 tests)**.
-## 23. Phát Hiện Cắm Ngược Cổng CAN (Direction Inversion Detection) & 1,009 TCs (VF Wild Routing) (2026-10-09)
-- **Mục tiêu**:
-  1. Tự động nhận diện khi người dùng cắm ngược chiều cổng RX (CH1) và TX (CH2) dựa trên danh sách bản tin (Transmitter) trong file DBC.
-  2. Đảm bảo Idempotency tuyệt đối khi Connect / Disconnect nhiều lần liên tiếp khi DBC vẫn nạp sẵn trong bộ nhớ.
-  3. Tuân thủ triệt để UI Protection: Giữ nguyên 100% XAML, KHÔNG thêm nút 1-Click Swap theo chỉ đạo của người dùng.
-  4. Xây dựng 1,009 Test Cases từ 9 file DBC tại C:\Users\Hnam\Downloads\VF_Wild_v4.0.0_20260825_final\Routing.
-- **Triển khai**:
-  1. CanChannelDirectionAnalyzer.cs: Phân tích luồng frame theo cửa sổ trượt (30 frames), đối chiếu Node nguồn trong DBC, xác định trạng thái Normal, SuspectedInverted, hoặc Unknown. Cung cấp phương thức Reset() thread-safe.
-  2. SimulationViewModel.cs: Bổ sung event public event Action<RoutedCanFrame>? FrameRouted; trong OnEngineFrameRouted.
-  3. MainViewModel.cs: Tích hợp CanChannelDirectionAnalyzer, điều khiển vòng đời qua ConnectCommand, DisconnectCommand, LoadDbcCommand, UnloadDbcCommand. Đưa ra cảnh báo LogWarning (màu Vàng) duy nhất 1 lần khi phát hiện cắm ngược, không spam log.
-  4. VfWildRoutingDirectionThousandTests.cs: 1,009 unit test cases:
-     + 9 TCs: Nạp và kiểm tra tính hợp lệ của 9 file DBC VF Wild ( 1_ICAN đến  9_C2_CAN).
-     + 350 TCs: Kiểm tra nhận diện cắm đúng chiều (Normal).
-     + 350 TCs: Kiểm tra nhận diện cắm ngược chiều (SuspectedInverted).
-     + 250 TCs: Kiểm tra chu trình lặp đa vòng Connect -> Feed -> Disconnect -> Reconnect.
-     + 50 TCs: Kiểm tra các tình huống biên (null frame, frame ngoài DBC, nhiễu bus, reset giữa chừng, lưu lượng hỗn hợp 80/20).
-- **Verification**:
-  - dotnet build Simulate.sln: **0 warning, 0 error**.
-  - dotnet test Simulate.sln: **PASS 100% (3,333 / 3,334 tests, 1 skipped)**.
-  - UI Diff: **0% (Không sửa bất kỳ file XAML nào)**.
-  - Báo cáo đã lưu: D:\Analysis Log\report\report_reverse_channel_detection_1000tcs_2026-10-09.txt và D:\Analysis Log\newconvert\change_log_2026-10-09.txt.
-
-## 24. Hiển Thị Cảnh Báo Đảo Chiều Kết Nối Trên Bảng 10 (STATUS OVERVIEW) (2026-10-09)
-- **Mục tiêu**: Phản ánh cảnh báo đảo chiều cổng CAN phần cứng (⚠ Inverted: [Tên_Bản_Tin], màu #F59E0B, kèm tooltip chi tiết) trực tiếp trên mục Connection của Bảng 10 theo Phương án 1 đã được người dùng phê duyệt tường minh.
-- **Triển khai**:
-  1. StatusOverviewViewModel.cs: Nhận CanChannelDirectionAnalyzer, lắng nghe DirectionEvaluated và DirectionReset, cập nhật ConnectionText, ConnectionColor, ConnectionToolTip.
-  2. MainWindow.xaml: Bổ sung ToolTip="{Binding StatusOverview.ConnectionToolTip}" và TextTrimming="CharacterEllipsis" cho TextBlock Connection trong Bảng 10.
-  3. StatusToLocalizedConverter.cs và 5 bộ từ điển ngôn ngữ (Strings.*.xaml): Hỗ trợ tiền tố ⚠  và từ khóa Loc_Status_Inverted.
-  4. StatusOverviewViewModelTests.cs: Bổ sung 3 unit tests mới.
-- **Verification**:
-  - dotnet build Simulate.sln: **0 warning, 0 error**.
-  - dotnet test Simulate.sln: **PASS 100% (3,336 / 3,337 tests, 1 skipped)**.
-  - Báo cáo đã lưu: D:\Analysis Log\report\report_ui10_channel_direction_warning_2026-10-09.txt và D:\Analysis Log\newconvert\change_log_2026-10-09.txt.
-
-## 25. Xử Lý Triệt Để Tràn Hàng Đợi Vector CAN & Tối Ưu Win32 Event Notification [FINDING-Q2] (2026-10-09)
-- **Mục tiêu**:
-  1. Triệt tiêu 100% hiện tượng Hardware CAN receive buffer overflow reported — frame(s) lost.
-  2. [FINDING-Q2]: Thay thế Polling Task.Delay(2ms) bằng Win32 Event Notification (XL_SetNotification / XL_WaitForSingleObject), rút ngắn thời gian thức dậy khi có frame tới từ 2ms-15.6ms xuống < 30us.
-  3. Task 1.2: Dọn sạch hàng đợi phần cứng ngay sau khi kích hoạt kênh (Flush on Channel Activation), loại bỏ tích tụ 29ms mở port.
-  4. Segregated Locks: Tách độc lập khóa _sync thành 3 khóa độc lập (_lifecycleSync, _txSync, _rxSync) trong VectorNativeSessionResources, luồng truyền và nhận frame chạy song song hoàn toàn.
-  5. Sửa lỗi in đúp log cảnh báo FrameLossDetected và bổ sung throttle 1,000ms gom đếm cảnh báo.
-- **Triển khai**:
-  1. VectorXlApi.cs: Bổ sung VectorWaitResult, SetNotification, WaitForSingleObject vào IVectorXlApi và VectorXlApi.
-  2. VectorHardwareService.cs: Gọi api.FlushReceiveQueue ngay sau khi ActivateCanChannels thành công (Task 1.2).
-  3. VectorCanGatewaySession.cs: Phân tách khóa RX/TX độc quyền; dùng WaitForNotification thay thế Task.Delay(2ms).
-  4. MainViewModel.cs: Subscribe duy nhất 1 lần cho FrameLossDetected, hủy đăng ký khi ngắt kết nối/shutdown, throttle gom cảnh báo 1s.
-  5. HardwareBufferOverflowTests.cs & VectorHardwareServiceTests.cs: Bổ sung 4 unit tests mới xác minh toàn diện.
-- **Verification**:
-  - dotnet build Simulate.sln: **0 warning, 0 error**.
-  - dotnet test Simulate.sln: **PASS 100% (3,340 / 3,341 tests, 1 skipped)**.
-  - UI Protection: **0% thay đổi trên bất kỳ file XAML nào**.
-  - Báo cáo đã lưu: D:\Analysis Log\report\report_vector_hardware_buffer_overflow_resolution_2026-10-09.txt và D:\Analysis Log\newconvert\change_log_2026-10-09.txt.
-
-
-## 26. Xá»­ LÃ½ Triá»‡t Äá»ƒ Hiá»‡n TÆ°á»£ng Crash Out, ÄÆ¡ Giao Diá»‡n, BÃ£o Echo VÃ²ng Láº·p Khi DÃ¹ng VN1640 Cá»•ng 1 & 2 & Bá»• Sung 3,000 Test Cases (2026-10-10)
-- **Má»¥c tiÃªu**:
-  1. PhÃ¢n tÃ­ch vÃ  cÃ´ láº­p nguyÃªn nhÃ¢n gá»‘c rá»… (Root Cause) cá»§a lá»—i crash out, Ä‘Æ¡ giao diá»‡n, vÃ  khÃ³a cá»•ng pháº§n cá»©ng (Ä‘Ã¨n Ä‘á» cá»‘ Ä‘á»‹nh) trÃªn Vector VN1640 (Cá»•ng 1 & 2).
-  2. XÃ¡c Ä‘á»‹nh lÃ½ do ká»¹ thuáº­t cÆ¡ cháº¿ Listen-Only / Silent Mode khÃ´ng kháº£ thi cho kiáº¿n trÃºc Gateway 2 chiá»u (Bidirectional Gateway) vÃ  ECU bench testing (thiáº¿u ACK).
-  3. Lá»c triá»‡t Ä‘á»ƒ bÃ£o pháº£n xáº¡ vÃ²ng láº·p (Cross-Channel Echo Suppression) trong cá»­a sá»• 10ms.
-  4. TÄƒng tá»‘c giáº£i mÃ£ tÃ­n hiá»‡u tá»« O(N) xuá»‘ng O(1) (_signalLookup), báº£o vá»‡ UI Thread Dispatcher khÃ´ng bá»‹ block.
-  5. Báº£o vá»‡ tiáº¿n trÃ¬nh á»©ng dá»¥ng WPF trÆ°á»›c ngoáº¡i lá»‡ pháº§n cá»©ng qua cÆ¡ cháº¿ Safe Teardown trong SimulationViewModel.
-  6. Bá»• sung 3,000 Test Cases kiá»ƒm chuáº©n chuyÃªn sÃ¢u phÃ¢n tÃ¡n vÃ o 3 suite chuyÃªn biá»‡t.
-- **Triá»ƒn khai**:
-  1. SimulationEngine.cs: NÃ¢ng cáº¥p TryConsumeEcho so khá»›p payload, ID vÃ  time window báº¥t ká»ƒ kÃªnh nguá»“n Ä‘á»ƒ triá»‡t tiÃªu frame dá»™i láº¡i qua bus váº­t lÃ½ chung.
-  2. SimulationViewModel.cs:
-     - Táº¡o _signalLookup cache O(1) cho ProcessIncomingFrame.
-     - Cáº­p nháº­t StopGatewayAsync báº¯t HardwareOperationException, dá»n dáº¹p tÃ i nguyÃªn vÃ  báº£o vá»‡ process WPF.
-  3. AutomotiveGatewayAndEchoStressThreeThousandTests.cs: Táº¡o 3,000 TCs (1,000 echo cases, 1,000 O(1) lookup cases, 1,000 hardware teardown cases).
-- **Verification**:
-  - dotnet build Simulate.sln: **0 warning, 0 error**.
-  - dotnet test Simulate.sln: **PASS 100% (6,340 / 6,341 tests, 1 skipped)**.
-  - UI Protection: **0% thay Ä‘á»•i trÃªn báº¥t ká»³ file XAML nÃ o**.
-  - BÃ¡o cÃ¡o Ä‘Ã£ lÆ°u: D:\Analysis Log\report\report_fix_freeze_crash_echo_storm_3000tcs_2026-10-10.txt vÃ  D:\Analysis Log\newconvert\change_log_2026-10-10.txt.
+### Phase 1: Xây dựng Unit Tests bao quát 6 Kịch bản theo chuẩn TDD
+- [ ] Test 1: Simulate bình thường $\to$ Counter tăng $0..14$, CRC tự tính đúng.
+- [ ] Test 2: Ghim Alive đơn lẻ $\to$ Alive đứng im, tạo lỗi theo đúng kỳ vọng.
+- [ ] Test 3: Ghim CRC đơn lẻ $\to$ CRC mang đúng giá trị ghim, Alive tiếp tục nhảy bình thường.
+- [ ] Test 4: **Ghim CẢ CRC và Alive** $\to$ Cả 2 giữ nguyên giá trị ghim, không bị tính đè.
+- [ ] Test 5: **Bỏ ghim (Unpin/Restore)** $\to$ Counter đếm tiếp trơn tru từ giá trị cũ $+1$, CRC tự phục hồi.
+- [ ] Test 6: **Ngắt E2E (Disable)** $\to$ Bỏ qua tính toán E2E, phát payload tĩnh.
+
+### Phase 2: Triển khai Tinh Chỉnh Engine (0% UI change)
+- [ ] Tinh chỉnh nhánh rẽ trong `SimulationEngine.CreateInjectedFrame`.
+- [ ] Đảm bảo đồng bộ `E2eProtector.Apply` xử lý trọn vẹn cả 4 trạng thái override.
+- [ ] Bảo vệ dải giá trị CRC không bị clamp sai trong `BuildSimulationPlan`.
+
+### Phase 3: Hoàn thiện Tự Phục Hồi & Chống Treo Driver CAN
+- [ ] Cải thiện xử lý ngoại lệ trong `TransmitScheduledFrameAsync` chống Bus-Off kéo dài.
+- [ ] Kiểm tra cơ chế giải phóng tài nguyên Semaphore `_transmitGate`.
+
+### Phase 4: Kiểm Chứng Biên Dịch & Chạy Toàn Bộ Test Suite
+- [ ] Biên dịch giải pháp: `dotnet build` đạt **0 Warning, 0 Error**.
+- [ ] Chạy kiểm thử: `dotnet test` đạt **100% Pass (toàn bộ 7,345+ test cases)**.
+
+### Phase 5: Xuất Báo Cáo & Đồng Bộ Dữ Liệu
+- [ ] Cập nhật đồng bộ nội dung vào `tasks/plan.md`.
+- [ ] Xuất báo cáo kỹ thuật hoàn chỉnh theo `.agents/rules/report-standards.md`.
+
+---
+
+## VI. Tiêu Chí Nghiệm Thu Tổng Quát (Acceptance Criteria)
+
+1. **AC-1 (Bảo toàn Simulate):** Simulate thông thường chạy ổn định tuyệt đối, không có bất kỳ sai lệch nào so với hiện tại.
+2. **AC-2 (Ghim cả 2):** Khi ghim đồng thời cả CRC và Alive, frame mang chính xác cả 2 giá trị ghim, xe kích hoạt Safe State ngay lập tức ($T \le 10\text{ms}$).
+3. **AC-3 (Bỏ ghim):** Khi bỏ ghim, frame lập tức phát giá trị hợp lệ với bước nhảy Counter $\Delta = 1$, xe có thể hồi phục trạng thái an toàn.
+4. **AC-4 (Ngắt E2E):** Khi tắt cấu hình E2E, engine phát payload DBC thô chuẩn xác.
+5. **AC-5 (Bảo vệ bus):** Không xảy ra crash luồng scheduler ngầm khi xe ngắt transceiver hoặc bus chập chờn.
+6. **AC-6 (Bảo vệ UI):** 0% thay đổi trên tất cả các file XAML.
+7. **AC-7 (Chất lượng kỹ thuật):** `dotnet build` 0 warning / 0 error, `dotnet test` 100% pass.

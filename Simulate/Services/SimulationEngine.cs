@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -823,8 +823,18 @@ namespace Simulate.Services
                         break;
                     }
 
-                    await TransmitScheduledFrameAsync(activeRule, cancellationToken).ConfigureAwait(false);
-                    sentFrames++;
+                    try
+                    {
+                        await TransmitScheduledFrameAsync(activeRule, cancellationToken).ConfigureAwait(false);
+                        sentFrames++;
+                    }
+                    catch (HardwareOperationException ex)
+                    {
+                        // Hardware transmit error (e.g. ACK error when ECU enters Safe State, or transient bus glitch).
+                        // Record failure without terminating the cyclic scheduler loop so transmission
+                        // can automatically resume once the bus or receiver recovers.
+                        CaptureFailure(ex.Failure);
+                    }
 
                     if (activeRule.Timing.RepeatCount != 0 && sentFrames >= activeRule.Timing.RepeatCount)
                     {
